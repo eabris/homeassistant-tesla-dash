@@ -1,0 +1,1048 @@
+title: Tesla Analytics
+icon: mdi:chart-line
+views:
+  # ========== VIEW 1: HISTORY ==========
+  - title: History
+    path: history
+    icon: mdi:history
+    cards:
+      - type: vertical-stack
+        cards:
+
+          # TODAY
+          - type: custom:button-card
+            show_icon: false
+            show_name: false
+            show_state: false
+            tap_action:
+              action: none
+            custom_fields:
+              block: |
+                [[[
+                  const fmtMin = (raw) => {
+                    const m = parseFloat(String(raw || '0'));
+                    if (isNaN(m) || m <= 0) return '–';
+                    const h = Math.floor(m / 60); const min = Math.round(m % 60);
+                    return h > 0 ? `${h}h ${min}m` : `${min}m`;
+                  };
+                  const fmt = (raw, unit, dec=1) => {
+                    const v = parseFloat(String(raw || '0'));
+                    return isNaN(v) || v <= 0 ? '–' : `${v.toFixed(dec)} ${unit}`;
+                  };
+                  const ftm = (raw) => {
+                    const v = parseFloat(String(raw || '0')) || 0;
+                    return v <= 0 ? 'Ft0' : 'Ft' + Math.round(v).toLocaleString('hu-HU');
+                  };
+                  const row = (icon, label, val, sub) =>
+                    `<div style="display:flex;align-items:center;gap:12px;padding:8px 0;border-top:1px solid rgba(255,255,255,0.07)">
+                      <span style="font-size:18px;width:22px;text-align:center;flex-shrink:0">${icon}</span>
+                      <div style="flex:1;min-width:0">
+                        <div style="color:#888;font-size:10px;font-weight:600;letter-spacing:1.2px">${label}</div>
+                        <div style="color:#fff;font-size:15px;font-weight:700">${val}${sub ? `<span style="color:#aaa;font-size:11px;font-weight:400">  ${sub}</span>` : ''}</div>
+                      </div>
+                    </div>`;
+                  const dist = fmt(states['sensor.tesla_daily_distance']?.state, 'km', 1);
+                  const driveT = fmtMin(states['sensor.tesla_driving_time_today']?.state);
+                  const energy = fmt(states['sensor.tesla_daily_charging_energy']?.state, 'kWh', 2);
+                  const chargeT = fmtMin(states['sensor.tesla_charging_time_today']?.state);
+                  const elecCost = ftm(states['sensor.tesla_daily_electric_cost']?.state);
+                  const fuelEq = ftm(states['sensor.tesla_daily_fuel_cost_equivalent']?.state);
+                  const elecV = parseFloat(states['sensor.tesla_daily_electric_cost']?.state || '0') || 0;
+                  const fuelV = parseFloat(states['sensor.tesla_daily_fuel_cost_equivalent']?.state || '0') || 0;
+                  const saved = Math.max(0, fuelV - elecV);
+                  return `<div style="width:100%;text-align:left">
+                    <div style="color:#ccc;font-size:12px;font-weight:700;letter-spacing:1.5px;padding-bottom:4px">📅 TODAY</div>
+                    ${row('🚗', 'DISTANCE', dist, `drive time ${driveT}`)}
+                    ${row('⚡', 'ENERGY CHARGED', energy, `charge time ${chargeT}`)}
+                    ${row('💰', 'ELECTRIC COST', elecCost, `vs fuel ${fuelEq}`)}
+                    ${saved > 0 ? row('✅', 'SAVED VS ICE', 'Ft' + Math.round(saved).toLocaleString('hu-HU'), '') : ''}
+                  </div>`;
+                ]]]
+            styles:
+              card:
+                - background-color: rgba(28, 28, 30, 0.95)
+                - border-radius: 16px
+                - padding: 16px 20px
+              grid:
+                - grid-template-areas: '"block"'
+                - grid-template-columns: 1fr
+                - grid-template-rows: 1fr
+              custom_fields:
+                block:
+                  - width: 100%
+
+          # THIS WEEK (calendar week, utility meter reset)
+          - type: custom:button-card
+            show_icon: false
+            show_name: false
+            show_state: false
+            tap_action:
+              action: none
+            custom_fields:
+              block: |
+                [[[
+                  const fmt = (raw, unit, dec=1) => {
+                    const v = parseFloat(String(raw || '0'));
+                    return isNaN(v) || v <= 0 ? '–' : `${v.toFixed(dec)} ${unit}`;
+                  };
+                  const ftm = (raw) => {
+                    const v = parseFloat(String(raw || '0')) || 0;
+                    return v <= 0 ? 'Ft0' : 'Ft' + Math.round(v).toLocaleString('hu-HU');
+                  };
+                  const row = (icon, label, val, sub) =>
+                    `<div style="display:flex;align-items:center;gap:12px;padding:8px 0;border-top:1px solid rgba(255,255,255,0.07)">
+                      <span style="font-size:18px;width:22px;text-align:center;flex-shrink:0">${icon}</span>
+                      <div style="flex:1;min-width:0">
+                        <div style="color:#888;font-size:10px;font-weight:600;letter-spacing:1.2px">${label}</div>
+                        <div style="color:#fff;font-size:15px;font-weight:700">${val}${sub ? `<span style="color:#aaa;font-size:11px;font-weight:400">  ${sub}</span>` : ''}</div>
+                      </div>
+                    </div>`;
+                  const dist = fmt(states['sensor.tesla_weekly_distance']?.state, 'km', 0);
+                  const energy = fmt(states['sensor.tesla_weekly_charging_energy']?.state, 'kWh', 2);
+                  const elecCost = ftm(states['sensor.tesla_weekly_electric_cost']?.state);
+                  const fuelEq = ftm(states['sensor.tesla_weekly_fuel_cost']?.state);
+                  const elecV = parseFloat(states['sensor.tesla_weekly_electric_cost']?.state || '0') || 0;
+                  const fuelV = parseFloat(states['sensor.tesla_weekly_fuel_cost']?.state || '0') || 0;
+                  const saved = Math.max(0, fuelV - elecV);
+                  return `<div style="width:100%;text-align:left">
+                    <div style="color:#ccc;font-size:12px;font-weight:700;letter-spacing:1.5px;padding-bottom:4px">📅 THIS WEEK <span style="color:#666;font-size:10px;font-weight:400">(since Mon)</span></div>
+                    ${row('🚗', 'DISTANCE', dist, '')}
+                    ${row('⚡', 'ENERGY CHARGED', energy, '')}
+                    ${row('💰', 'ELECTRIC COST', elecCost, `vs fuel ${fuelEq}`)}
+                    ${saved > 0 ? row('✅', 'SAVED VS ICE', 'Ft' + Math.round(saved).toLocaleString('hu-HU'), '') : ''}
+                  </div>`;
+                ]]]
+            styles:
+              card:
+                - background-color: rgba(28, 28, 30, 0.95)
+                - border-radius: 16px
+                - padding: 16px 20px
+              grid:
+                - grid-template-areas: '"block"'
+                - grid-template-columns: 1fr
+                - grid-template-rows: 1fr
+              custom_fields:
+                block:
+                  - width: 100%
+
+          # LAST 7 DAYS (rolling window, history_stats)
+          - type: custom:button-card
+            show_icon: false
+            show_name: false
+            show_state: false
+            tap_action:
+              action: none
+            custom_fields:
+              block: |
+                [[[
+                  const fmtMin = (raw) => {
+                    const m = parseFloat(String(raw || '0'));
+                    if (isNaN(m) || m <= 0) return '–';
+                    const h = Math.floor(m / 60); const min = Math.round(m % 60);
+                    return h > 0 ? `${h}h ${min}m` : `${min}m`;
+                  };
+                  const row = (icon, label, val, sub) =>
+                    `<div style="display:flex;align-items:center;gap:12px;padding:8px 0;border-top:1px solid rgba(255,255,255,0.07)">
+                      <span style="font-size:18px;width:22px;text-align:center;flex-shrink:0">${icon}</span>
+                      <div style="flex:1;min-width:0">
+                        <div style="color:#888;font-size:10px;font-weight:600;letter-spacing:1.2px">${label}</div>
+                        <div style="color:#fff;font-size:15px;font-weight:700">${val}${sub ? `<span style="color:#aaa;font-size:11px;font-weight:400">  ${sub}</span>` : ''}</div>
+                      </div>
+                    </div>`;
+                  const driveT = fmtMin(states['sensor.tesla_driving_time_7d']?.state);
+                  const chargeT = fmtMin(states['sensor.tesla_charging_time_7d']?.state);
+                  return `<div style="width:100%;text-align:left">
+                    <div style="color:#ccc;font-size:12px;font-weight:700;letter-spacing:1.5px;padding-bottom:4px">📅 LAST 7 DAYS <span style="color:#666;font-size:10px;font-weight:400">(rolling)</span></div>
+                    ${row('🚗', 'DRIVE TIME', driveT, '')}
+                    ${row('⚡', 'CHARGE TIME', chargeT, '')}
+                  </div>`;
+                ]]]
+            styles:
+              card:
+                - background-color: rgba(28, 28, 30, 0.95)
+                - border-radius: 16px
+                - padding: 16px 20px
+              grid:
+                - grid-template-areas: '"block"'
+                - grid-template-columns: 1fr
+                - grid-template-rows: 1fr
+              custom_fields:
+                block:
+                  - width: 100%
+
+          # THIS MONTH
+          - type: custom:button-card
+            show_icon: false
+            show_name: false
+            show_state: false
+            tap_action:
+              action: none
+            custom_fields:
+              block: |
+                [[[
+                  const fmt = (raw, unit, dec=1) => {
+                    const v = parseFloat(String(raw || '0'));
+                    return isNaN(v) || v <= 0 ? '–' : `${v.toFixed(dec)} ${unit}`;
+                  };
+                  const ftm = (raw) => {
+                    const v = parseFloat(String(raw || '0')) || 0;
+                    return v <= 0 ? 'Ft0' : 'Ft' + Math.round(v).toLocaleString('hu-HU');
+                  };
+                  const row = (icon, label, val, sub) =>
+                    `<div style="display:flex;align-items:center;gap:12px;padding:8px 0;border-top:1px solid rgba(255,255,255,0.07)">
+                      <span style="font-size:18px;width:22px;text-align:center;flex-shrink:0">${icon}</span>
+                      <div style="flex:1;min-width:0">
+                        <div style="color:#888;font-size:10px;font-weight:600;letter-spacing:1.2px">${label}</div>
+                        <div style="color:#fff;font-size:15px;font-weight:700">${val}${sub ? `<span style="color:#aaa;font-size:11px;font-weight:400">  ${sub}</span>` : ''}</div>
+                      </div>
+                    </div>`;
+                  const dist = fmt(states['sensor.tesla_monthly_distance']?.state, 'km', 0);
+                  const energy = fmt(states['sensor.tesla_monthly_charging_energy']?.state, 'kWh', 2);
+                  const elecCost = ftm(states['sensor.tesla_monthly_electric_cost']?.state);
+                  const fuelEq = ftm(states['sensor.tesla_monthly_fuel_cost']?.state);
+                  const elecV = parseFloat(states['sensor.tesla_monthly_electric_cost']?.state || '0') || 0;
+                  const fuelV = parseFloat(states['sensor.tesla_monthly_fuel_cost']?.state || '0') || 0;
+                  const saved = Math.max(0, fuelV - elecV);
+                  return `<div style="width:100%;text-align:left">
+                    <div style="color:#ccc;font-size:12px;font-weight:700;letter-spacing:1.5px;padding-bottom:4px">📅 THIS MONTH</div>
+                    ${row('🚗', 'DISTANCE', dist, '')}
+                    ${row('⚡', 'ENERGY CHARGED', energy, '')}
+                    ${row('💰', 'ELECTRIC COST', elecCost, `vs fuel ${fuelEq}`)}
+                    ${saved > 0 ? row('✅', 'SAVED VS ICE', 'Ft' + Math.round(saved).toLocaleString('hu-HU'), '') : ''}
+                  </div>`;
+                ]]]
+            styles:
+              card:
+                - background-color: rgba(28, 28, 30, 0.95)
+                - border-radius: 16px
+                - padding: 16px 20px
+              grid:
+                - grid-template-areas: '"block"'
+                - grid-template-columns: 1fr
+                - grid-template-rows: 1fr
+              custom_fields:
+                block:
+                  - width: 100%
+
+  # ========== VIEW 2: DRIVING ANALYTICS ==========
+  - title: Driving
+    path: driving
+    icon: mdi:car
+    cards:
+
+      # ── 1. DISTANCE ──
+      - type: custom:apexcharts-card
+        graph_span: 30d
+        header:
+          show: true
+          title: Distance
+          show_states: true
+          colorize_states: true
+        apex_config:
+          subtitle:
+            text: The total distance driven.
+            offsetY: 0
+            style:
+              fontSize: "12px"
+              color: "#888888"
+          chart:
+            height: 260
+            foreColor: '#7F7F7F'
+            toolbar:
+              show: false
+          plotOptions:
+            bar:
+              columnWidth: 70%
+              borderRadius: 2
+          grid:
+            borderColor: '#2D2D2D'
+            strokeDashArray: 4
+          xaxis:
+            type: datetime
+            labels:
+              datetimeFormatter:
+                day: "MMM d"
+          dataLabels:
+            enabled: false
+          colors:
+            - '#1E88E5'
+        series:
+          - entity: sensor.tesla_monthly_distance
+            name: TOTAL
+            unit: " km"
+            show:
+              in_chart: false
+              legend_value: true
+          - entity: sensor.tesla_daily_distance
+            name: km
+            type: column
+            show:
+              legend_value: false
+              in_header: false
+            transform: "return x > 500 ? null : x;"
+            group_by:
+              func: max
+              duration: 1d
+
+      # ── 2. ENERGY USED ──
+      - type: custom:apexcharts-card
+        graph_span: 30d
+        header:
+          show: true
+          title: Energy used
+          show_states: true
+          colorize_states: true
+        apex_config:
+          subtitle:
+            text: The total energy consumed while driving.
+            offsetY: 0
+            style:
+              fontSize: "12px"
+              color: "#888888"
+          chart:
+            height: 260
+            foreColor: '#7F7F7F'
+            toolbar:
+              show: false
+          plotOptions:
+            bar:
+              columnWidth: 70%
+              borderRadius: 2
+          grid:
+            borderColor: '#2D2D2D'
+            strokeDashArray: 4
+          xaxis:
+            type: datetime
+            labels:
+              datetimeFormatter:
+                day: "MMM d"
+          dataLabels:
+            enabled: false
+          colors:
+            - '#1E88E5'
+        series:
+          - entity: sensor.tesla_monthly_energy_consumed
+            name: TOTAL
+            unit: " kWh"
+            show:
+              in_chart: false
+              legend_value: true
+          - entity: sensor.tesla_daily_energy_consumed
+            name: AVERAGE
+            type: column
+            show:
+              legend_value: false
+            group_by:
+              func: max
+              duration: 1d
+
+      # ── 3. ELECTRIC COST ──
+      - type: custom:apexcharts-card
+        graph_span: 30d
+        header:
+          show: true
+          title: Electric cost
+          show_states: true
+          colorize_states: true
+        apex_config:
+          subtitle:
+            text: Based on the charging efficiency and cost of this period.
+            offsetY: 0
+            style:
+              fontSize: "12px"
+              color: "#888888"
+          chart:
+            height: 260
+            foreColor: '#7F7F7F'
+            toolbar:
+              show: false
+          plotOptions:
+            bar:
+              columnWidth: 70%
+              borderRadius: 2
+          grid:
+            borderColor: '#2D2D2D'
+            strokeDashArray: 4
+          xaxis:
+            type: datetime
+            labels:
+              datetimeFormatter:
+                day: "MMM d"
+          dataLabels:
+            enabled: false
+          colors:
+            - '#FF9F0A'
+            - '#FF9F0A'
+            - '#1E88E5'
+        series:
+          - entity: sensor.tesla_monthly_electric_cost
+            name: TOTAL
+            unit: " Ft"
+            show:
+              in_chart: false
+              legend_value: true
+          - entity: sensor.tesla_electric_cost_per_km
+            name: PER KILOMETER
+            unit: " Ft"
+            show:
+              in_chart: false
+              legend_value: true
+          - entity: sensor.tesla_daily_electric_cost
+            name: Ft
+            type: column
+            show:
+              legend_value: false
+              in_header: false
+            group_by:
+              func: max
+              duration: 1d
+
+      # ── 4. FUEL COST ──
+      - type: custom:apexcharts-card
+        graph_span: 30d
+        header:
+          show: true
+          title: Fuel cost
+          show_states: true
+          colorize_states: true
+        apex_config:
+          subtitle:
+            text: The total cost of driving if fuel was used.
+            offsetY: 0
+            style:
+              fontSize: "12px"
+              color: "#888888"
+          chart:
+            height: 260
+            foreColor: '#7F7F7F'
+            toolbar:
+              show: false
+          plotOptions:
+            bar:
+              columnWidth: 70%
+              borderRadius: 2
+          grid:
+            borderColor: '#2D2D2D'
+            strokeDashArray: 4
+          xaxis:
+            type: datetime
+            labels:
+              datetimeFormatter:
+                day: "MMM d"
+          dataLabels:
+            enabled: false
+          colors:
+            - '#1E88E5'
+        series:
+          - entity: sensor.tesla_monthly_fuel_cost
+            name: TOTAL
+            unit: " Ft"
+            show:
+              in_chart: false
+              legend_value: true
+          - entity: sensor.tesla_daily_fuel_cost_equivalent
+            name: AVERAGE
+            type: column
+            show:
+              legend_value: false
+            transform: "return x > 25000 ? null : x;"
+            group_by:
+              func: max
+              duration: 1d
+
+      # ── 5. DURATION ──
+      - type: custom:apexcharts-card
+        graph_span: 30d
+        header:
+          show: true
+          title: Duration
+          show_states: true
+          colorize_states: true
+        apex_config:
+          subtitle:
+            text: The total time spent driving.
+            offsetY: 0
+            style:
+              fontSize: "12px"
+              color: "#888888"
+          chart:
+            height: 260
+            foreColor: '#7F7F7F'
+            toolbar:
+              show: false
+          plotOptions:
+            bar:
+              columnWidth: 70%
+              borderRadius: 2
+          grid:
+            borderColor: '#2D2D2D'
+            strokeDashArray: 4
+          xaxis:
+            type: datetime
+            labels:
+              datetimeFormatter:
+                day: "MMM d"
+          yaxis:
+            labels:
+              formatter: "function(val) { return val.toFixed(1) + 'h'; }"
+          dataLabels:
+            enabled: false
+          colors:
+            - '#1E88E5'
+        series:
+          - entity: sensor.tesla_driving_time_30d_raw
+            name: TOTAL
+            unit: " h"
+            show:
+              in_chart: false
+              legend_value: true
+          - entity: sensor.tesla_driving_time_today_raw
+            name: h
+            type: column
+            group_by:
+              func: max
+              duration: 1d
+            show:
+              legend_value: false
+              in_header: false
+
+      # ── 6. SPEED ──
+      - type: custom:apexcharts-card
+        graph_span: 30d
+        header:
+          show: true
+          title: Speed
+          show_states: true
+          colorize_states: true
+        apex_config:
+          subtitle:
+            text: Average and peak driving speeds during this period.
+            offsetY: 0
+            style:
+              fontSize: "12px"
+              color: "#888888"
+          chart:
+            height: 260
+            foreColor: '#7F7F7F'
+            toolbar:
+              show: false
+          plotOptions:
+            bar:
+              columnWidth: 70%
+              borderRadius: 2
+          grid:
+            borderColor: '#2D2D2D'
+            strokeDashArray: 4
+          xaxis:
+            type: datetime
+            labels:
+              datetimeFormatter:
+                day: "MMM d"
+          yaxis:
+            title:
+              text: "km/h"
+          dataLabels:
+            enabled: false
+          colors:
+            - '#90CAF9'
+            - '#1565C0'
+          legend:
+            show: true
+            position: bottom
+        series:
+          - entity: sensor.tesla_speed
+            name: AVERAGE
+            type: column
+            unit: " km/h"
+            group_by:
+              func: avg
+              duration: 1d
+          - entity: sensor.tesla_speed
+            name: MAX
+            type: column
+            unit: " km/h"
+            group_by:
+              func: max
+              duration: 1d
+
+      # ── 7. TOTAL DRIVES ──
+      - type: custom:apexcharts-card
+        graph_span: 30d
+        header:
+          show: true
+          title: Total drives
+          show_states: true
+          colorize_states: true
+        apex_config:
+          subtitle:
+            text: The number of drives during this period.
+            offsetY: 0
+            style:
+              fontSize: "12px"
+              color: "#888888"
+          chart:
+            height: 260
+            foreColor: '#7F7F7F'
+            toolbar:
+              show: false
+          plotOptions:
+            bar:
+              columnWidth: 70%
+              borderRadius: 2
+          grid:
+            borderColor: '#2D2D2D'
+            strokeDashArray: 4
+          xaxis:
+            type: datetime
+            labels:
+              datetimeFormatter:
+                day: "MMM d"
+          yaxis:
+            min: 0
+            forceNiceScale: true
+          dataLabels:
+            enabled: false
+          colors:
+            - '#1E88E5'
+        series:
+          - entity: sensor.tesla_drive_sessions_30d
+            name: TOTAL
+            show:
+              in_chart: false
+              legend_value: true
+          - entity: sensor.tesla_drive_sessions_today
+            name: drives
+            type: column
+            show:
+              legend_value: false
+            group_by:
+              func: max
+              duration: 1d
+
+      # ── 8. ENERGY EFFICIENCY ──
+      - type: custom:apexcharts-card
+        graph_span: 30d
+        header:
+          show: true
+          title: Energy efficiency
+          show_states: true
+          colorize_states: true
+        apex_config:
+          subtitle:
+            text: Energy usage while driving.
+            offsetY: 0
+            style:
+              fontSize: "12px"
+              color: "#888888"
+          chart:
+            height: 260
+            foreColor: '#7F7F7F'
+            toolbar:
+              show: false
+          plotOptions:
+            bar:
+              columnWidth: 70%
+              borderRadius: 2
+          grid:
+            borderColor: '#2D2D2D'
+            strokeDashArray: 4
+          xaxis:
+            type: datetime
+            labels:
+              datetimeFormatter:
+                day: "MMM d"
+          yaxis:
+            title:
+              text: "Wh/km"
+            min: 0
+          dataLabels:
+            enabled: false
+          colors:
+            - '#1E88E5'
+        series:
+          - entity: sensor.tesla_efficiency_wh_per_km
+            name: AVERAGE
+            unit: " Wh/km"
+            show:
+              in_chart: false
+              legend_value: true
+          - entity: sensor.tesla_daily_efficiency_wh_per_km
+            name: Wh/km
+            type: column
+            show:
+              legend_value: false
+            group_by:
+              func: last
+              duration: 1d
+
+      # ── 9. SPEED EFFICIENCY ──
+      - type: custom:apexcharts-card
+        graph_span: 30d
+        header:
+          show: true
+          title: Speed efficiency
+          show_states: false
+        apex_config:
+          subtitle:
+            text: "Energy usage by vehicle speed. Includes drives over 24 kilometers."
+            offsetY: 0
+            style:
+              fontSize: "12px"
+              color: "#888888"
+          chart:
+            height: 280
+            foreColor: '#7F7F7F'
+            toolbar:
+              show: false
+          plotOptions:
+            bar:
+              columnWidth: 70%
+              borderRadius: 2
+          grid:
+            borderColor: '#2D2D2D'
+            strokeDashArray: 4
+          xaxis:
+            type: datetime
+            labels:
+              datetimeFormatter:
+                day: "MMM d"
+          yaxis:
+            - id: efficiency
+              title:
+                text: "Wh/km"
+              min: 0
+              seriesName: "Wh/km"
+              labels:
+                formatter: "function(val) { return Math.round(val); }"
+            - id: speed
+              opposite: true
+              title:
+                text: "km/h"
+              min: 0
+              seriesName: "km/h"
+              labels:
+                formatter: "function(val) { return Math.round(val); }"
+          stroke:
+            curve: smooth
+            width:
+              - 0
+              - 2
+          dataLabels:
+            enabled: false
+          colors:
+            - '#1E88E5'
+            - '#90CAF9'
+          legend:
+            show: true
+            position: bottom
+        series:
+          - entity: sensor.tesla_daily_efficiency_wh_per_km
+            name: "Wh/km"
+            type: column
+            yaxis_id: efficiency
+            group_by:
+              func: last
+              duration: 1d
+          - entity: sensor.tesla_speed
+            name: "km/h"
+            type: line
+            yaxis_id: speed
+            statistics:
+              type: mean
+              period: day
+
+      # ── 10. TEMPERATURE EFFICIENCY ──
+      - type: custom:apexcharts-card
+        graph_span: 30d
+        header:
+          show: true
+          title: Temperature efficiency
+          show_states: false
+        apex_config:
+          subtitle:
+            text: "Energy usage by outside temperature. Includes drives over 24 kilometers."
+            offsetY: 0
+            style:
+              fontSize: "12px"
+              color: "#888888"
+          chart:
+            height: 280
+            foreColor: '#7F7F7F'
+            toolbar:
+              show: false
+          plotOptions:
+            bar:
+              columnWidth: 70%
+              borderRadius: 2
+          grid:
+            borderColor: '#2D2D2D'
+            strokeDashArray: 4
+          xaxis:
+            type: datetime
+            labels:
+              datetimeFormatter:
+                day: "MMM d"
+          yaxis:
+            - id: efficiency
+              title:
+                text: "Wh/km"
+              min: 0
+              seriesName: "Wh/km"
+              labels:
+                formatter: "function(val) { return Math.round(val); }"
+            - id: temp
+              opposite: true
+              title:
+                text: "°C"
+              seriesName: "°C"
+              labels:
+                formatter: "function(val) { return Math.round(val); }"
+          stroke:
+            curve: smooth
+            width:
+              - 0
+              - 2
+          dataLabels:
+            enabled: false
+          colors:
+            - '#1E88E5'
+            - '#EF5350'
+          legend:
+            show: true
+            position: bottom
+        series:
+          - entity: sensor.tesla_daily_efficiency_wh_per_km
+            name: "Wh/km"
+            type: column
+            yaxis_id: efficiency
+            group_by:
+              func: last
+              duration: 1d
+          - entity: sensor.tesla_outside_temperature
+            name: "°C"
+            type: line
+            yaxis_id: temp
+            statistics:
+              type: mean
+              period: day
+
+  # ========== VIEW 3: CHARGING ANALYTICS ==========
+  - title: Charging
+    path: charging
+    icon: mdi:lightning-bolt
+    cards:
+
+      # ── Charger Power ──
+      - type: custom:apexcharts-card
+        graph_span: 30d
+        header:
+          show: true
+          title: "Charger power"
+          show_states: true
+          colorize_states: true
+        apex_config:
+          chart:
+            height: 230
+            foreColor: '#7F7F7F'
+            toolbar:
+              show: false
+          plotOptions:
+            bar:
+              columnWidth: 70%
+              borderRadius: 2
+          grid:
+            borderColor: '#2D2D2D'
+            strokeDashArray: 4
+          xaxis:
+            type: datetime
+          dataLabels:
+            enabled: false
+          colors:
+            - '#1E88E5'
+        series:
+          - entity: sensor.tesla_charger_power
+            name: "kW"
+            type: column
+
+      # ── Energy Added ──
+      - type: custom:apexcharts-card
+        graph_span: 30d
+        header:
+          show: true
+          title: "Energy added"
+          show_states: true
+          colorize_states: true
+        apex_config:
+          chart:
+            height: 230
+            foreColor: '#7F7F7F'
+            toolbar:
+              show: false
+          plotOptions:
+            bar:
+              columnWidth: 70%
+              borderRadius: 2
+          grid:
+            borderColor: '#2D2D2D'
+            strokeDashArray: 4
+          xaxis:
+            type: datetime
+          dataLabels:
+            enabled: false
+          colors:
+            - '#1565C0'
+            - '#1E88E5'
+        series:
+          - entity: sensor.tesla_monthly_charging_energy
+            name: "TOTAL"
+            unit: " kWh"
+            show:
+              in_chart: false
+              legend_value: true
+          - entity: sensor.tesla_charge_energy_added
+            name: "kWh"
+            type: column
+
+      # ── Charge Rate ──
+      - type: custom:apexcharts-card
+        graph_span: 30d
+        header:
+          show: true
+          title: "Charge rate"
+          show_states: true
+          colorize_states: true
+        apex_config:
+          chart:
+            height: 230
+            foreColor: '#7F7F7F'
+            toolbar:
+              show: false
+          plotOptions:
+            bar:
+              columnWidth: 70%
+              borderRadius: 2
+          grid:
+            borderColor: '#2D2D2D'
+            strokeDashArray: 4
+          xaxis:
+            type: datetime
+          dataLabels:
+            enabled: false
+          colors:
+            - '#4CAF50'
+        series:
+          - entity: sensor.tesla_charge_rate
+            name: "km/h"
+            type: column
+
+      # ── Charger Current ──
+      - type: custom:apexcharts-card
+        graph_span: 30d
+        header:
+          show: true
+          title: "Charger current"
+          show_states: true
+          colorize_states: true
+        apex_config:
+          chart:
+            height: 230
+            foreColor: '#7F7F7F'
+            toolbar:
+              show: false
+          plotOptions:
+            bar:
+              columnWidth: 70%
+              borderRadius: 2
+          grid:
+            borderColor: '#2D2D2D'
+            strokeDashArray: 4
+          xaxis:
+            type: datetime
+          dataLabels:
+            enabled: false
+          colors:
+            - '#9C27B0'
+        series:
+          - entity: sensor.tesla_charger_current
+            name: "A"
+            type: column
+
+  # ========== VIEW 4: SETTINGS ==========
+  - title: Settings
+    path: settings
+    icon: mdi:cog
+    cards:
+      - type: markdown
+        content: |
+          ## Settings & Configuration
+
+      # Electricity Cost Configuration
+      - type: markdown
+        content: |
+          ## ⚡ Electricity Costs
+
+      - type: custom:mushroom-number-card
+        entity: input_number.tesla_default_electricity_cost
+        name: "Default Electricity Rate"
+        icon: mdi:currency-eur
+        unit: "Ft/kWh"
+        min: 0
+        max: 200
+        step: 0.5
+
+      # Supercharger Configuration (Placeholder)
+      - type: markdown
+        content: |
+          ## 🔌 Supercharging
+
+          Supercharging costs are synced automatically from your Tesla account. Current status: **Not configured yet**
+
+      # Fuel Comparison Profiler
+      - type: markdown
+        content: |
+          ## 🚗 Fuel Comparison (ICE Vehicle)
+
+      - type: custom:mushroom-number-card
+        entity: input_number.comparison_ice_efficiency
+        name: "ICE Fuel Efficiency"
+        icon: mdi:fuel
+        unit: "L/100km"
+        min: 1
+        max: 25
+        step: 0.1
+
+      - type: custom:mushroom-number-card
+        entity: input_number.comparison_fuel_price_per_liter
+        name: "Fuel Price per Litre"
+        icon: mdi:currency-eur
+        unit: "Ft/L"
+        min: 0
+        max: 2000
+        step: 1
+
+      # Rate Schedules Documentation
+      - type: markdown
+        content: |
+          ---
+          ## 📍 Saved Location Rates
+
+          ### Home (123 Main St)
+          - **Rate:** 60.0 Ft/kWh
+          - **Hours:** 00:00 – 00:00 (24/7)
+          - **Active Days:** Mon–Sun
+          - **Season:** Jan–Dec
+
+          ### Solar / Off-Peak (Seasonal)
+          - **Rate:** 0.0 Ft/kWh (Solar surplus)
+          - **Hours:** 10:00 – 14:00
+          - **Active Days:** Mon–Sun
+          - **Season:** May–Sep
+
+          ### Work Location (456 Office Ave)
+          - **Rate:** 75.0 Ft/kWh
+          - **Hours:** 06:00 – 18:00
+          - **Active Days:** Mon–Fri
+          - **Season:** Jan–Dec
+
+          ---
+          **Note:** Edit these rates directly in `configuration.yaml` under `input_number:` for now. Full UI editor coming in a future update.

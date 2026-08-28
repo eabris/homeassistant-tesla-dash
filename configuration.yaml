@@ -1,0 +1,749 @@
+# Loads default set of integrations. Do not remove.
+default_config:
+
+# Load frontend themes from the themes folder
+frontend:
+  themes: !include_dir_merge_named themes
+
+automation: !include packages/tesla/automations.yaml
+script: !include packages/tesla/scripts.yaml
+
+lovelace:
+  mode: storage
+  dashboards:
+    tesla-dashboard:
+      mode: yaml
+      title: Tesla Overview
+      icon: mdi:car-electric
+      show_in_sidebar: true
+      filename: dashboards/tesla-overview.yaml
+    tesla-analytics:
+      mode: yaml
+      title: Tesla Analytics
+      icon: mdi:chart-line
+      show_in_sidebar: true
+      filename: dashboards/tesla-analytics.yaml
+
+http:
+  use_x_forwarded_for: true
+  trusted_proxies:
+    - 172.30.33.0/24
+    - 127.0.0.1
+    - ::1
+#    - 192.168.188.0/24
+
+utility_meter:
+  tesla_daily_distance_raw:
+    source: sensor.tesla_odometer
+    cycle: daily
+    name: "Tesla Daily Distance Raw"
+
+  tesla_daily_charging_energy:
+    source: sensor.tesla_charge_energy_added
+    cycle: daily
+    name: "Tesla Daily Charging Energy"
+
+  tesla_weekly_charging_energy:
+    source: sensor.tesla_charge_energy_added
+    cycle: weekly
+    name: "Tesla Weekly Charging Energy"
+
+  tesla_monthly_charging_energy:
+    source: sensor.tesla_charge_energy_added
+    cycle: monthly
+    name: "Tesla Monthly Charging Energy"
+
+  tesla_weekly_distance_raw:
+    source: sensor.tesla_odometer
+    cycle: weekly
+    name: "Tesla Weekly Distance Raw"
+
+sensor:
+  - platform: history_stats
+    name: "Tesla Driving Time Today Raw"
+    entity_id: binary_sensor.tesla_driving_active
+    state: "on"
+    type: time
+    start: "{{ today_at('00:00') }}"
+    end: "{{ now() }}"
+
+  - platform: history_stats
+    name: "Tesla Driving Time 7d Raw"
+    entity_id: binary_sensor.tesla_driving_active
+    state: "on"
+    type: time
+    start: "{{ now() - timedelta(days=7) }}"
+    end: "{{ now() }}"
+
+  - platform: history_stats
+    name: "Tesla Charging Time Today Raw"
+    entity_id: binary_sensor.tesla_charging_active
+    state: "on"
+    type: time
+    start: "{{ today_at('00:00') }}"
+    end: "{{ now() }}"
+
+  - platform: history_stats
+    name: "Tesla Charging Time 7d Raw"
+    entity_id: binary_sensor.tesla_charging_active
+    state: "on"
+    type: time
+    start: "{{ now() - timedelta(days=7) }}"
+    end: "{{ now() }}"
+
+  - platform: history_stats
+    name: "Tesla Drive Sessions Today"
+    entity_id: binary_sensor.tesla_driving_active
+    state: "on"
+    type: count
+    start: "{{ today_at('00:00') }}"
+    end: "{{ now() }}"
+
+  - platform: history_stats
+    name: "Tesla Drive Sessions 7d"
+    entity_id: binary_sensor.tesla_driving_active
+    state: "on"
+    type: count
+    start: "{{ now() - timedelta(days=7) }}"
+    end: "{{ now() }}"
+
+  - platform: history_stats
+    name: "Tesla Charge Sessions Today"
+    entity_id: binary_sensor.tesla_charging_active
+    state: "on"
+    type: count
+    start: "{{ today_at('00:00') }}"
+    end: "{{ now() }}"
+
+  - platform: history_stats
+    name: "Tesla Charge Sessions 7d"
+    entity_id: binary_sensor.tesla_charging_active
+    state: "on"
+    type: count
+    start: "{{ now() - timedelta(days=7) }}"
+    end: "{{ now() }}"
+
+  - platform: history_stats
+    name: "Tesla Charging Time 3d Raw"
+    entity_id: binary_sensor.tesla_charging_active
+    state: "on"
+    type: time
+    start: "{{ now() - timedelta(days=3) }}"
+    end: "{{ now() }}"
+
+  - platform: history_stats
+    name: "Tesla Driving Time 30d Raw"
+    entity_id: binary_sensor.tesla_driving_active
+    state: "on"
+    type: time
+    start: "{{ now() - timedelta(days=30) }}"
+    end: "{{ now() }}"
+
+  - platform: history_stats
+    name: "Tesla Drive Sessions 30d"
+    entity_id: binary_sensor.tesla_driving_active
+    state: "on"
+    type: count
+    start: "{{ now() - timedelta(days=30) }}"
+    end: "{{ now() }}"
+
+input_number:
+  tesla_odometer_daily_baseline:
+    name: "Tesla Odometer Daily Baseline"
+    min: 0
+    max: 9999999
+    step: 0.01
+    mode: box
+    unit_of_measurement: "km"
+    icon: mdi:counter
+
+  tesla_odometer_monthly_baseline:
+    name: "Tesla Odometer Monthly Baseline"
+    min: 0
+    max: 9999999
+    step: 0.01
+    mode: box
+    unit_of_measurement: "km"
+    icon: mdi:counter
+
+  tesla_target_charge_limit:
+    name: "Tesla Target Charge Limit"
+    min: 50
+    max: 100
+    step: 1
+    unit_of_measurement: "%"
+    icon: mdi:battery-80
+
+  tesla_default_electricity_cost:
+    name: "Default Electricity Cost"
+    unit_of_measurement: "Ft/kWh"
+    min: 0
+    max: 200
+    step: 0.5
+    icon: mdi:currency-eur
+    mode: slider
+    initial: 60.0
+
+  comparison_ice_efficiency:
+    name: "ICE Fuel Efficiency (Comparison)"
+    unit_of_measurement: "L/100km"
+    min: 1
+    max: 25
+    step: 0.1
+    icon: mdi:fuel
+    mode: slider
+    initial: 6.5
+
+  comparison_fuel_price_per_liter:
+    name: "Fuel Price per Litre"
+    unit_of_measurement: "Ft/L"
+    min: 0
+    max: 2000
+    step: 1
+    icon: mdi:currency-eur
+    mode: slider
+    initial: 595.0
+
+input_text:
+  tesla_model:
+    name: "Tesla Model"
+    initial: "Tesla Model X"
+    icon: mdi:car-electric
+  tesla_vin:
+    name: "Tesla VIN"
+    initial: "5YJ12345678901234"
+    icon: mdi:identifier
+  tesla_plate:
+    name: "Tesla Plate"
+    initial: "XXYY-123"
+    icon: mdi:card-text
+
+input_boolean:
+  tesla_enable_smart_charging:
+    name: "Tesla Enable Smart Charging"
+    icon: mdi:lightning-bolt
+
+input_datetime:
+  tesla_next_departure:
+    name: "Tesla Next Departure"
+    has_date: true
+    has_time: true
+    icon: mdi:calendar-clock
+
+template:
+  # ===== FLEET SENSOR ALIASES =====
+  # These read dynamically from input_text.tesla_car_name.
+  # Change that helper value → all aliases (and anything built on them) update automatically.
+  - sensor:
+      - name: "Tesla Odometer"
+        unique_id: tesla_odometer_alias_v1
+        state: >
+          {% set car = states('input_text.tesla_car_name') %}
+          {{ states('sensor.' + car + '_odometer') }}
+        unit_of_measurement: "km"
+        device_class: distance
+        state_class: total_increasing
+        icon: mdi:counter
+
+      - name: "Tesla Charge Energy Added"
+        unique_id: tesla_charge_energy_added_alias_v1
+        state: >
+          {% set car = states('input_text.tesla_car_name') %}
+          {{ states('sensor.' + car + '_charge_energy_added') }}
+        unit_of_measurement: "kWh"
+        device_class: energy
+        state_class: total_increasing
+        icon: mdi:ev-station
+
+      - name: "Tesla Battery Level"
+        unique_id: tesla_battery_level_alias_v1
+        state: >
+          {% set car = states('input_text.tesla_car_name') %}
+          {{ states('sensor.' + car + '_usable_battery_level') }}
+        unit_of_measurement: "%"
+        device_class: battery
+        state_class: measurement
+        icon: mdi:battery
+
+      - name: "Tesla Battery Range"
+        unique_id: tesla_battery_range_alias_v1
+        state: >
+          {% set car = states('input_text.tesla_car_name') %}
+          {{ states('sensor.' + car + '_estimate_battery_range') }}
+        unit_of_measurement: "km"
+        icon: mdi:map-marker-distance
+
+      - name: "Tesla Charge Rate"
+        unique_id: tesla_charge_rate_alias_v1
+        state: >
+          {% set car = states('input_text.tesla_car_name') %}
+          {{ states('sensor.' + car + '_charge_rate') }}
+        unit_of_measurement: "km/h"
+        icon: mdi:speedometer
+
+      - name: "Tesla Charger Current"
+        unique_id: tesla_charger_current_alias_v1
+        state: >
+          {% set car = states('input_text.tesla_car_name') %}
+          {{ states('sensor.' + car + '_charger_current') }}
+        unit_of_measurement: "A"
+        device_class: current
+        icon: mdi:sine-wave
+
+      - name: "Tesla Charger Power"
+        unique_id: tesla_charger_power_alias_v1
+        state: >
+          {% set car = states('input_text.tesla_car_name') %}
+          {{ states('sensor.' + car + '_charger_power') }}
+        unit_of_measurement: "kW"
+        device_class: power
+        icon: mdi:flash
+
+      - name: "Tesla Charger Voltage"
+        unique_id: tesla_charger_voltage_alias_v1
+        state: >
+          {% set car = states('input_text.tesla_car_name') %}
+          {{ states('sensor.' + car + '_charger_voltage') }}
+        unit_of_measurement: "V"
+        device_class: voltage
+        icon: mdi:flash
+
+      - name: "Tesla Charging"
+        unique_id: tesla_charging_alias_v1
+        state: >
+          {% set car = states('input_text.tesla_car_name') %}
+          {{ states('sensor.' + car + '_charging') }}
+        icon: mdi:ev-station
+
+      - name: "Tesla Inside Temperature"
+        unique_id: tesla_inside_temperature_alias_v1
+        state: >
+          {% set car = states('input_text.tesla_car_name') %}
+          {{ states('sensor.' + car + '_inside_temperature') }}
+        unit_of_measurement: "°C"
+        device_class: temperature
+        state_class: measurement
+        icon: mdi:thermometer
+
+      - name: "Tesla Outside Temperature"
+        unique_id: tesla_outside_temperature_alias_v1
+        state: >
+          {% set car = states('input_text.tesla_car_name') %}
+          {{ states('sensor.' + car + '_outside_temperature') }}
+        unit_of_measurement: "°C"
+        device_class: temperature
+        state_class: measurement
+        icon: mdi:thermometer
+
+      - name: "Tesla Shift State"
+        unique_id: tesla_shift_state_alias_v1
+        state: >
+          {% set car = states('input_text.tesla_car_name') %}
+          {{ states('sensor.' + car + '_shift_state') }}
+        icon: mdi:car-shift-pattern
+
+      - name: "Tesla Speed"
+        unique_id: tesla_speed_alias_v1
+        state: >
+          {% set car = states('input_text.tesla_car_name') %}
+          {{ states('sensor.' + car + '_speed') }}
+        unit_of_measurement: "km/h"
+        state_class: measurement
+        icon: mdi:speedometer
+
+      - name: "Tesla Time To Full Charge"
+        unique_id: tesla_time_to_full_charge_alias_v1
+        state: >
+          {% set car = states('input_text.tesla_car_name') %}
+          {{ states('sensor.' + car + '_time_to_full_charge') }}
+        icon: mdi:battery-clock
+
+      - name: "Tesla Tyre Pressure Front Left"
+        unique_id: tesla_tyre_pressure_fl_alias_v1
+        state: >
+          {% set car = states('input_text.tesla_car_name') %}
+          {{ states('sensor.' + car + '_tyre_pressure_front_left') }}
+        unit_of_measurement: "bar"
+        device_class: pressure
+        state_class: measurement
+        icon: mdi:tire
+
+      - name: "Tesla Tyre Pressure Front Right"
+        unique_id: tesla_tyre_pressure_fr_alias_v1
+        state: >
+          {% set car = states('input_text.tesla_car_name') %}
+          {{ states('sensor.' + car + '_tyre_pressure_front_right') }}
+        unit_of_measurement: "bar"
+        device_class: pressure
+        state_class: measurement
+        icon: mdi:tire
+
+      - name: "Tesla Tyre Pressure Rear Left"
+        unique_id: tesla_tyre_pressure_rl_alias_v1
+        state: >
+          {% set car = states('input_text.tesla_car_name') %}
+          {{ states('sensor.' + car + '_tyre_pressure_rear_left') }}
+        unit_of_measurement: "bar"
+        device_class: pressure
+        state_class: measurement
+        icon: mdi:tire
+
+      - name: "Tesla Tyre Pressure Rear Right"
+        unique_id: tesla_tyre_pressure_rr_alias_v1
+        state: >
+          {% set car = states('input_text.tesla_car_name') %}
+          {{ states('sensor.' + car + '_tyre_pressure_rear_right') }}
+        unit_of_measurement: "bar"
+        device_class: pressure
+        state_class: measurement
+        icon: mdi:tire
+
+  - binary_sensor:
+      - name: "Tesla Tyre Pressure Warning Front Left"
+        unique_id: tesla_tyre_pressure_warning_fl_alias_v1
+        state: >
+          {% set car = states('input_text.tesla_car_name') %}
+          {{ is_state('binary_sensor.' + car + '_tyre_pressure_warning_front_left', 'on') }}
+        device_class: problem
+        icon: mdi:tire-alert
+
+      - name: "Tesla Tyre Pressure Warning Front Right"
+        unique_id: tesla_tyre_pressure_warning_fr_alias_v1
+        state: >
+          {% set car = states('input_text.tesla_car_name') %}
+          {{ is_state('binary_sensor.' + car + '_tyre_pressure_warning_front_right', 'on') }}
+        device_class: problem
+        icon: mdi:tire-alert
+
+      - name: "Tesla Tyre Pressure Warning Rear Left"
+        unique_id: tesla_tyre_pressure_warning_rl_alias_v1
+        state: >
+          {% set car = states('input_text.tesla_car_name') %}
+          {{ is_state('binary_sensor.' + car + '_tyre_pressure_warning_rear_left', 'on') }}
+        device_class: problem
+        icon: mdi:tire-alert
+
+      - name: "Tesla Tyre Pressure Warning Rear Right"
+        unique_id: tesla_tyre_pressure_warning_rr_alias_v1
+        state: >
+          {% set car = states('input_text.tesla_car_name') %}
+          {{ is_state('binary_sensor.' + car + '_tyre_pressure_warning_rear_right', 'on') }}
+        device_class: problem
+        icon: mdi:tire-alert
+
+      - name: "Tesla Status"
+        unique_id: tesla_status_alias_v1
+        state: >
+          {% set car = states('input_text.tesla_car_name') %}
+          {{ is_state('binary_sensor.' + car + '_status', 'on') }}
+        icon: mdi:car-connected
+
+      - name: "Tesla Charge Cable"
+        unique_id: tesla_charge_cable_alias_v1
+        state: >
+          {% set car = states('input_text.tesla_car_name') %}
+          {{ is_state('binary_sensor.' + car + '_charge_cable', 'on') }}
+        device_class: plug
+        icon: mdi:power-plug
+
+  # ===== CUSTOM SENSORS (built on top of aliases — rename-proof) =====
+  - binary_sensor:
+      - name: "Tesla Driving Active"
+        unique_id: tesla_driving_active_v1
+        icon: mdi:car
+        state: >
+          {% set shift = states('sensor.tesla_shift_state') | upper %}
+          {% set speed = states('sensor.tesla_speed') | float(0) %}
+          {{ shift in ['D', 'R', 'N'] or (shift in ['UNKNOWN', 'UNAVAILABLE', 'NONE', ''] and speed > 1) }}
+
+      - name: "Tesla Charging Active"
+        unique_id: tesla_charging_active_v1
+        icon: mdi:ev-station
+        state: >
+          {{ states('sensor.tesla_charging') | lower in ['charging', 'preconditioning'] }}
+
+      - name: "Tesla Anomaly No Charge 3d"
+        unique_id: tesla_anomaly_no_charge_3d_v1
+        icon: mdi:alert-outline
+        state: >
+          {% set charge_h = states('sensor.tesla_charging_time_3d_raw') | float(0) %}
+          {% set dist_7d = states('sensor.tesla_weekly_distance') | float(0) %}
+          {{ charge_h < 0.1 and dist_7d > 30 }}
+
+      - name: "Tesla Anomaly High Daily Cost"
+        unique_id: tesla_anomaly_high_daily_cost_v1
+        icon: mdi:cash-alert
+        state: >
+          {% set daily_cost = states('sensor.tesla_daily_electric_cost') | float(0) %}
+          {% set weekly_energy = states('sensor.tesla_weekly_charging_energy') | float(0) %}
+          {% set weekly_avg = (weekly_energy * 60) / 7 %}
+          {{ daily_cost > (weekly_avg * 1.8) and daily_cost > 800 }}
+
+  - sensor:
+      # === Vehicle Stats ===
+      - name: "Tesla Tires Status"
+        unique_id: tesla_tires_status_v4
+        icon: mdi:tire
+        state: >
+          {% set warning_entities = [
+            'binary_sensor.tesla_tyre_pressure_warning_front_left',
+            'binary_sensor.tesla_tyre_pressure_warning_front_right',
+            'binary_sensor.tesla_tyre_pressure_warning_rear_left',
+            'binary_sensor.tesla_tyre_pressure_warning_rear_right'
+          ] %}
+          {% set active_warnings = warning_entities | select('is_state', 'on') | list | count %}
+          {% if active_warnings > 0 %}
+            Check Tires
+          {% else %}
+            Optimal
+          {% endif %}
+
+      # === Efficiency ===
+      - name: "Tesla Efficiency kWh/km"
+        unique_id: tesla_efficiency_kwh_per_km_v4
+        unit_of_measurement: "kWh/km"
+        icon: mdi:car-electric
+        state: "0.228"
+
+      - name: "Tesla Efficiency Wh Per Km"
+        unique_id: tesla_efficiency_wh_per_km_v5
+        unit_of_measurement: "Wh/km"
+        icon: mdi:car-electric
+        state: >
+          {{ (states('sensor.tesla_efficiency_kwh_per_km') | float(0.228) * 1000) | round(0) }}
+
+      # === Distance ===
+      - name: "Tesla Daily Distance"
+        unique_id: tesla_daily_distance_v4
+        unit_of_measurement: "km"
+        icon: mdi:map-marker-distance
+        state: >
+          {{ states('sensor.tesla_daily_distance_raw') | float(0) | round(2) }}
+
+      - name: "Tesla Weekly Distance"
+        unique_id: tesla_weekly_distance_v1
+        unit_of_measurement: "km"
+        state_class: measurement
+        icon: mdi:map-marker-distance
+        state: >
+          {{ states('sensor.tesla_weekly_distance_raw') | float(0) | round(2) }}
+
+      - name: "Tesla Monthly Distance"
+        unique_id: tesla_monthly_distance_v4
+        unit_of_measurement: "km"
+        state_class: measurement
+        icon: mdi:map-marker-distance
+        state: >
+          {% set odom_raw = states('sensor.tesla_odometer') %}
+          {% set base_raw = states('input_number.tesla_odometer_monthly_baseline') %}
+          {% if odom_raw in ['unknown', 'unavailable', 'none'] or base_raw in ['unknown', 'unavailable', 'none'] %}
+            {% set prev = this.state | float(0) %}
+            {{ prev | round(2) }}
+          {% else %}
+            {% set odom = odom_raw | float(0) %}
+            {% set base = base_raw | float(0) %}
+            {{ ((odom - base) if odom >= base else 0) | round(2) }}
+          {% endif %}
+
+      # === Daily Tracking ===
+      - name: "Tesla Daily Energy Consumed"
+        unique_id: tesla_daily_energy_consumed_v4
+        unit_of_measurement: "kWh"
+        icon: mdi:flash
+        state: >
+          {% set dist_km = states('sensor.tesla_daily_distance') | float(0) %}
+          {% set eff = states('sensor.tesla_efficiency_kwh_per_km') | float(0.228) %}
+          {{ (dist_km * eff) | round(2) }}
+
+      - name: "Tesla Daily Electric Cost"
+        unique_id: tesla_daily_electric_cost_v4
+        unit_of_measurement: "Ft"
+        icon: mdi:cash
+        state: >
+          {% set energy = states('sensor.tesla_daily_charging_energy') | float(0) %}
+          {{ (energy * 60) | round(0) }}
+
+      # === Monthly + Projections ===
+      - name: "Tesla Monthly Electric Cost"
+        unique_id: tesla_monthly_electric_cost_v4
+        unit_of_measurement: "Ft"
+        icon: mdi:cash-multiple
+        state: >
+          {% set monthly_energy = states('sensor.tesla_monthly_charging_energy') | float(0) %}
+          {{ (monthly_energy * 60) | round(0) }}
+
+      - name: "Tesla Weekly Electric Cost"
+        unique_id: tesla_weekly_electric_cost_v1
+        unit_of_measurement: "Ft"
+        icon: mdi:cash-multiple
+        state: >
+          {% set weekly_energy = states('sensor.tesla_weekly_charging_energy') | float(0) %}
+          {{ (weekly_energy * 60) | round(0) }}
+
+      - name: "Tesla Annual Electric Cost"
+        unique_id: tesla_annual_electric_cost_v4
+        unit_of_measurement: "Ft"
+        icon: mdi:cash-multiple
+        state: >
+          {% set monthly = states('sensor.tesla_monthly_electric_cost') | float(0) %}
+          {{ (monthly * 12) | round(0) }}
+
+      - name: "Tesla 5 Year Electric Cost"
+        unique_id: tesla_5year_electric_cost_v4
+        unit_of_measurement: "Ft"
+        icon: mdi:cash-multiple
+        state: >
+          {% set annual = states('sensor.tesla_annual_electric_cost') | float(0) %}
+          {{ (annual * 5) | round(0) }}
+
+      # === Equivalent Fuel Cost ===
+      - name: "Tesla Fuel Cost per km"
+        unique_id: tesla_fuel_cost_per_km_v4
+        unit_of_measurement: "Ft/km"
+        icon: mdi:gas-station
+        state: >
+          {% set eff = states('input_number.comparison_ice_efficiency') | float(6.5) %}
+          {% set price = states('input_number.comparison_fuel_price_per_liter') | float(595) %}
+          {{ (eff / 100 * price) | round(2) }}
+
+      - name: "Tesla Daily Fuel Cost Equivalent"
+        unique_id: tesla_daily_fuel_cost_equivalent_v4
+        unit_of_measurement: "Ft"
+        icon: mdi:gas-station
+        state: >
+          {% set dist = states('sensor.tesla_daily_distance') | float(0) %}
+          {% set fuel_per_km = states('sensor.tesla_fuel_cost_per_km') | float(0) %}
+          {{ (dist * fuel_per_km) | round(0) }}
+
+      - name: "Tesla Monthly Fuel Cost"
+        unique_id: tesla_monthly_fuel_cost_v5
+        unit_of_measurement: "Ft"
+        icon: mdi:gas-station
+        state: >
+          {% set dist = states('sensor.tesla_monthly_distance') | float(0) %}
+          {% set fuel_per_km = states('sensor.tesla_fuel_cost_per_km') | float(0) %}
+          {{ (dist * fuel_per_km) | round(0) }}
+
+      - name: "Tesla Weekly Fuel Cost Equivalent"
+        unique_id: tesla_weekly_fuel_cost_v1
+        unit_of_measurement: "Ft"
+        icon: mdi:gas-station
+        state: >
+          {% set dist = states('sensor.tesla_weekly_distance') | float(0) %}
+          {% set fuel_per_km = states('sensor.tesla_fuel_cost_per_km') | float(0) %}
+          {{ (dist * fuel_per_km) | round(0) }}
+
+      - name: "Tesla Monthly Energy Consumed"
+        unique_id: tesla_monthly_energy_consumed_v4
+        unit_of_measurement: "kWh"
+        device_class: energy
+        state_class: total_increasing
+        icon: mdi:flash
+        state: >
+          {{ states('sensor.tesla_monthly_charging_energy') | float(0) | round(2) }}
+
+      - name: "Tesla Electric Cost Per KM"
+        unique_id: tesla_electric_cost_per_km_v4
+        unit_of_measurement: "Ft/km"
+        icon: mdi:cash
+        state: >
+          {{ (states('sensor.tesla_efficiency_kwh_per_km') | float(0) * 60) | round(2) }}
+
+      # === Activity Time Tracking ===
+      - name: "Tesla Driving Time Today"
+        unique_id: tesla_driving_time_today_v1
+        unit_of_measurement: "min"
+        icon: mdi:car
+        state: >
+          {% set hours = states('sensor.tesla_driving_time_today_raw') | float(0) %}
+          {{ (hours * 60) | round(0) }}
+
+      - name: "Tesla Driving Time 7d"
+        unique_id: tesla_driving_time_7d_v1
+        unit_of_measurement: "min"
+        icon: mdi:car-clock
+        state: >
+          {% set hours = states('sensor.tesla_driving_time_7d_raw') | float(0) %}
+          {{ (hours * 60) | round(0) }}
+
+      - name: "Tesla Charging Time Today"
+        unique_id: tesla_charging_time_today_v1
+        unit_of_measurement: "min"
+        icon: mdi:ev-station
+        state: >
+          {% set hours = states('sensor.tesla_charging_time_today_raw') | float(0) %}
+          {{ (hours * 60) | round(0) }}
+
+      - name: "Tesla Charging Time 7d"
+        unique_id: tesla_charging_time_7d_v1
+        unit_of_measurement: "min"
+        icon: mdi:ev-station
+        state: >
+          {% set hours = states('sensor.tesla_charging_time_7d_raw') | float(0) %}
+          {{ (hours * 60) | round(0) }}
+
+      - name: "Tesla Distance per Drive Session Today"
+        unique_id: tesla_distance_per_drive_session_today_v1
+        unit_of_measurement: "km/session"
+        icon: mdi:road-variant
+        state: >
+          {% set dist = states('sensor.tesla_daily_distance') | float(0) %}
+          {% set sessions = states('sensor.tesla_drive_sessions_today') | float(0) | round(0) | int(0) %}
+          {{ (dist / sessions) | round(2) if sessions > 0 else 0 }}
+
+      - name: "Tesla Energy per Charge Session Today"
+        unique_id: tesla_energy_per_charge_session_today_v1
+        unit_of_measurement: "kWh/session"
+        icon: mdi:ev-station
+        state: >
+          {% set energy = states('sensor.tesla_daily_charging_energy') | float(0) %}
+          {% set sessions = states('sensor.tesla_charge_sessions_today') | float(0) %}
+          {{ (energy / sessions) | round(2) if sessions > 0 else 0 }}
+
+      # === Analytics ===
+      - name: "Tesla Monthly Driving Duration"
+        unique_id: tesla_monthly_driving_duration_v1
+        icon: mdi:timer-outline
+        state: >
+          {% set h = states('sensor.tesla_driving_time_30d_raw') | float(0) %}
+          {% set days = (h / 24) | int %}
+          {% set hrs = (h % 24) | int %}
+          {% if days > 0 %}{{ days }}d {{ hrs }}h{% else %}{{ hrs }}h{% endif %}
+
+      - name: "Tesla Daily Efficiency Wh Per Km"
+        unique_id: tesla_daily_efficiency_wh_per_km_v1
+        unit_of_measurement: "Wh/km"
+        state_class: measurement
+        icon: mdi:leaf
+        state: >
+          {% set dist = states('sensor.tesla_daily_distance') | float(0) %}
+          {% set energy = states('sensor.tesla_daily_energy_consumed') | float(0) %}
+          {% if dist > 0.5 %}
+            {{ (energy * 1000 / dist) | round(0) }}
+          {% else %}
+            {{ states('sensor.tesla_efficiency_wh_per_km') | float(228) | round(0) }}
+          {% endif %}
+
+# ---------------------------------------------------------------------------
+# REST COMMANDS
+# ---------------------------------------------------------------------------
+# tesla_window_close_gps: Workaround for HA tesla_fleet integration bug where
+# cover.close_cover passes lat=0,lon=0, triggering Tesla's proximity check.
+# Calls the Fleet API directly with the vehicle's current GPS coordinates.
+#
+# Required secrets.yaml entries:
+#   tesla_fleet_token: <OAuth2 access token from Tesla Fleet integration>
+#   tesla_fleet_vehicle_id: <numeric vehicle ID, e.g. 1234567890123456789>
+#
+# To find your vehicle ID: call GET https://fleet-api.prd.eu.vn.cloud.tesla.com/api/1/vehicles
+# with your bearer token — the "id" field in the response is what you need.
+# To get the token temporarily: HA Developer Tools → Template →
+#   {{ integration_loaded('tesla_fleet') }}  (then check .storage/tesla_fleet/ in your HA config volume)
+rest_command:
+  tesla_window_close_gps:
+    url: "https://fleet-api.prd.eu.vn.cloud.tesla.com/api/1/vehicles/{{ vehicle_id }}/command/window_control"
+    method: POST
+    headers:
+      Authorization: "Bearer {{ token }}"
+      Content-Type: "application/json"
+    payload: '{"command": "close", "lat": {{ lat | float }}, "lon": {{ lon | float }}}'

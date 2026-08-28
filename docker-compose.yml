@@ -1,0 +1,149 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database for TeslaMate
+  database:
+    image: postgres:15-alpine
+    container_name: teslamate_db
+    restart: always
+    environment:
+      POSTGRES_USER: teslamate
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-teslamate_password_change_me}
+      POSTGRES_DB: teslamate
+    volumes:
+      - teslamate_db:/var/lib/postgresql/data
+    networks:
+      - teslamate_network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U teslamate"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Eclipse Mosquitto MQTT Broker
+  mosquitto:
+    image: eclipse-mosquitto:latest
+    container_name: teslamate_mosquitto
+    restart: always
+    ports:
+      - "1883:1883"
+      - "9001:9001"
+    volumes:
+      - mosquitto_config:/mosquitto/config
+      - mosquitto_data:/mosquitto/data
+      - mosquitto_logs:/mosquitto/log
+    networks:
+      - teslamate_network
+    environment:
+      - TZ=Europe/Budapest
+    healthcheck:
+      test: ["CMD", "mosquitto_sub", "-h", "localhost", "-t", "$SYS/broker/uptime", "-C", "1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # TeslaMate API & Session Logger
+  teslamate:
+    image: teslamate/teslamate:latest
+    container_name: teslamate
+    restart: always
+    depends_on:
+      database:
+        condition: service_healthy
+      mosquitto:
+        condition: service_healthy
+    environment:
+      # Database Configuration
+      DATABASE_USER: teslamate
+      DATABASE_PASS: ${DB_PASSWORD:-teslamate_password_change_me}
+      DATABASE_NAME: teslamate
+      DATABASE_HOST: database
+      DATABASE_PORT: 5432
+
+      # MQTT Configuration
+      MQTT_HOST: mosquitto
+      MQTT_USERNAME: teslamate
+      MQTT_PASSWORD: ${MQTT_PASSWORD:-teslamate_mqtt_change_me}
+      MQTT_PORT: 1883
+
+      # Tesla API Configuration
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY}
+      TZ: Europe/Budapest
+      DISABLE_TELEMETRY: "false"
+
+      # Optional: Sentry error reporting
+      # SENTRY_DSN: ""
+
+    ports:
+      - "4000:4000"
+    networks:
+      - teslamate_network
+    volumes:
+      - teslamate_logs:/app/log
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:4000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # Grafana for Dashboards & Visualization
+  grafana:
+    image: grafana/grafana:latest
+    container_name: teslamate_grafana
+    restart: always
+    depends_on:
+      - database
+    ports:
+      - "3000:3000"
+    environment:
+      # Grafana Admin Credentials
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD}
+
+      # Allow embedding dashboards in iFrames (for HA integration)
+      GF_SECURITY_ALLOW_EMBED_INIT_STATE_IN_VIEW_MODE: "true"
+      GF_SECURITY_COOKIE_SAMESITE: lax
+
+      # Data source configuration
+      GF_INSTALL_PLUGINS: "grafana-worldmap-panel,grafana-clock-panel,grafana-piechart-panel"
+
+      # Timezone
+      TZ: Europe/Budapest
+
+    volumes:
+      - grafana_storage:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning
+    networks:
+      - teslamate_network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+volumes:
+  # PostgreSQL data persistence
+  teslamate_db:
+    driver: local
+
+  # Mosquitto configuration & data
+  mosquitto_config:
+    driver: local
+  mosquitto_data:
+    driver: local
+  mosquitto_logs:
+    driver: local
+
+  # TeslaMate logs
+  teslamate_logs:
+    driver: local
+
+  # Grafana data persistence
+  grafana_storage:
+    driver: local
+
+networks:
+  teslamate_network:
+    driver: bridge

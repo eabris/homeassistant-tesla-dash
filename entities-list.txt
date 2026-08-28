@@ -1,0 +1,275 @@
+# Tesla Fleet Entities + Custom Helpers Inventory for "Tesla"
+#
+# Vehicle: Tesla (Tesla Fleet integration)
+# This file is the SINGLE SOURCE OF TRUTH.
+# ALWAYS read this file first before creating/modifying any Tesla-related sensors,
+# helpers, automations, scripts, or dashboard cards.
+#
+# Format example:
+# entity_id                                      | type           | category          | friendly_name                        | notes / purpose
+#
+# Last updated: 2026-06-23 (distance/time reliability fixes)
+# ============================================================
+
+# ============================================================
+# TESLA FLEET - TESLA VEHICLE ENTITIES
+# ============================================================
+
+# --- CHARGING & ENERGY ---
+binary_sensor.tesla_charge_cable                 | binary_sensor | charging          | Charge cable                         | Charge cable connected status
+sensor.tesla_charge_cable                        | sensor        | charging          | Charge cable                         | (detailed charge cable state)
+lock.tesla_charge_cable_lock                     | lock          | charging          | Charge cable lock                    | Lock/unlock the charge port cable
+number.tesla_charge_current                      | number        | charging          | Charge current                       | Charging current (Amps)
+sensor.tesla_charge_energy_added                 | sensor        | charging          | Charge energy added                  | kWh added in current charging session
+number.tesla_charge_limit                        | number        | charging          | Charge limit                         | Target State of Charge % (user adjustable)
+cover.tesla_charge_port_door                     | cover         | charging          | Charge port door                     | Open/close charge port
+sensor.tesla_charge_rate                         | sensor        | charging          | Charge rate                          | Charging speed (km/h or mi/h)
+sensor.tesla_charger_current                     | sensor        | charging          | Charger current                      | Current from wall connector
+sensor.tesla_charger_power                       | sensor        | charging          | Charger power                        | Power draw from charger (kW)
+sensor.tesla_charger_voltage                     | sensor        | charging          | Charger voltage                      | Voltage from charger
+sensor.tesla_charging                            | sensor        | charging          | Charging                             | Charging status / state
+sensor.tesla_power                               | sensor        | charging          | Power                                | Current power usage / battery power
+sensor.tesla_time_to_full_charge                 | sensor        | charging          | Time to full charge                  | Estimated time until battery is full
+binary_sensor.tesla_scheduled_charging_pending   | binary_sensor | charging          | Scheduled charging pending           | Scheduled charge is waiting to start
+binary_sensor.tesla_trip_charging                | binary_sensor | charging          | Trip charging                        | Charging during a trip
+
+# --- CLIMATE & COMFORT ---
+climate.tesla_climate                            | climate       | climate           | Climate                              | Main climate control (HVAC)
+sensor.tesla_driver_temperature_setting          | sensor        | climate           | Driver temperature setting           | Driver side target temperature
+sensor.tesla_inside_temperature                  | sensor        | climate           | Inside temperature                   | Cabin temperature
+sensor.tesla_outside_temperature                 | sensor        | climate           | Outside temperature                  | Ambient temperature
+sensor.tesla_passenger_temperature_setting       | sensor        | climate           | Passenger temperature setting        | Passenger side target temperature
+binary_sensor.tesla_preconditioning              | binary_sensor | climate           | Preconditioning                      | Preconditioning active
+binary_sensor.tesla_preconditioning_enabled      | binary_sensor | climate           | Preconditioning enabled              | Preconditioning feature enabled
+switch.tesla_defrost                             | switch        | climate           | Defrost                              | Front/rear window + mirror defrost
+select.tesla_seat_heater_front_left              | select        | climate           | Seat heater front left               | Off / Low / Medium / High
+select.tesla_seat_heater_front_right             | select        | climate           | Seat heater front right              | Off / Low / Medium / High
+select.tesla_seat_heater_rear_left               | select        | climate           | Seat heater rear left                | Off / Low / Medium / High
+select.tesla_seat_heater_rear_right              | select        | climate           | Seat heater rear right               | Off / Low / Medium / High
+select.tesla_seat_heater_third_row_left          | select        | climate           | Seat heater third row left           | Off / Low / Medium / High
+select.tesla_seat_heater_third_row_right         | select        | climate           | Seat heater third row right          | Off / Low / Medium / High
+select.tesla_steering_wheel_heater               | select        | climate           | Steering wheel heater                | Steering wheel heater level
+
+# --- ACCESS & BODY ---
+cover.tesla_charge_port_door                     | cover         | access            | Charge port door                     | (see Charging section)
+cover.tesla_froot                                | cover         | access            | Frunk                                | Open/close front trunk (note: entity name "froot")
+cover.tesla_windows                              | cover         | access            | Windows                              | Control all windows (vent/close)
+binary_sensor.tesla_front_driver_door            | binary_sensor | access            | Front driver door                    | Door open/closed
+binary_sensor.tesla_front_driver_window          | binary_sensor | access            | Front driver window                  | Window open/closed
+binary_sensor.tesla_front_passenger_door         | binary_sensor | access            | Front passenger door                 | Door open/closed
+binary_sensor.tesla_front_passenger_window       | binary_sensor | access            | Front passenger window               | Window open/closed
+binary_sensor.tesla_rear_driver_door             | binary_sensor | access            | Rear driver door                     | Door open/closed
+binary_sensor.tesla_rear_driver_window           | binary_sensor | access            | Rear driver window                   | Window open/closed
+binary_sensor.tesla_rear_passenger_door          | binary_sensor | access            | Rear passenger door                  | Door open/closed
+binary_sensor.tesla_rear_passenger_window        | binary_sensor | access            | Rear passenger window                | Window open/closed
+
+# --- SAFETY, SECURITY & SENTRY ---
+lock.tesla_lock                                  | lock          | safety            | Lock                                 | Vehicle doors lock/unlock
+switch.tesla_sentry_mode                         | switch        | safety            | Sentry mode                          | Sentry mode on/off
+binary_sensor.tesla_status                       | binary_sensor | safety            | Status                               | Main vehicle status / online availability
+binary_sensor.tesla_user_present                 | binary_sensor | safety            | User present                         | User detected in/near vehicle
+binary_sensor.tesla_dashcam                      | binary_sensor | safety            | Dashcam                              | Dashcam recording status
+binary_sensor.tesla_tyre_pressure_warning_front_left   | binary_sensor | safety      | Tyre pressure warning front left     | Low pressure warning
+binary_sensor.tesla_tyre_pressure_warning_front_right  | binary_sensor | safety      | Tyre pressure warning front right    | Low pressure warning
+binary_sensor.tesla_tyre_pressure_warning_rear_left    | binary_sensor | safety      | Tyre pressure warning rear left      | Low pressure warning
+binary_sensor.tesla_tyre_pressure_warning_rear_right   | binary_sensor | safety      | Tyre pressure warning rear right     | Low pressure warning
+sensor.tesla_tyre_pressure_front_left            | sensor        | safety            | Tyre pressure front left             | Current pressure (bar/psi)
+sensor.tesla_tyre_pressure_front_right           | sensor        | safety            | Tyre pressure front right            | Current pressure (bar/psi)
+sensor.tesla_tyre_pressure_rear_left             | sensor        | safety            | Tyre pressure rear left              | Current pressure (bar/psi)
+sensor.tesla_tyre_pressure_rear_right            | sensor        | safety            | Tyre pressure rear right             | Current pressure (bar/psi)
+
+# --- LOCATION & NAVIGATION ---
+device_tracker.tesla_location                    | device_tracker| location          | Location                             | Current GPS location (for zones/automations)
+device_tracker.tesla_route                       | device_tracker| location          | Route                                | Active navigation route
+sensor.tesla_distance_to_arrival                 | sensor        | location          | Distance to arrival                  | Remaining distance to destination
+sensor.tesla_state_of_charge_at_arrival          | sensor        | location          | State of charge at arrival           | Expected SOC upon arrival
+sensor.tesla_time_to_arrival                     | sensor        | location          | Time to arrival                      | Estimated time to destination
+sensor.tesla_traffic_delay                       | sensor        | location          | Traffic delay                        | Extra time due to traffic
+
+# --- MEDIA & ENTERTAINMENT ---
+media_player.tesla_media_player                  | media_player  | media             | Media Player                         | Tesla media player control
+
+# --- MAINTENANCE, DIAGNOSTICS & GENERAL ---
+sensor.tesla_estimate_battery_range              | sensor        | vehicle_stats     | Estimate battery range               | Estimated range (ideal?)
+sensor.tesla_ideal_battery_range                 | sensor        | vehicle_stats     | Ideal battery range                  | Ideal / rated battery range
+sensor.tesla_odometer                            | sensor        | vehicle_stats     | Odometer                             | Total distance driven
+sensor.tesla_shift_state                         | sensor        | vehicle_stats     | Shift state                          | Park / Drive / Reverse / Neutral
+sensor.tesla_speed                               | sensor        | vehicle_stats     | Speed                                | Current vehicle speed
+sensor.tesla_usable_battery_level                | sensor        | vehicle_stats     | Usable battery level                 | Current usable State of Charge %
+update.tesla_update                              | update        | maintenance       | Update                               | Software / firmware update status
+sensor.tesla_fast_charger_type                   | sensor        | charging          | Fast charger type                    | Type of fast charger connected (if any)
+
+# --- ACTION BUTTONS ---
+button.tesla_wake                                | button        | action            | Wake                                 | Wake the vehicle from sleep
+button.tesla_flash_lights                        | button        | action            | Flash lights                         | Flash exterior lights (locate vehicle)
+button.tesla_honk_horn                           | button        | action            | Honk horn                            | Honk the horn
+button.tesla_play_fart                           | button        | action            | Fart                                 | Play fart sound (Tesla fun feature)
+button.tesla_homelink                            | button        | action            | Homelink                             | Trigger HomeLink (garage door etc.)
+button.tesla_keyless_driving                     | button        | action            | Keyless driving                      | Enable keyless driving
+
+# ============================================================
+# CUSTOM TEMPLATES, UTILITY METERS & DERIVED STATS
+# (These are created/maintained in this project)
+# ============================================================
+
+# --- HELPERS ---
+input_text.tesla_model                          | input_text    | helper            | Tesla Model                     | Editable vehicle model name (default: Tesla Model X); shown in footer
+input_text.tesla_vin                            | input_text    | helper            | Tesla VIN                       | Editable VIN number (default: 5YJ12345678901234); shown in footer
+input_text.tesla_plate                          | input_text    | helper            | Tesla Plate                     | Editable license plate (default: XXYY-123); shown in footer
+input_number.tesla_odometer_daily_baseline      | input_number  | helper            | Tesla Odometer Daily Baseline   | Odometer snapshot at midnight/startup for daily distance template
+input_number.tesla_odometer_monthly_baseline    | input_number  | helper            | Tesla Odometer Monthly Baseline | Odometer snapshot on 1st of month for monthly distance template
+input_number.tesla_target_charge_limit          | input_number  | helper            | Tesla Target Charge Limit       | Helper slider for planned charge target in automations
+input_boolean.tesla_enable_smart_charging       | input_boolean | helper            | Tesla Enable Smart Charging     | Helper toggle to enable or disable smart charging logic
+input_datetime.tesla_next_departure             | input_datetime| helper            | Tesla Next Departure            | Helper datetime for departure-based automation planning
+
+# --- VEHICLE STATS (use Tesla Fleet natively in dashboards) ---
+# sensor.tesla_usable_battery_level              | sensor        | vehicle_stats     | Usable battery level                 | Tesla Fleet — use directly (replaces battery_level template)
+# sensor.tesla_estimate_battery_range            | sensor        | vehicle_stats     | Estimate battery range               | Tesla Fleet — use directly (replaces estimated_range template)
+# sensor.tesla_ideal_battery_range               | sensor        | vehicle_stats     | Ideal battery range                  | Tesla Fleet — use directly (replaces ideal_range template)
+# sensor.tesla_time_to_full_charge                 | sensor        | charging          | Time to full charge                  | Tesla Fleet — use directly (replaces time_to_full_charge_minutes template)
+sensor.tesla_tires_status                        | sensor        | safety            | Tesla Tires Status              | Template: combined tire warning summary (Optimal / Check Tires)
+
+# --- EFFICIENCY (Templates) ---
+sensor.tesla_efficiency_kwh_per_km               | sensor        | efficiency        | Tesla Efficiency kWh/km         | Template: baseline 0.228 kWh/km (Tessie analytics)
+sensor.tesla_efficiency_wh_per_km                | sensor        | efficiency        | Tesla Efficiency Wh/km          | Template: efficiency in Wh/km (kWh/km * 1000)
+sensor.tesla_electric_cost_per_km                | sensor        | cost_tracking     | Tesla Electric Cost Per KM      | Template: home charging cost per km (60 Ft/kWh * efficiency)
+sensor.tesla_fuel_cost_per_km                    | sensor        | cost_tracking     | Tesla Fuel Cost per km          | Template: ICE equivalent fuel cost per km (6.5 L/100km @ 595 Ft/L)
+
+# --- ENERGY TRACKING (Utility Meters + Templates) ---
+sensor.tesla_daily_charging_energy               | sensor        | energy_tracking   | Tesla Daily Charging Energy     | Utility meter: daily kWh from charge_energy_added
+sensor.tesla_weekly_charging_energy              | sensor        | energy_tracking   | Tesla Weekly Charging Energy    | Utility meter: weekly kWh from charge_energy_added
+sensor.tesla_monthly_charging_energy             | sensor        | energy_tracking   | Tesla Monthly Charging Energy   | Utility meter: monthly kWh from charge_energy_added
+sensor.tesla_daily_energy_consumed               | sensor        | energy_tracking   | Tesla Daily Energy Consumed     | Template: estimated drive consumption (daily_distance * efficiency)
+sensor.tesla_monthly_energy_consumed             | sensor        | energy_tracking   | Tesla Monthly Energy Consumed   | Template: mirrors monthly_charging_energy
+
+# --- COST TRACKING (Templates) ---
+sensor.tesla_daily_electric_cost                 | sensor        | cost_tracking     | Tesla Daily Electric Cost       | Template: daily energy * 60 Ft/kWh
+sensor.tesla_weekly_electric_cost                | sensor        | cost_tracking     | Tesla Weekly Electric Cost      | Template: weekly charging energy * 60 Ft/kWh
+sensor.tesla_monthly_electric_cost               | sensor        | cost_tracking     | Tesla Monthly Electric Cost     | Template: monthly energy * 60 Ft/kWh
+sensor.tesla_annual_electric_cost                | sensor        | cost_tracking     | Tesla Annual Electric Cost      | Template: monthly electric cost * 12 (projected)
+sensor.tesla_5year_electric_cost                 | sensor        | cost_tracking     | Tesla 5 Year Electric Cost      | Template: annual electric cost * 5 (projected); default_entity_id set for dashboard match
+sensor.tesla_daily_fuel_cost_equivalent          | sensor        | cost_tracking     | Tesla Daily Fuel Cost Equivalent | Template: daily_distance * fuel_cost_per_km
+sensor.tesla_weekly_fuel_cost                    | sensor        | cost_tracking     | Tesla Weekly Fuel Cost Equivalent | Template: weekly_distance * fuel_cost_per_km
+sensor.tesla_monthly_fuel_cost                   | sensor        | cost_tracking     | Tesla Monthly Fuel Cost Equivalent | Template: monthly_distance * fuel_cost_per_km; default_entity_id set for dashboard match
+
+# --- DISTANCE TRACKING (Templates + baseline helpers) ---
+sensor.tesla_daily_distance_raw                  | sensor        | distance          | Tesla Daily Distance Raw        | Utility meter: daily delta from odometer
+sensor.tesla_daily_distance                      | sensor        | distance          | Tesla Daily Distance            | Template: rounded daily distance from daily_distance_raw
+sensor.tesla_weekly_distance_raw                 | sensor        | distance          | Tesla Weekly Distance Raw       | Utility meter: weekly delta from odometer
+sensor.tesla_weekly_distance_2                   | sensor        | distance          | Tesla Weekly Distance           | Template: rounded weekly distance from weekly_distance_raw (HA registered as _2 instead of _rounded; dashboard and fuel cost templates use this entity)
+sensor.tesla_monthly_distance                    | sensor        | distance          | Tesla Monthly Distance          | Template: odometer minus monthly baseline helper
+
+# --- ACTIVITY / SESSION ANALYTICS ---
+binary_sensor.tesla_driving_active               | binary_sensor | activity          | Tesla Driving Active            | Template binary sensor: shift state (D/R/N) with speed fallback when shift is unknown
+binary_sensor.tesla_charging_active              | binary_sensor | activity          | Tesla Charging Active           | Template binary sensor: charging or preconditioning
+sensor.tesla_driving_time_today_raw              | sensor        | activity          | Tesla Driving Time Today Raw    | History stats time (hours) for driving active today
+sensor.tesla_driving_time_7d_raw                 | sensor        | activity          | Tesla Driving Time 7d Raw       | History stats time (hours) for driving active over last 7 days
+sensor.tesla_charging_time_today_raw             | sensor        | activity          | Tesla Charging Time Today Raw   | History stats time (hours) for charging active today
+sensor.tesla_charging_time_7d_raw                | sensor        | activity          | Tesla Charging Time 7d Raw      | History stats time (hours) for charging active over last 7 days
+sensor.tesla_charging_time_3d_raw                | sensor        | activity          | Tesla Charging Time 3d Raw      | History stats time (hours) used for no-charge anomaly check
+sensor.tesla_driving_time_today                  | sensor        | activity          | Tesla Driving Time Today        | Template: converted to minutes from history stats raw sensor
+sensor.tesla_driving_time_7d                     | sensor        | activity          | Tesla Driving Time 7d           | Template: converted to minutes from history stats raw sensor
+sensor.tesla_charging_time_today                 | sensor        | activity          | Tesla Charging Time Today       | Template: converted to minutes from history stats raw sensor
+sensor.tesla_charging_time_7d                    | sensor        | activity          | Tesla Charging Time 7d          | Template: converted to minutes from history stats raw sensor
+sensor.tesla_drive_sessions_today                | sensor        | activity          | Tesla Drive Sessions Today      | History stats count of driving sessions today
+sensor.tesla_drive_sessions_7d                   | sensor        | activity          | Tesla Drive Sessions 7d         | History stats count of driving sessions over last 7 days
+sensor.tesla_charge_sessions_today               | sensor        | activity          | Tesla Charge Sessions Today     | History stats count of charging sessions today
+sensor.tesla_charge_sessions_7d                  | sensor        | activity          | Tesla Charge Sessions 7d        | History stats count of charging sessions over last 7 days
+sensor.tesla_distance_per_drive_session_today    | sensor        | activity          | Tesla Distance per Drive Session Today | Template: daily distance divided by drive sessions today
+sensor.tesla_energy_per_charge_session_today     | sensor        | activity          | Tesla Energy per Charge Session Today | Template: daily charging energy divided by charge sessions today
+binary_sensor.tesla_anomaly_no_charge_3d         | binary_sensor | anomaly           | Tesla Anomaly No Charge 3d      | True when no charging in last 3 days while weekly driving distance is significant
+binary_sensor.tesla_anomaly_high_daily_cost      | binary_sensor | anomaly           | Tesla Anomaly High Daily Cost   | True when today's charging cost is much higher than weekly average
+
+# ============================================================
+# NOTES & MAINTENANCE RULES
+# ============================================================
+#
+# 1. This vehicle uses the official Tesla Fleet integration.
+# 2. Entity prefix for this car = "tesla_"
+# 3. No Powerwall / Solar / Energy Site entities are currently present (vehicle only).
+# 4. Many useful derived statistics already exist as Templates (especially cost & efficiency tracking).
+# 5. When adding NEW helpers/templates:
+#    - Add them to the "CUSTOM TEMPLATES..." section above.
+#    - Give them clear friendly_names starting with "Tesla ..." or "Tesla ...".
+#    - Set proper device_class, state_class, unit_of_measurement, and unique_id.
+# 6. Common useful additions you might want:
+#    - Use sensor.tesla_usable_battery_level directly (no template wrapper needed)
+#    - sensor.tesla_remaining_range (template combining usable_battery_level + ideal_battery_range)
+#    - input_number.tesla_target_charge_limit (user-friendly slider for charge limit)
+#    - input_boolean.tesla_enable_smart_charging
+#    - binary_sensor.tesla_is_home (based on device_tracker + zone)
+#    - script.tesla_precondition_departure
+#    - automation for smart charging / notifications
+# 7. "froot" entity = Frunk (front trunk). Keep the original entity_id.
+
+# ============================================================
+# CUSTOM HELPERS - PHASE 1 (2026-06-23)
+# ============================================================
+
+input_number.tesla_default_electricity_cost            | input_number  | settings          | Default Electricity Cost             | Default grid rate for cost calculations (Ft/kWh). Used in cost templates. Default: 60.0
+input_number.comparison_ice_efficiency                 | input_number  | settings          | ICE Fuel Efficiency (Comparison)     | Baseline ICE fuel consumption for cost comparison (L/100km). Default: 6.5
+input_number.comparison_fuel_price_per_liter           | input_number  | settings          | Fuel Price per Litre                 | Current fuel market price for comparison calculations (Ft/L). Default: 595.0
+
+# ============================================================
+# TESLAMATE INTEGRATION - PHASE 4 (PLANNED)
+# ============================================================
+#
+# Status: NOT YET IMPLEMENTED
+# TeslaMate provides rich per-session data (Drive, Charge, Idle logs) + Grafana dashboards.
+# Requires Docker stack: teslamate + postgres + mosquitto + grafana
+# Once running, will auto-discover MQTT sensors below via Home Assistant MQTT integration.
+#
+# Expected MQTT Topic Structure (published by TeslaMate):
+#   teslamate/cars/1/...
+#
+# Key Sensors (to be auto-discovered after setup):
+#   sensor.teslamate_cars_1_battery              | Battery State of Charge (%)
+#   sensor.teslamate_cars_1_position             | GPS latitude/longitude
+#   sensor.teslamate_cars_1_speed                | Vehicle speed (km/h)
+#   sensor.teslamate_cars_1_status               | Status (charging/driving/parked/offline)
+#   sensor.teslamate_cars_1_state_of_charge      | State of Charge (alternative)
+#   sensor.teslamate_cars_1_odometer             | Odometer (km)
+#   sensor.teslamate_cars_1_version              | Firmware version
+#   sensor.teslamate_cars_1_display_name         | Vehicle display name
+#
+# Historical Entities (via Grafana iFrames):
+#   Grafana Dashboard: Drives (per-session drive logs)
+#   Grafana Dashboard: Charges (per-session charge logs)
+#   Grafana Dashboard: Idles (per-session idle/standby logs)
+#   Grafana Dashboard: Overview (macro statistics)
+#
+# Setup Instructions:
+#   1. Review docker-compose.yml + .env file
+#   2. Set ENCRYPTION_KEY, DB_PASSWORD, GRAFANA_PASSWORD in .env
+#   3. Run: docker-compose up -d
+#   4. Access TeslaMate UI: http://localhost:4000
+#   5. Add vehicle via Tesla account signin
+#   6. Update configuration.yaml MQTT integration settings
+#   7. Verify MQTT sensors discovered in HA
+#   8. Embed Grafana panel URLs into History tab dashboard cards
+#
+# Reference:
+#   - TeslaMate docs: https://docs.teslamate.org/
+#   - GitHub: https://github.com/adriankumpf/teslamate
+# 8. Update this file + commit whenever you add/remove Tesla entities or helpers.
+#
+# Vehicle appears to support 3rd row seating (third_row seat heaters present).
+#
+# Added local automations in automations.yaml:
+#   - automation.tesla_odometer_daily_baseline_midnight
+#   - automation.tesla_odometer_monthly_baseline
+#   - automation.tesla_odometer_baseline_startup
+#
+# Added local scripts in scripts.yaml:
+#   - script.tesla_precondition
+#   - script.tesla_charge_to_80
+#   - script.tesla_wake_vehicle
+#   - script.tesla_flash_lights_script
+#   - script.tesla_climate_off
+#   - script.tesla_dog_mode
+#   - script.tesla_camp_mode
+# ============================================================
+sensor.tesla_driving_time_30d_raw                | sensor        | activity          | Tesla Driving Time 30d Raw      | History stats: hours driven in last 30 days (rolling)
+sensor.tesla_drive_sessions_30d                  | sensor        | activity          | Tesla Drive Sessions 30d        | History stats: drive session count in last 30 days (rolling)
+sensor.tesla_monthly_driving_duration            | sensor        | activity          | Tesla Monthly Driving Duration  | Template: 30d driving time formatted as "Xd Xh" for Driving analytics TOTAL badge
+sensor.tesla_daily_efficiency_wh_per_km          | sensor        | efficiency        | Tesla Daily Efficiency Wh Per Km | Template: today's actual Wh/km (daily_energy_consumed*1000/daily_distance); falls back to static 228 Wh/km when no driving

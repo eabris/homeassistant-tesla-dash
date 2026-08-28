@@ -1,0 +1,136 @@
+- id: tesla_odometer_daily_baseline_midnight
+  alias: Tesla - Reset daily odometer baseline
+  description: Snapshot odometer at midnight so daily distance resets
+  trigger:
+    - trigger: time
+      at: "00:00:05"
+  action:
+    - action: input_number.set_value
+      target:
+        entity_id: input_number.tesla_odometer_daily_baseline
+      data:
+        value: "{{ states('sensor.tesla_odometer') | float(0) }}"
+
+- id: tesla_odometer_monthly_baseline
+  alias: Tesla - Reset monthly odometer baseline
+  description: Snapshot odometer on the 1st of each month
+  trigger:
+    - trigger: time
+      at: "00:00:10"
+  condition:
+    - condition: template
+      value_template: "{{ now().day == 1 }}"
+  action:
+    - action: input_number.set_value
+      target:
+        entity_id: input_number.tesla_odometer_monthly_baseline
+      data:
+        value: "{{ states('sensor.tesla_odometer') | float(0) }}"
+
+- id: tesla_odometer_baseline_startup
+  alias: Tesla - Init odometer baselines on startup
+  description: Initialize distance baselines after HA restart
+  trigger:
+    - trigger: homeassistant
+      event: start
+  action:
+    - choose:
+        - conditions:
+            - condition: template
+              value_template: "{{ states('input_number.tesla_odometer_daily_baseline') | float(0) == 0 }}"
+          sequence:
+            - action: input_number.set_value
+              target:
+                entity_id: input_number.tesla_odometer_daily_baseline
+              data:
+                value: "{{ states('sensor.tesla_odometer') | float(0) }}"
+    - choose:
+        - conditions:
+            - condition: template
+              value_template: "{{ states('input_number.tesla_odometer_monthly_baseline') | float(0) == 0 }}"
+          sequence:
+            - action: input_number.set_value
+              target:
+                entity_id: input_number.tesla_odometer_monthly_baseline
+              data:
+                value: "{{ states('sensor.tesla_odometer') | float(0) }}"
+
+
+- id: tesla_precondition_before_departure
+  alias: "Tesla - Precondition before departure"
+  description: "Automatically start preconditioning ~40 minutes before the set departure time"
+  mode: single
+  trigger:
+    - platform: time_pattern
+      minutes: "/5"
+  condition:
+    - condition: template
+      value_template: >
+        {% set departure = states('input_datetime.tesla_next_departure') %}
+        {% if departure in ['unknown', 'unavailable', None] %}
+          false
+        {% else %}
+          {% set dep_time = strptime(departure, '%Y-%m-%d %H:%M:%S') %}
+          {% set precondition_time = dep_time - timedelta(minutes=40) %}
+          {{ now() >= precondition_time and now() < dep_time }}
+        {% endif %}
+  action:
+    - action: script.tesla_precondition
+    - action: persistent_notification.create
+      data:
+        title: "Tesla"
+        message: "Preconditioning started (40 min before departure)"
+
+- id: tesla___close_windows_before_rain
+  alias: Tesla - Close windows before rain
+  description: Automatically close windows if rain is predicted in the next 2 hours.
+  trigger:
+    - platform: state
+      entity_id:
+        - binary_sensor.tesla_front_driver_window
+        - binary_sensor.tesla_rear_driver_window
+        - binary_sensor.tesla_front_passenger_window
+        - binary_sensor.tesla_rear_passenger_window
+      to: "on"
+    - platform: time_pattern
+      minutes: "/15"
+  condition:
+    - condition: template
+      value_template: >-
+        {{ is_state('binary_sensor.tesla_front_driver_window', 'on') or
+           is_state('binary_sensor.tesla_rear_driver_window', 'on') or
+           is_state('binary_sensor.tesla_front_passenger_window', 'on') or
+           is_state('binary_sensor.tesla_rear_passenger_window', 'on') }}
+    - condition: template
+      value_template: >-
+        {{ this.attributes.last_triggered is none or
+           now() - this.attributes.last_triggered > timedelta(hours=3) }}
+  action:
+    - service: weather.get_forecasts
+      target:
+        entity_id: weather.forecast_home
+      data:
+        type: hourly
+      response_variable: tesla_hourly_forecast
+    - condition: template
+      value_template: >-
+        {% set forecast = tesla_hourly_forecast.get('weather.forecast_home', {}).get('forecast', []) %}
+        {% set rainy = ['rainy', 'pouring', 'lightning-rainy', 'hail'] %}
+        {% set ns = namespace(rain=false) %}
+        {% for hour in forecast[:2] %}
+          {% if hour.precipitation|default(0)|float > 0 or hour.precipitation_probability|default(0)|int >= 50 or hour.condition in rainy %}
+            {% set ns.rain = true %}
+          {% endif %}
+        {% endfor %}
+        {{ ns.rain }}
+    - service: persistent_notification.create
+      data:
+        title: Tesla windows open before rain
+        message: Rain is forecast within the next 2 hours. Waking the Tesla and closing windows.
+    - service: script.tesla_wake_vehicle
+    - delay: "00:00:20"
+    - service: cover.close_cover
+      target:
+        entity_id: cover.tesla_windows
+  mode: single
+  initial_state: true

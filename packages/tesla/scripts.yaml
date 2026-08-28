@@ -1,0 +1,345 @@
+tesla_precondition:
+  alias: "Precondition Tesla"
+  description: "Start cabin climate and set temperature to 22 C"
+  icon: mdi:fan
+  sequence:
+    - action: climate.turn_on
+      target:
+        entity_id: climate.tesla_climate
+    - action: climate.set_temperature
+      target:
+        entity_id: climate.tesla_climate
+      data:
+        temperature: 22
+    - action: persistent_notification.create
+      data:
+        title: "Tesla"
+        message: "Preconditioning started."
+
+tesla_charge_to_80:
+  alias: "Tesla Charge Limit 80"
+  description: "Set the Tesla charge limit to 80 percent"
+  icon: mdi:battery-charging-80
+  sequence:
+    - action: number.set_value
+      target:
+        entity_id: number.tesla_charge_limit
+      data:
+        value: 80
+    - action: persistent_notification.create
+      data:
+        title: "Tesla"
+        message: "Charge limit set to 80 percent."
+
+tesla_wake_vehicle:
+  alias: "Wake Tesla"
+  description: "Wake the Tesla from sleep"
+  icon: mdi:power
+  sequence:
+    - action: button.press
+      target:
+        entity_id: button.tesla_wake
+
+tesla_flash_lights_script:
+  alias: "Flash Tesla Lights"
+  description: "Flash the lights to locate the Tesla"
+  icon: mdi:flash
+  sequence:
+    - action: button.press
+      target:
+        entity_id: button.tesla_flash_lights
+
+tesla_climate_off:
+  alias: "Tesla Climate Off"
+  description: "Turn off cabin climate"
+  icon: mdi:air-conditioner-off
+  sequence:
+    - action: climate.turn_off
+      target:
+        entity_id: climate.tesla_climate
+
+tesla_dog_mode:
+  alias: "Tesla Dog Mode"
+  description: "Keep cabin comfortable at 20 C"
+  icon: mdi:dog-side
+  sequence:
+    - action: climate.turn_on
+      target:
+        entity_id: climate.tesla_climate
+    - action: climate.set_temperature
+      target:
+        entity_id: climate.tesla_climate
+      data:
+        temperature: 20
+    - action: persistent_notification.create
+      data:
+        title: "Tesla"
+        message: "Dog Mode preset applied (20 C)."
+
+tesla_camp_mode:
+  alias: "Tesla Camp Mode"
+  description: "Keep cabin warm at 18 C"
+  icon: mdi:campfire
+  sequence:
+    - action: climate.turn_on
+      target:
+        entity_id: climate.tesla_climate
+    - action: climate.set_temperature
+      target:
+        entity_id: climate.tesla_climate
+      data:
+        temperature: 18
+    - action: persistent_notification.create
+      data:
+        title: "Tesla"
+        message: "Camp Mode preset applied (18 C)."
+
+tesla_smart_charge_to_target:
+  alias: "Tesla - Smart Charge to Target"
+  description: "Set the charge limit to the value in input_number.tesla_target_charge_limit"
+  icon: mdi:battery-charging
+  sequence:
+    - action: number.set_value
+      target:
+        entity_id: number.tesla_charge_limit
+      data:
+        value: "{{ states('input_number.tesla_target_charge_limit') | int(80) }}"
+    - action: persistent_notification.create
+      data:
+        title: "Tesla"
+        message: "Charge limit set to {{ states('input_number.tesla_target_charge_limit') }}%"
+
+tesla_set_departure_now_plus_2h:
+  alias: "Tesla - Set Departure +2 Hours"
+  description: "Quickly set next departure time to now + 2 hours"
+  icon: mdi:clock-outline
+  sequence:
+    - action: input_datetime.set_datetime
+      target:
+        entity_id: input_datetime.tesla_next_departure
+      data:
+        datetime: "{{ (now() + timedelta(hours=2)).strftime('%Y-%m-%d %H:%M:%S') }}"
+    - action: persistent_notification.create
+      data:
+        title: "Tesla"
+        message: "Departure time set to +2 hours"
+
+# ─────────────────────────────────────────────────────────────
+# UNIVERSAL SCRIPTS — entity_id built from input_text.tesla_car_name
+# Change that helper → all scripts auto-route to the new vehicle
+# ─────────────────────────────────────────────────────────────
+
+tesla_lock_toggle:
+  alias: "Tesla Lock Toggle"
+  icon: mdi:lock
+  sequence:
+    - action: lock.toggle
+      target:
+        entity_id: "{{ 'lock.' + states('input_text.tesla_car_name') + '_lock' }}"
+
+tesla_climate_toggle:
+  alias: "Tesla Climate Toggle"
+  icon: mdi:fan
+  sequence:
+    - action: climate.toggle
+      target:
+        entity_id: "{{ 'climate.' + states('input_text.tesla_car_name') + '_climate' }}"
+
+tesla_frunk_open:
+  alias: "Tesla Frunk Open"
+  icon: mdi:car-door
+  sequence:
+    - action: cover.open_cover
+      target:
+        entity_id: "{{ 'cover.' + states('input_text.tesla_car_name') + '_froot' }}"
+
+tesla_trunk_open:
+  alias: "Tesla Trunk Open"
+  icon: mdi:car-back
+  sequence:
+    - action: cover.open_cover
+      target:
+        entity_id: "{{ 'cover.' + states('input_text.tesla_car_name') + '_trunk' }}"
+
+tesla_flash_lights:
+  alias: "Tesla Flash Lights"
+  icon: mdi:lightbulb-flash
+  sequence:
+    - action: button.press
+      target:
+        entity_id: "{{ 'button.' + states('input_text.tesla_car_name') + '_flash_lights' }}"
+
+tesla_sentry_toggle:
+  alias: "Tesla Sentry Toggle"
+  icon: mdi:shield-alert
+  sequence:
+    - action: switch.toggle
+      target:
+        entity_id: "{{ 'switch.' + states('input_text.tesla_car_name') + '_sentry_mode' }}"
+
+tesla_wake:
+  alias: "Tesla Wake"
+  icon: mdi:sleep-off
+  sequence:
+    - action: button.press
+      target:
+        entity_id: "{{ 'button.' + states('input_text.tesla_car_name') + '_wake' }}"
+
+tesla_windows_vent:
+  alias: "Tesla Vent Windows"
+  icon: mdi:window-open
+  sequence:
+    - action: cover.open_cover
+      target:
+        entity_id: "{{ 'cover.' + states('input_text.tesla_car_name') + '_windows' }}"
+
+tesla_windows_close:
+  alias: "Tesla Close Windows"
+  icon: mdi:window-closed
+  # cover.close_cover passes lat=0,lon=0 (HA tesla_fleet bug) → "too far from vehicle".
+  # Workaround: call Fleet API directly with the vehicle's real GPS coordinates.
+  sequence:
+    - variables:
+        car: "{{ states('input_text.tesla_car_name') }}"
+        lat: "{{ state_attr('device_tracker.' + states('input_text.tesla_car_name') + '_location', 'latitude') | float(0) }}"
+        lon: "{{ state_attr('device_tracker.' + states('input_text.tesla_car_name') + '_location', 'longitude') | float(0) }}"
+    - action: rest_command.tesla_window_close_gps
+      data:
+        vehicle_id: !secret tesla_fleet_vehicle_id
+        token: !secret tesla_fleet_token
+        lat: "{{ lat }}"
+        lon: "{{ lon }}"
+
+tesla_defrost_toggle:
+  alias: "Tesla Defrost Toggle"
+  icon: mdi:snowflake
+  sequence:
+    - action: switch.toggle
+      target:
+        entity_id: "{{ 'switch.' + states('input_text.tesla_car_name') + '_defrost' }}"
+
+tesla_charge_start:
+  alias: "Tesla Start Charging"
+  icon: mdi:lightning-bolt
+  sequence:
+    - action: switch.turn_on
+      target:
+        entity_id: "{{ 'switch.' + states('input_text.tesla_car_name') + '_charger' }}"
+
+tesla_charge_stop:
+  alias: "Tesla Stop Charging"
+  icon: mdi:lightning-bolt-off
+  sequence:
+    - action: switch.turn_off
+      target:
+        entity_id: "{{ 'switch.' + states('input_text.tesla_car_name') + '_charger' }}"
+
+tesla_unlock_port:
+  alias: "Tesla Unlock Charge Port"
+  icon: mdi:lock-open
+  sequence:
+    - action: cover.open_cover
+      target:
+        entity_id: "{{ 'cover.' + states('input_text.tesla_car_name') + '_charge_port_door' }}"
+
+tesla_climate_temp_up:
+  alias: "Tesla Climate Temp +0.5°"
+  icon: mdi:plus
+  sequence:
+    - action: climate.set_temperature
+      target:
+        entity_id: "{{ 'climate.' + states('input_text.tesla_car_name') + '_climate' }}"
+      data:
+        temperature: >
+          {% set car = states('input_text.tesla_car_name') %}
+          {% set curr = state_attr('climate.' + car + '_climate', 'temperature') | float(22) %}
+          {{ (curr + 0.5) | round(1) }}
+
+tesla_climate_temp_down:
+  alias: "Tesla Climate Temp -0.5°"
+  icon: mdi:minus
+  sequence:
+    - action: climate.set_temperature
+      target:
+        entity_id: "{{ 'climate.' + states('input_text.tesla_car_name') + '_climate' }}"
+      data:
+        temperature: >
+          {% set car = states('input_text.tesla_car_name') %}
+          {% set curr = state_attr('climate.' + car + '_climate', 'temperature') | float(22) %}
+          {{ (curr - 0.5) | round(1) }}
+
+tesla_seat_heater_next_fl:
+  alias: "Tesla Seat FL Next"
+  sequence:
+    - action: select.select_next
+      target:
+        entity_id: "{{ 'select.' + states('input_text.tesla_car_name') + '_seat_heater_front_left' }}"
+
+tesla_seat_heater_next_fr:
+  alias: "Tesla Seat FR Next"
+  sequence:
+    - action: select.select_next
+      target:
+        entity_id: "{{ 'select.' + states('input_text.tesla_car_name') + '_seat_heater_front_right' }}"
+
+tesla_seat_heater_next_rl:
+  alias: "Tesla Seat RL Next"
+  sequence:
+    - action: select.select_next
+      target:
+        entity_id: "{{ 'select.' + states('input_text.tesla_car_name') + '_seat_heater_rear_left' }}"
+
+tesla_seat_heater_next_rr:
+  alias: "Tesla Seat RR Next"
+  sequence:
+    - action: select.select_next
+      target:
+        entity_id: "{{ 'select.' + states('input_text.tesla_car_name') + '_seat_heater_rear_right' }}"
+
+tesla_seat_heater_next_3l:
+  alias: "Tesla Seat 3L Next"
+  sequence:
+    - action: select.select_next
+      target:
+        entity_id: "{{ 'select.' + states('input_text.tesla_car_name') + '_seat_heater_third_row_left' }}"
+
+tesla_seat_heater_next_3r:
+  alias: "Tesla Seat 3R Next"
+  sequence:
+    - action: select.select_next
+      target:
+        entity_id: "{{ 'select.' + states('input_text.tesla_car_name') + '_seat_heater_third_row_right' }}"
+
+tesla_steering_heater_next:
+  alias: "Tesla Steering Wheel Heater Next"
+  sequence:
+    - action: select.select_next
+      target:
+        entity_id: "{{ 'select.' + states('input_text.tesla_car_name') + '_steering_wheel_heater' }}"
+
+tesla_dog_mode:
+  alias: "Tesla Dog Mode"
+  icon: mdi:dog-side
+  sequence:
+    - action: climate.turn_on
+      target:
+        entity_id: "{{ 'climate.' + states('input_text.tesla_car_name') + '_climate' }}"
+    - action: climate.set_temperature
+      target:
+        entity_id: "{{ 'climate.' + states('input_text.tesla_car_name') + '_climate' }}"
+      data:
+        temperature: 20
+
+tesla_camp_mode:
+  alias: "Tesla Camp Mode"
+  icon: mdi:campfire
+  sequence:
+    - action: climate.turn_on
+      target:
+        entity_id: "{{ 'climate.' + states('input_text.tesla_car_name') + '_climate' }}"
+    - action: climate.set_temperature
+      target:
+        entity_id: "{{ 'climate.' + states('input_text.tesla_car_name') + '_climate' }}"
+      data:
+        temperature: 18
+

@@ -1,0 +1,1378 @@
+title: Tesla Overview
+icon: mdi:car-electric
+views:
+  # ========== VIEW 1: DASHBOARD (Main Hub) ==========
+  - title: Dashboard
+    path: dashboard
+    icon: mdi:gauge
+    cards:
+      # 1.1 Header Status Row
+      - type: horizontal-stack
+        cards:
+          - type: custom:button-card
+            name: Tesla
+            icon: mdi:car-electric
+            label: "🔔"
+            tap_action:
+              action: none
+            styles:
+              card:
+                - background-color: rgba(0, 0, 0, 0.3)
+                - height: 60px
+                - padding: 8px
+
+          - type: custom:button-card
+            entity: sensor.tesla_battery_range
+            icon: mdi:battery
+            name: "km"
+            show_label: true
+            label: |
+              [[[
+                const soc = parseFloat(String(states['sensor.tesla_battery_level']?.state || '0'));
+                const rawRange = String(states['sensor.tesla_battery_range']?.state || '');
+                const range = (!rawRange || rawRange === 'unknown' || rawRange === 'unavailable')
+                  ? `~${Math.round(soc * 4.1)}`
+                  : rawRange;
+                return `${soc.toFixed(0)}% • ${range} km`;
+              ]]]
+            styles:
+              card:
+                - background-color: >
+                    [[[
+                      const soc = parseFloat(String(states['sensor.tesla_battery_level']?.state || '0'));
+                      if (soc > 70) return 'rgba(76, 175, 80, 0.3)';
+                      if (soc > 40) return 'rgba(255, 193, 7, 0.3)';
+                      return 'rgba(244, 67, 54, 0.3)';
+                    ]]]
+                - height: 60px
+                - padding: 8px
+
+      # 1.2 Charging Status Card (Conditional)
+      - type: conditional
+        conditions:
+          - entity: binary_sensor.tesla_charge_cable
+            state: "on"
+        card:
+          type: custom:button-card
+          entity: binary_sensor.tesla_charge_cable
+          name: "CHARGING >"
+          show_label: true
+          label: |
+            [[[
+              const raw = String(states['sensor.tesla_time_to_full_charge']?.state || '');
+              if (!raw || raw === 'unknown' || raw === 'unavailable') return 'Calculating...';
+              const endTime = new Date(raw);
+              const now = new Date();
+              const diffMs = endTime - now;
+              if (diffMs <= 0) return 'Fully charged';
+              const diffMins = Math.round(diffMs / 60000);
+              const h = Math.floor(diffMins / 60);
+              const m = diffMins % 60;
+              const hStr = String(endTime.getHours()).padStart(2, '0');
+              const mStr = String(endTime.getMinutes()).padStart(2, '0');
+              const dur = h > 0 ? `${h}h ${m}m` : `${m}m`;
+              return `${dur} remaining > ${hStr}:${mStr}`;
+            ]]]
+          show_state: false
+          styles:
+            card:
+              - background-color: rgba(33, 150, 243, 0.2)
+              - border-left: 4px solid rgb(33, 150, 243)
+              - padding: 12px
+
+      # 1.3 Quick Action Row (6 buttons)
+      - type: horizontal-stack
+        cards:
+          # Lock/Unlock
+          - type: custom:button-card
+            entity: script.tesla_lock_toggle
+            icon: mdi:lock
+            name: "Lock"
+            tap_action:
+              action: call-service
+              service: script.tesla_lock_toggle
+            styles:
+              card:
+                - background-color: rgba(76, 175, 80, 0.2)
+              icon:
+                - color: |
+                    [[[
+                      const car = states['input_text.tesla_car_name']?.state || 'tesla';
+                      return states['lock.' + car + '_lock']?.state === 'locked' ? 'rgb(76, 175, 80)' : 'rgb(244, 67, 54)';
+                    ]]]
+
+          # Climate
+          - type: custom:button-card
+            entity: script.tesla_climate_toggle
+            icon: mdi:fan
+            name: "Climate"
+            tap_action:
+              action: call-service
+              service: script.tesla_climate_toggle
+            styles:
+              card:
+                - background-color: rgba(76, 175, 80, 0.2)
+
+          # Frunk
+          - type: custom:button-card
+            entity: script.tesla_frunk_open
+            icon: mdi:car-door
+            name: "Frunk"
+            tap_action:
+              action: call-service
+              service: script.tesla_frunk_open
+            styles:
+              card:
+                - background-color: rgba(76, 175, 80, 0.2)
+
+          # Trunk
+          - type: custom:button-card
+            entity: script.tesla_trunk_open
+            icon: mdi:car-back
+            name: "Trunk"
+            tap_action:
+              action: call-service
+              service: script.tesla_trunk_open
+            styles:
+              card:
+                - background-color: rgba(76, 175, 80, 0.2)
+
+          # Flash Lights
+          - type: custom:button-card
+            entity: script.tesla_flash_lights
+            icon: mdi:lightbulb-flash
+            name: "Flash"
+            tap_action:
+              action: call-service
+              service: script.tesla_flash_lights
+            styles:
+              card:
+                - background-color: rgba(76, 175, 80, 0.2)
+
+          # Sentry
+          - type: custom:button-card
+            entity: script.tesla_sentry_toggle
+            icon: mdi:shield-alert
+            name: "Sentry"
+            tap_action:
+              action: call-service
+              service: script.tesla_sentry_toggle
+            styles:
+              card:
+                - background-color: |
+                    [[[
+                      const car = states['input_text.tesla_car_name']?.state || 'tesla';
+                      return states['switch.' + car + '_sentry_mode']?.state === 'on' ? 'rgba(244, 67, 54, 0.3)' : 'rgba(76, 175, 80, 0.2)';
+                    ]]]
+
+      # 1.4 Location Strip Card
+      - type: custom:button-card
+        entity: input_text.tesla_car_name
+        name: "📍 Current Location"
+        show_label: true
+        label: |
+          [[[
+            const car = states['input_text.tesla_car_name']?.state || 'tesla';
+            const addr = String(states['device_tracker.' + car + '_location']?.state || 'No location');
+            return addr.startsWith('unknown') ? 'No location' : addr;
+          ]]]
+        tap_action:
+          action: url
+          url_path: |
+            [[[
+              const car = states['input_text.tesla_car_name']?.state || 'tesla';
+              const lat = state_attr('device_tracker.' + car + '_location', 'latitude');
+              const lon = state_attr('device_tracker.' + car + '_location', 'longitude');
+              return lat && lon ? `https://maps.google.com/?q=${lat},${lon}` : '#';
+            ]]]
+        styles:
+          card:
+            - background-color: rgba(33, 150, 243, 0.15)
+            - padding: 12px
+
+      # 1.5 Information Overview Grid (10 cards, 2 columns)
+      - type: grid
+        columns: 2
+        cards:
+          # Climate
+          - type: custom:button-card
+            entity: sensor.tesla_inside_temperature
+            icon: mdi:thermometer
+            name: "Climate"
+            show_label: true
+            label: |
+              [[[
+                const tempStr = String(states['sensor.tesla_inside_temperature']?.state || '0');
+                const temp = parseFloat(tempStr);
+                return isNaN(temp) ? 'N/A' : `${temp.toFixed(1)}°`;
+              ]]]
+            styles:
+              card:
+                - background-color: rgba(0, 0, 0, 0.2)
+
+          # Battery
+          - type: custom:button-card
+            entity: sensor.tesla_battery_range
+            icon: mdi:battery
+            name: "Battery"
+            show_label: true
+            label: |
+              [[[
+                const range = String(states['sensor.tesla_battery_range']?.state || '');
+                if (!range || range === 'unknown' || range === 'unavailable') {
+                  const soc = parseFloat(String(states['sensor.tesla_battery_level']?.state || '0'));
+                  return isNaN(soc) ? '– km' : `~${Math.round(soc * 4.1)} km`;
+                }
+                return `${range} km`;
+              ]]]
+            styles:
+              card:
+                - background-color: rgba(0, 0, 0, 0.2)
+
+          # Schedule
+          - type: custom:button-card
+            entity: input_datetime.tesla_next_departure
+            icon: mdi:calendar-clock
+            name: "Schedule"
+            show_label: true
+            label: |
+              [[[
+                const time = String(states['input_datetime.tesla_next_departure']?.state || 'unknown');
+                if (time === 'unavailable' || time === 'unknown' || !time) return 'Not set';
+                const parts = time.split(' ');
+                if (parts.length > 1 && parts[1]) {
+                  const timeParts = parts[1].split(':');
+                  return `${timeParts[0]}:${timeParts[1] || '00'}`;
+                }
+                return 'Not set';
+              ]]]
+            styles:
+              card:
+                - background-color: rgba(0, 0, 0, 0.2)
+
+          # Tires
+          - type: custom:button-card
+            entity: sensor.tesla_tires_status
+            icon: mdi:tire
+            name: "Tires"
+            show_label: true
+            label: |
+              [[[
+                return String(states['sensor.tesla_tires_status']?.state || 'Unknown');
+              ]]]
+            styles:
+              card:
+                - background-color: rgba(0, 0, 0, 0.2)
+
+          # Drives
+          - type: custom:button-card
+            entity: sensor.tesla_driving_time_today_raw
+            icon: mdi:map
+            name: "Drives"
+            show_label: true
+            label: |
+              [[[
+                const sessions = parseInt(states['sensor.tesla_drive_sessions_today']?.state || '0');
+                const hours = parseFloat(states['sensor.tesla_driving_time_today_raw']?.state || '0');
+                const mins = Math.round(hours * 60);
+                if (sessions === 0 && mins === 0) return 'No drives today';
+                const timeStr = hours >= 1 ? `${Math.floor(hours)}h ${Math.round((hours % 1) * 60)}m` : `${mins}m`;
+                return sessions > 0 ? `${sessions}x · ${timeStr}` : timeStr;
+              ]]]
+            styles:
+              card:
+                - background-color: rgba(0, 0, 0, 0.2)
+
+          # Charges
+          - type: custom:button-card
+            entity: sensor.tesla_charging_time_today_raw
+            icon: mdi:lightning-bolt
+            name: "Charges"
+            show_label: true
+            label: |
+              [[[
+                const sessions = parseInt(states['sensor.tesla_charge_sessions_today']?.state || '0');
+                const hours = parseFloat(states['sensor.tesla_charging_time_today_raw']?.state || '0');
+                const mins = Math.round(hours * 60);
+                if (sessions === 0 && mins === 0) return 'No charges today';
+                const timeStr = hours >= 1 ? `${Math.floor(hours)}h ${Math.round((hours % 1) * 60)}m` : `${mins}m`;
+                return sessions > 0 ? `${sessions}x · ${timeStr}` : timeStr;
+              ]]]
+            styles:
+              card:
+                - background-color: rgba(0, 0, 0, 0.2)
+
+          # Idles
+          - type: custom:button-card
+            entity: sensor.tesla_charging_time_3d_raw
+            icon: mdi:parking
+            name: "Idles"
+            show_label: true
+            label: |
+              [[[
+                const shift = String(states['sensor.tesla_shift_state']?.state || '').toUpperCase();
+                const charging = String(states['sensor.tesla_charging']?.state || '').toLowerCase();
+                const driving = states['binary_sensor.tesla_driving_active']?.state === 'true';
+                if (driving) return 'Driving';
+                if (['charging','preconditioning'].includes(charging)) return 'Charging';
+                if (['p','park','unknown','unavailable',''].includes(shift.toLowerCase())) return 'Parked';
+                return shift || 'Parked';
+              ]]]
+            styles:
+              card:
+                - background-color: rgba(0, 0, 0, 0.2)
+
+          # Activity
+          - type: custom:button-card
+            entity: sensor.tesla_shift_state
+            icon: mdi:state-machine
+            name: "Activity"
+            show_label: true
+            label: |
+              [[[
+                const state = String(states['sensor.tesla_shift_state']?.state || '');
+                if (!state || state === 'unknown' || state === 'unavailable') return 'Parked';
+                return state.toUpperCase();
+              ]]]
+            styles:
+              card:
+                - background-color: rgba(0, 0, 0, 0.2)
+
+          # Automation
+          - type: custom:button-card
+            entity: input_boolean.tesla_enable_smart_charging
+            icon: mdi:wand-plus
+            name: "Automation"
+            show_label: true
+            label: |
+              [[[
+                return states['input_boolean.tesla_enable_smart_charging']?.state === 'on' ? 'On' : 'Off';
+              ]]]
+            tap_action:
+              action: call-service
+              service: input_boolean.toggle
+              service_data:
+                entity_id: input_boolean.tesla_enable_smart_charging
+            styles:
+              card:
+                - background-color: rgba(0, 0, 0, 0.2)
+
+
+
+      # 1.6 Vehicle Specifications Footer
+      - type: markdown
+        content: |
+          ---
+          **{{ states('input_text.tesla_model') | default('Tesla Model X') }}** • VIN: {{ states('input_text.tesla_vin') | default('Unknown') }} • Plate: {{ states('input_text.tesla_plate') | default('Unknown') }}
+          
+          {% set car = states('input_text.tesla_car_name') %}
+          Firmware: {{ state_attr('update.' + car + '_update', 'installed_version') | default('Unknown') }}{{ ' ⬆️' if states('update.' + car + '_update') == 'on' else '' }} • Odometer: {{ states('sensor.tesla_odometer') | round(0) }} km • Status: {{ 'Online' if is_state('binary_sensor.tesla_status', 'on') else 'Offline' }}
+
+  # ========== VIEW 2: CONTROLS ==========
+  - title: Controls
+    path: controls
+    icon: mdi:tune
+    cards:
+      # Vehicle Status Hero Card
+      - type: custom:button-card
+        show_icon: false
+        show_name: false
+        show_state: false
+        tap_action:
+          action: none
+        custom_fields:
+          status: |
+            [[[
+              const car = states['input_text.tesla_car_name']?.state || 'tesla';
+              const online = states['binary_sensor.tesla_status']?.state === 'on';
+              const driving = states['binary_sensor.tesla_driving_active']?.state === 'true';
+              const charging = states['binary_sensor.tesla_charging_active']?.state === 'true';
+              const soc = parseFloat(states['sensor.tesla_battery_level']?.state || '0');
+              const range = states['sensor.tesla_battery_range']?.state;
+              const rangeStr = (!range || range === 'unknown') ? `~${Math.round(soc * 4.1)} km` : `${Math.round(parseFloat(range))} km`;
+
+              let statePill, stateColor;
+              if (!online) {
+                statePill = '😴 Sleeping'; stateColor = '#555';
+              } else if (driving) {
+                statePill = '🚗 Driving'; stateColor = '#1E88E5';
+              } else if (charging) {
+                statePill = '⚡ Charging'; stateColor = '#4CAF50';
+              } else {
+                statePill = '🅿️ Parked'; stateColor = '#888';
+              }
+
+              const battColor = soc > 70 ? '#4CAF50' : soc > 40 ? '#FFC107' : '#F44336';
+              const battBar = `<div style="width:100%;background:rgba(255,255,255,0.08);border-radius:4px;height:6px;margin-top:4px">
+                <div style="width:${soc}%;background:${battColor};height:6px;border-radius:4px"></div>
+              </div>`;
+
+              return `<div style="display:flex;align-items:center;justify-content:space-between;width:100%">
+                <div>
+                  <span style="background:${stateColor};color:#fff;font-size:11px;font-weight:700;padding:3px 10px;border-radius:20px;letter-spacing:0.5px">${statePill}</span>
+                </div>
+                <div style="text-align:right">
+                  <div style="color:#fff;font-size:18px;font-weight:700">${soc.toFixed(0)}% <span style="color:#aaa;font-size:13px;font-weight:400">${rangeStr}</span></div>
+                  ${battBar}
+                </div>
+              </div>`;
+            ]]]
+          details: |
+            [[[
+              const car = states['input_text.tesla_car_name']?.state || 'tesla';
+              const online = states['binary_sensor.tesla_status']?.state === 'on';
+              const sentry = states['switch.' + car + '_sentry_mode']?.state === 'on';
+              const lock = states['lock.' + car + '_lock']?.state;
+              const windows = states['cover.' + car + '_windows']?.state;
+
+              const chip = (icon, label, color) =>
+                `<span style="display:inline-flex;align-items:center;gap:4px;background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.1);border-radius:16px;padding:3px 10px;font-size:11px;color:${color};margin:2px">${icon} ${label}</span>`;
+
+              const lockChip = lock === 'locked'
+                ? chip('🔒', 'Locked', '#4CAF50')
+                : lock === 'unlocked' ? chip('🔓', 'Unlocked', '#F44336') : chip('🔒', '–', '#666');
+              const winChip = windows === 'open'
+                ? chip('🪟', 'Windows open', '#FF9F0A')
+                : windows === 'closed' ? chip('🪟', 'Windows closed', '#4CAF50') : chip('🪟', '–', '#666');
+              const sentryChip = sentry ? chip('🛡️', 'Sentry on', '#EF5350') : chip('🛡️', 'Sentry off', '#888');
+              const onlineChip = online ? chip('📡', 'Online', '#4CAF50') : chip('📡', 'Offline', '#F44336');
+
+              return `<div style="padding-top:8px;border-top:1px solid rgba(255,255,255,0.07);margin-top:8px">
+                ${onlineChip}${lockChip}${winChip}${sentryChip}
+              </div>`;
+            ]]]
+        styles:
+          card:
+            - background-color: rgba(28, 28, 30, 0.95)
+            - border-radius: 16px
+            - padding: 16px 20px
+          grid:
+            - grid-template-areas: '"status" "details"'
+            - grid-template-columns: 1fr
+            - grid-template-rows: auto auto
+          custom_fields:
+            status:
+              - width: 100%
+            details:
+              - width: 100%
+
+      # Wake Car
+      - type: custom:button-card
+        entity: script.tesla_wake
+        icon: mdi:sleep-off
+        name: "Wake Car"
+        show_label: true
+        label: |
+          [[[
+            const online = states['binary_sensor.tesla_status']?.state === 'on';
+            return online ? '✅ Vehicle is awake' : '💤 Tap to wake from sleep';
+          ]]]
+        tap_action:
+          action: call-service
+          service: script.tesla_wake
+        styles:
+          card:
+            - background-color: |
+                [[[
+                  return states['binary_sensor.tesla_status']?.state === 'on'
+                    ? 'rgba(76, 175, 80, 0.15)'
+                    : 'rgba(255, 193, 7, 0.2)';
+                ]]]
+          icon:
+            - color: |
+                [[[
+                  return states['binary_sensor.tesla_status']?.state === 'on'
+                    ? 'rgb(76, 175, 80)'
+                    : 'rgb(255, 193, 7)';
+                ]]]
+
+      # Window Controls
+      - type: horizontal-stack
+        cards:
+          - type: custom:button-card
+            entity: script.tesla_windows_vent
+            icon: mdi:window-open-variant
+            name: "Vent Windows"
+            show_label: true
+            label: |
+              [[[
+                const car = states['input_text.tesla_car_name']?.state || 'tesla';
+                const s = states['cover.' + car + '_windows']?.state;
+                return s === 'open' ? '● Currently open' : s === 'closed' ? '○ Currently closed' : '–';
+              ]]]
+            tap_action:
+              action: call-service
+              service: script.tesla_windows_vent
+            styles:
+              card:
+                - background-color: |
+                    [[[
+                      const car = states['input_text.tesla_car_name']?.state || 'tesla';
+                      return states['cover.' + car + '_windows']?.state === 'open'
+                        ? 'rgba(255, 159, 10, 0.25)'
+                        : 'rgba(76, 175, 80, 0.2)';
+                    ]]]
+              label:
+                - font-size: 10px
+                - color: |
+                    [[[
+                      const car = states['input_text.tesla_car_name']?.state || 'tesla';
+                      return states['cover.' + car + '_windows']?.state === 'open'
+                        ? 'rgb(255, 159, 10)'
+                        : 'rgb(76, 175, 80)';
+                    ]]]
+
+          - type: custom:button-card
+            entity: script.tesla_windows_close
+            icon: mdi:window-closed-variant
+            name: "Close Windows"
+            show_label: true
+            label: |
+              [[[
+                const car = states['input_text.tesla_car_name']?.state || 'tesla';
+                const s = states['cover.' + car + '_windows']?.state;
+                return s === 'closed' ? '● Already closed' : '↓ Tap to close';
+              ]]]
+            tap_action:
+              action: call-service
+              service: script.tesla_windows_close
+            styles:
+              card:
+                - background-color: rgba(244, 67, 54, 0.2)
+              label:
+                - font-size: 10px
+                - color: rgba(255, 255, 255, 0.5)
+
+      # Sentry Mode
+      - type: custom:button-card
+        entity: script.tesla_sentry_toggle
+        icon: mdi:shield-alert
+        name: "Sentry Mode"
+        show_label: true
+        label: |
+          [[[
+            const car = states['input_text.tesla_car_name']?.state || 'tesla';
+            return states['switch.' + car + '_sentry_mode']?.state === 'on'
+              ? '🛡️ Active — monitoring surroundings'
+              : '○ Inactive — tap to enable';
+          ]]]
+        tap_action:
+          action: call-service
+          service: script.tesla_sentry_toggle
+        styles:
+          card:
+            - background-color: |
+                [[[
+                  const car = states['input_text.tesla_car_name']?.state || 'tesla';
+                  return states['switch.' + car + '_sentry_mode']?.state === 'on'
+                    ? 'rgba(239, 83, 80, 0.2)'
+                    : 'rgba(76, 175, 80, 0.15)';
+                ]]]
+          icon:
+            - color: |
+                [[[
+                  const car = states['input_text.tesla_car_name']?.state || 'tesla';
+                  return states['switch.' + car + '_sentry_mode']?.state === 'on'
+                    ? 'rgb(239, 83, 80)'
+                    : 'rgb(128, 128, 128)';
+                ]]]
+          label:
+            - font-size: 11px
+            - color: rgba(255, 255, 255, 0.6)
+
+      # Media Player
+      - type: media-control
+        entity: media_player.tesla_media_player  # ⚠️ update if car is renamed
+
+      # Valet Mode (Placeholder)
+      - type: custom:button-card
+        icon: mdi:car-key
+        name: "Valet Mode"
+        show_label: true
+        label: "Not available in Tesla Fleet API"
+        tap_action:
+          action: none
+        styles:
+          card:
+            - opacity: 0.5
+
+
+  # ========== VIEW 3: CLIMATE ==========
+  - title: Climate
+    path: climate
+    icon: mdi:hvac
+    cards:
+      # Header with outdoor temp
+      - type: horizontal-stack
+        cards:
+          - type: custom:button-card
+            name: "Climate"
+            icon: mdi:hvac
+            styles:
+              card:
+                - background-color: rgba(0, 0, 0, 0.3)
+
+          - type: custom:button-card
+            entity: sensor.tesla_outside_temperature
+            icon: mdi:weather-sunny
+            name: "Outdoor"
+            show_label: true
+            label: |
+              [[[
+                const temp = parseFloat(String(states['sensor.tesla_outside_temperature']?.state || '0'));
+                return `${temp.toFixed(1)}°`;
+              ]]]
+            styles:
+              card:
+                - background-color: rgba(0, 0, 0, 0.3)
+
+      # Interior Temp Hero
+      - type: custom:button-card
+        entity: sensor.tesla_inside_temperature
+        name: "INTERIOR"
+        show_label: true
+        label: |
+          [[[
+            const temp = parseFloat(String(states['sensor.tesla_inside_temperature']?.state || '0'));
+            return `${temp.toFixed(1)}°`;
+          ]]]
+        styles:
+          card:
+            - font-size: 24px
+            - padding: 20px
+            - background-color: rgba(76, 175, 80, 0.15)
+            - height: 100px
+
+      # Seat Heating Matrix - Car cabin layout: Left | Center | Right
+      - type: grid
+        columns: 3
+        cards:
+          # Row 1: empty | Steering Wheel | empty
+          - type: custom:button-card
+            show_icon: false
+            show_name: false
+            styles:
+              card:
+                - background: transparent
+                - box-shadow: none
+
+          - type: custom:button-card
+            entity: select.tesla_steering_wheel_heater  # ⚠️ update if car is renamed
+            icon: mdi:steering
+            name: "Wheel"
+            tap_action:
+              action: call-service
+              service: script.tesla_steering_heater_next
+            show_label: true
+            label: |
+              [[[
+                const car = states['input_text.tesla_car_name']?.state || 'tesla';
+                const state = String(states['select.' + car + '_steering_wheel_heater']?.state || '0');
+                return state === 'unknown' ? '0' : state;
+              ]]]
+
+          - type: custom:button-card
+            show_icon: false
+            show_name: false
+            styles:
+              card:
+                - background: transparent
+                - box-shadow: none
+
+          # Row 2: FL | empty | FR
+          - type: custom:button-card
+            entity: script.tesla_seat_heater_next_fl
+            icon: mdi:seat-recline-extra
+            name: "FL"
+            tap_action:
+              action: call-service
+              service: script.tesla_seat_heater_next_fl
+            show_label: true
+            label: |
+              [[[
+                const car = states['input_text.tesla_car_name']?.state || 'tesla';
+                const state = String(states['select.' + car + '_seat_heater_front_left']?.state || '0');
+                return state === 'unknown' ? '0' : state;
+              ]]]
+
+          - type: custom:button-card
+            show_icon: false
+            show_name: false
+            styles:
+              card:
+                - background: transparent
+                - box-shadow: none
+
+          - type: custom:button-card
+            entity: script.tesla_seat_heater_next_fr
+            icon: mdi:seat-recline-extra
+            name: "FR"
+            tap_action:
+              action: call-service
+              service: script.tesla_seat_heater_next_fr
+            show_label: true
+            label: |
+              [[[
+                const car = states['input_text.tesla_car_name']?.state || 'tesla';
+                const state = String(states['select.' + car + '_seat_heater_front_right']?.state || '0');
+                return state === 'unknown' ? '0' : state;
+              ]]]
+
+          # Row 3: RL | empty | RR
+          - type: custom:button-card
+            entity: script.tesla_seat_heater_next_rl
+            icon: mdi:seat
+            name: "RL"
+            tap_action:
+              action: call-service
+              service: script.tesla_seat_heater_next_rl
+            show_label: true
+            label: |
+              [[[
+                const car = states['input_text.tesla_car_name']?.state || 'tesla';
+                const state = String(states['select.' + car + '_seat_heater_rear_left']?.state || '0');
+                return state === 'unknown' ? '0' : state;
+              ]]]
+
+          - type: custom:button-card
+            show_icon: false
+            show_name: false
+            styles:
+              card:
+                - background: transparent
+                - box-shadow: none
+
+          - type: custom:button-card
+            entity: script.tesla_seat_heater_next_rr
+            icon: mdi:seat
+            name: "RR"
+            tap_action:
+              action: call-service
+              service: script.tesla_seat_heater_next_rr
+            show_label: true
+            label: |
+              [[[
+                const car = states['input_text.tesla_car_name']?.state || 'tesla';
+                const state = String(states['select.' + car + '_seat_heater_rear_right']?.state || '0');
+                return state === 'unknown' ? '0' : state;
+              ]]]
+
+          # Row 4: 3L | empty | 3R
+          - type: custom:button-card
+            entity: script.tesla_seat_heater_next_3l
+            icon: mdi:seat
+            name: "3L"
+            tap_action:
+              action: call-service
+              service: script.tesla_seat_heater_next_3l
+            show_label: true
+            label: |
+              [[[
+                const car = states['input_text.tesla_car_name']?.state || 'tesla';
+                const state = String(states['select.' + car + '_seat_heater_third_row_left']?.state || '0');
+                return state === 'unknown' ? '0' : state;
+              ]]]
+
+          - type: custom:button-card
+            show_icon: false
+            show_name: false
+            styles:
+              card:
+                - background: transparent
+                - box-shadow: none
+
+          - type: custom:button-card
+            entity: script.tesla_seat_heater_next_3r
+            icon: mdi:seat
+            name: "3R"
+            tap_action:
+              action: call-service
+              service: script.tesla_seat_heater_next_3r
+            show_label: true
+            label: |
+              [[[
+                const car = states['input_text.tesla_car_name']?.state || 'tesla';
+                const state = String(states['select.' + car + '_seat_heater_third_row_right']?.state || '0');
+                return state === 'unknown' ? '0' : state;
+              ]]]
+
+      # Temperature Setpoint Stepper
+      - type: horizontal-stack
+        cards:
+          - type: custom:button-card
+            entity: script.tesla_climate_temp_down
+            icon: mdi:minus
+            name: ""
+            tap_action:
+              action: call-service
+              service: script.tesla_climate_temp_down
+            styles:
+              card:
+                - background-color: rgba(244, 67, 54, 0.2)
+
+          - type: custom:button-card
+            entity: input_text.tesla_car_name
+            icon: mdi:thermometer
+            name: "Target Temp"
+            show_label: true
+            label: |
+              [[[
+                const car = states['input_text.tesla_car_name']?.state || 'tesla';
+                const target = states['climate.' + car + '_climate']?.attributes?.temperature;
+                return target ? `${parseFloat(target).toFixed(1)}°` : '22.0°';
+              ]]]
+            tap_action:
+              action: none
+            styles:
+              card:
+                - background-color: rgba(0, 0, 0, 0.2)
+                - flex-grow: 2
+
+          - type: custom:button-card
+            entity: script.tesla_climate_temp_up
+            icon: mdi:plus
+            name: ""
+            tap_action:
+              action: call-service
+              service: script.tesla_climate_temp_up
+            styles:
+              card:
+                - background-color: rgba(76, 175, 80, 0.2)
+
+      # Auxiliary Climate Buttons (2×3 grid)
+      - type: grid
+        columns: 3
+        cards:
+          - type: custom:button-card
+            entity: script.tesla_dog_mode
+            icon: mdi:dog
+            name: "Dog Mode"
+            tap_action:
+              action: call-service
+              service: script.tesla_dog_mode
+            styles:
+              card:
+                - background-color: rgba(76, 175, 80, 0.2)
+
+          - type: custom:button-card
+            entity: script.tesla_camp_mode
+            icon: mdi:tent
+            name: "Camp Mode"
+            tap_action:
+              action: call-service
+              service: script.tesla_camp_mode
+            styles:
+              card:
+                - background-color: rgba(76, 175, 80, 0.2)
+
+          - type: custom:button-card
+            icon: mdi:biohazard
+            name: "Bio Defense"
+            tap_action:
+              action: none
+            styles:
+              card:
+                - opacity: 0.4
+
+          - type: custom:button-card
+            entity: script.tesla_climate_toggle
+            icon: mdi:fan
+            name: "Climate"
+            tap_action:
+              action: call-service
+              service: script.tesla_climate_toggle
+            show_label: true
+            label: |
+              [[[
+                const car = states['input_text.tesla_car_name']?.state || 'tesla';
+                return states['climate.' + car + '_climate']?.state !== 'off' ? 'On' : 'Off';
+              ]]]
+            styles:
+              card:
+                - background-color: rgba(76, 175, 80, 0.2)
+
+          - type: custom:button-card
+            entity: script.tesla_defrost_toggle
+            icon: mdi:snowflake
+            name: "Defrost"
+            tap_action:
+              action: call-service
+              service: script.tesla_defrost_toggle
+            show_label: true
+            label: |
+              [[[
+                const car = states['input_text.tesla_car_name']?.state || 'tesla';
+                return String(states['switch.' + car + '_defrost']?.state || 'off') === 'on' ? 'On' : 'Off';
+              ]]]
+            styles:
+              card:
+                - background-color: rgba(76, 175, 80, 0.2)
+
+          - type: custom:button-card
+            icon: mdi:shield-thermometer
+            name: "Cabin Protect"
+            tap_action:
+              action: none
+            styles:
+              card:
+                - opacity: 0.4
+
+  # ========== VIEW 4: BATTERY ==========
+  - title: Battery
+    path: battery
+    icon: mdi:battery
+    cards:
+      # 4.1 Primary Battery Gauge
+      - type: custom:button-card
+        entity: sensor.tesla_battery_level
+        show_icon: false
+        show_name: false
+        show_state: false
+        tap_action:
+          action: none
+        custom_fields:
+          bar: |
+            [[[
+              const soc = parseFloat(states['sensor.tesla_battery_level']?.state || '0');
+              const car = states['input_text.tesla_car_name']?.state || 'tesla';
+              const limit = parseFloat(states['number.' + car + '_charge_limit']?.state || '100');
+              const color = soc > 70 ? '#4CAF50' : soc > 40 ? '#FFC107' : '#F44336';
+              return `<div style="width:100%;background:rgba(255,255,255,0.1);border-radius:8px;height:14px;overflow:hidden;position:relative">
+                <div style="width:${limit}%;background:rgba(255,255,255,0.08);height:100%;position:absolute;border-radius:8px"></div>
+                <div style="width:${soc}%;background:${color};height:100%;border-radius:8px;position:relative"></div>
+              </div>`;
+            ]]]
+        styles:
+          card:
+            - padding: 14px 16px
+            - background-color: rgba(0, 0, 0, 0.2)
+          custom_fields:
+            bar:
+              - width: 100%
+
+      # 4.2 Telemetry Table (2×4 grid)
+      - type: grid
+        columns: 2
+        cards:
+          # LEVEL
+          - type: custom:button-card
+            entity: sensor.tesla_battery_level
+            icon: mdi:percent
+            name: "LEVEL"
+            show_label: true
+            label: |
+              [[[
+                const level = parseFloat(String(states['sensor.tesla_battery_level']?.state || '0'));
+                return `${level.toFixed(0)}%`;
+              ]]]
+            tap_action:
+              action: none
+            styles:
+              card:
+                - background-color: rgba(0, 0, 0, 0.2)
+
+          # RANGE
+          - type: custom:button-card
+            entity: sensor.tesla_battery_range
+            icon: mdi:map-marker-distance
+            name: "RANGE"
+            show_label: true
+            label: |
+              [[[
+                const soc = parseFloat(String(states['sensor.tesla_battery_level']?.state || '0'));
+                const rawEst = String(states['sensor.tesla_battery_range']?.state || '');
+                const estVal = (!rawEst || rawEst === 'unknown' || rawEst === 'unavailable')
+                  ? Math.round(soc * 4.1)
+                  : Math.round(parseFloat(rawEst));
+                const realLife = Math.round(estVal * 0.9);
+                return `${estVal} km (${realLife} km)`;
+              ]]]
+            tap_action:
+              action: none
+            styles:
+              card:
+                - background-color: rgba(0, 0, 0, 0.2)
+                - font-size: 12px
+
+          # DRAIN
+          - type: custom:button-card
+            entity: sensor.tesla_battery_level
+            icon: mdi:water-remove
+            name: "DRAIN"
+            show_label: true
+            label: |
+              [[[
+                const charging = String(states['sensor.tesla_charging']?.state || '').toLowerCase();
+                const driving = states['binary_sensor.tesla_driving_active']?.state === 'true';
+                if (charging === 'charging') return '+charging';
+                if (driving) return 'Driving';
+                return '–';
+              ]]]
+            tap_action:
+              action: none
+            styles:
+              card:
+                - background-color: rgba(0, 0, 0, 0.2)
+
+          # ENERGY
+          - type: custom:button-card
+            entity: sensor.tesla_battery_level
+            icon: mdi:lightning-bolt
+            name: "ENERGY"
+            show_label: true
+            label: |
+              [[[
+                const soc = parseFloat(String(states['sensor.tesla_battery_level']?.state || '0'));
+                const currentKwh = (soc).toFixed(2);
+                return `${currentKwh} / 100.00 kWh`;
+              ]]]
+            tap_action:
+              action: none
+            styles:
+              card:
+                - background-color: rgba(0, 0, 0, 0.2)
+                - font-size: 12px
+
+          # AMPERAGE
+          - type: custom:button-card
+            entity: sensor.tesla_charger_current
+            icon: mdi:sine-wave
+            name: "AMPERAGE"
+            show_label: true
+            label: |
+              [[[
+                const ampStr = String(states['sensor.tesla_charger_current']?.state || '0');
+                const amp = parseFloat(ampStr);
+                return isNaN(amp) ? '0.0 A' : `${amp.toFixed(1)} A`;
+              ]]]
+            tap_action:
+              action: none
+            styles:
+              card:
+                - background-color: rgba(0, 0, 0, 0.2)
+
+          # VOLTAGE
+          - type: custom:button-card
+            entity: sensor.tesla_charger_voltage
+            icon: mdi:flash
+            name: "VOLTAGE"
+            show_label: true
+            label: |
+              [[[
+                const voltStr = String(states['sensor.tesla_charger_voltage']?.state || '0');
+                const volt = parseFloat(voltStr);
+                return isNaN(volt) ? '0 V' : `${volt.toFixed(0)} V`;
+              ]]]
+            tap_action:
+              action: none
+            styles:
+              card:
+                - background-color: rgba(0, 0, 0, 0.2)
+
+          # ENERGY USED (Lifetime estimated)
+          - type: custom:button-card
+            entity: sensor.tesla_odometer
+            icon: mdi:meter-gas
+            name: "ENERGY USED"
+            show_label: true
+            label: |
+              [[[
+                const odom = parseFloat(states['sensor.tesla_odometer']?.state || '0');
+                const kwh = (odom * 0.228).toFixed(0);
+                return isNaN(odom) || odom === 0 ? '– kWh' : `~${parseFloat(kwh).toLocaleString('hu-HU')} kWh`;
+              ]]]
+            tap_action:
+              action: none
+            styles:
+              card:
+                - background-color: rgba(0, 0, 0, 0.2)
+                - font-size: 12px
+
+      # 4.3 Charge Limit Slider
+      - type: custom:mushroom-number-card
+        entity: number.tesla_charge_limit  # ⚠️ update if car is renamed
+        name: "Charge Limit"
+        icon: mdi:battery-charging-100
+        display_mode: slider
+        fill_container: false
+
+      # 4.4 Action Row (Start/Stop + Unlock Port)
+      - type: horizontal-stack
+        cards:
+          - type: custom:button-card
+            entity: script.tesla_charge_stop
+            icon: mdi:lightning-bolt
+            name: |
+              [[[
+                const car = states['input_text.tesla_car_name']?.state || 'tesla';
+                return states['binary_sensor.' + car + '_charge_cable']?.state === 'on' ? 'Stop Charging' : 'Start Charging';
+              ]]]
+            tap_action:
+              action: call-service
+              service: |
+                [[[
+                  const car = states['input_text.tesla_car_name']?.state || 'tesla';
+                  return states['binary_sensor.' + car + '_charge_cable']?.state === 'on' ? 'script.tesla_charge_stop' : 'script.tesla_charge_start';
+                ]]]
+            styles:
+              card:
+                - background-color: |
+                    [[[
+                      const car = states['input_text.tesla_car_name']?.state || 'tesla';
+                      return states['binary_sensor.' + car + '_charge_cable']?.state === 'on' ? 'rgba(244, 67, 54, 0.2)' : 'rgba(76, 175, 80, 0.2)';
+                    ]]]
+
+          - type: custom:button-card
+            entity: script.tesla_unlock_port
+            icon: mdi:lock-open
+            name: "Unlock Port"
+            tap_action:
+              action: call-service
+              service: script.tesla_unlock_port
+            styles:
+              card:
+                - background-color: rgba(76, 175, 80, 0.2)
+
+  # ========== VIEW 5: TIRES ==========
+  - title: Tires
+    path: tires
+    icon: mdi:tire
+    cards:
+      # 5.1 Target Pressure Notice
+      - type: markdown
+        content: |
+          💡 **Recommended cold pressure: 2.9 bar**
+
+      # 5.2 Wheel Pressure Matrix (2×2)
+      - type: grid
+        columns: 2
+        cards:
+          # FL
+          - type: custom:button-card
+            entity: sensor.tesla_tyre_pressure_front_left
+            icon: mdi:tire
+            name: "FL"
+            show_label: true
+            label: |
+              [[[
+                const pressStr = String(states['sensor.tesla_tyre_pressure_front_left']?.state || '0');
+                const pressure = parseFloat(pressStr);
+                return isNaN(pressure) ? '0.00 bar' : `${pressure.toFixed(2)} bar`;
+              ]]]
+            tap_action:
+              action: none
+            styles:
+              card:
+                - background-color: rgba(76, 175, 80, 0.2)
+
+          # FR
+          - type: custom:button-card
+            entity: sensor.tesla_tyre_pressure_front_right
+            icon: mdi:tire
+            name: "FR"
+            show_label: true
+            label: |
+              [[[
+                const pressStr = String(states['sensor.tesla_tyre_pressure_front_right']?.state || '0');
+                const pressure = parseFloat(pressStr);
+                return isNaN(pressure) ? '0.00 bar' : `${pressure.toFixed(2)} bar`;
+              ]]]
+            tap_action:
+              action: none
+            styles:
+              card:
+                - background-color: rgba(76, 175, 80, 0.2)
+
+          # RL
+          - type: custom:button-card
+            entity: sensor.tesla_tyre_pressure_rear_left
+            icon: mdi:tire
+            name: "RL"
+            show_label: true
+            label: |
+              [[[
+                const pressStr = String(states['sensor.tesla_tyre_pressure_rear_left']?.state || '0');
+                const pressure = parseFloat(pressStr);
+                return isNaN(pressure) ? '0.00 bar' : `${pressure.toFixed(2)} bar`;
+              ]]]
+            tap_action:
+              action: none
+            styles:
+              card:
+                - background-color: rgba(76, 175, 80, 0.2)
+
+          # RR
+          - type: custom:button-card
+            entity: sensor.tesla_tyre_pressure_rear_right
+            icon: mdi:tire
+            name: "RR"
+            show_label: true
+            label: |
+              [[[
+                const pressStr = String(states['sensor.tesla_tyre_pressure_rear_right']?.state || '0');
+                const pressure = parseFloat(pressStr);
+                return isNaN(pressure) ? '0.00 bar' : `${pressure.toFixed(2)} bar`;
+              ]]]
+            tap_action:
+              action: none
+            styles:
+              card:
+                - background-color: rgba(76, 175, 80, 0.2)
+
+      # 5.3 Historical Pressure Chart
+      - type: custom:apexcharts-card
+        graph_span: 30d
+        header:
+          show: true
+          title: "Tire Pressure History (30 days)"
+        apex_config:
+          chart:
+            height: 300
+          yaxis:
+            - min: 1.5
+              max: 3.8
+              title:
+                text: "bar"
+          colors:
+            - '#FF6B6B'
+            - '#4ECDC4'
+            - '#45B7D1'
+            - '#FFA07A'
+          plotOptions:
+            area:
+              fillTo: zero
+        series:
+          - entity: sensor.tesla_tyre_pressure_front_left
+            name: "Front Left"
+            type: line
+            stroke_width: 2
+          - entity: sensor.tesla_tyre_pressure_front_right
+            name: "Front Right"
+            type: line
+            stroke_width: 2
+          - entity: sensor.tesla_tyre_pressure_rear_left
+            name: "Rear Left"
+            type: line
+            stroke_width: 2
+          - entity: sensor.tesla_tyre_pressure_rear_right
+            name: "Rear Right"
+            type: line
+            stroke_width: 2
+
+  # ========== VIEW 6: COST PROJECTIONS ==========
+  - title: Cost Projections
+    path: cost
+    icon: mdi:currency-eur
+    cards:
+      - type: vertical-stack
+        cards:
+          # MONTHLY
+          - type: custom:button-card
+            show_icon: false
+            show_name: false
+            show_state: false
+            tap_action:
+              action: none
+            custom_fields:
+              block: |
+                [[[
+                  const monthly = parseFloat(states['sensor.tesla_monthly_electric_cost']?.state || '0') || 0;
+                  const row = (icon, label, value) =>
+                    `<div style="display:flex;align-items:center;gap:14px;padding:10px 0;border-top:1px solid rgba(255,255,255,0.07)">
+                      <span style="font-size:22px;width:26px;text-align:center;flex-shrink:0">${icon}</span>
+                      <div>
+                        <div style="color:#888;font-size:10px;font-weight:600;letter-spacing:1.2px">${label}</div>
+                        <div style="color:#fff;font-size:20px;font-weight:700">${value}</div>
+                      </div>
+                    </div>`;
+                  return `<div style="width:100%;text-align:left">
+                    <div style="color:#888;font-size:11px;font-weight:600;letter-spacing:1.5px;padding-bottom:4px">📅 MONTHLY</div>
+                    ${row('🏠', 'HOME', Math.round(monthly).toLocaleString('hu-HU') + ' Ft')}
+                  </div>`;
+                ]]]
+            styles:
+              card:
+                - background-color: rgba(28, 28, 30, 0.95)
+                - border-radius: 16px
+                - padding: 16px 20px
+              grid:
+                - grid-template-areas: '"block"'
+                - grid-template-columns: 1fr
+                - grid-template-rows: 1fr
+              custom_fields:
+                block:
+                  - width: 100%
+
+          # ANNUAL
+          - type: custom:button-card
+            show_icon: false
+            show_name: false
+            show_state: false
+            tap_action:
+              action: none
+            custom_fields:
+              block: |
+                [[[
+                  const annual = parseFloat(states['sensor.tesla_annual_electric_cost']?.state || '0') || 0;
+                  const row = (icon, label, value) =>
+                    `<div style="display:flex;align-items:center;gap:14px;padding:10px 0;border-top:1px solid rgba(255,255,255,0.07)">
+                      <span style="font-size:22px;width:26px;text-align:center;flex-shrink:0">${icon}</span>
+                      <div>
+                        <div style="color:#888;font-size:10px;font-weight:600;letter-spacing:1.2px">${label}</div>
+                        <div style="color:#fff;font-size:20px;font-weight:700">${value}</div>
+                      </div>
+                    </div>`;
+                  return `<div style="width:100%;text-align:left">
+                    <div style="color:#888;font-size:11px;font-weight:600;letter-spacing:1.5px;padding-bottom:4px">📅 ANNUAL</div>
+                    ${row('🏠', 'HOME', Math.round(annual).toLocaleString('hu-HU') + ' Ft')}
+                  </div>`;
+                ]]]
+            styles:
+              card:
+                - background-color: rgba(28, 28, 30, 0.95)
+                - border-radius: 16px
+                - padding: 16px 20px
+              grid:
+                - grid-template-areas: '"block"'
+                - grid-template-columns: 1fr
+                - grid-template-rows: 1fr
+              custom_fields:
+                block:
+                  - width: 100%
+
+          # 5 YEARS
+          - type: custom:button-card
+            show_icon: false
+            show_name: false
+            show_state: false
+            tap_action:
+              action: none
+            custom_fields:
+              block: |
+                [[[
+                  const five = parseFloat(states['sensor.tesla_5year_electric_cost']?.state || '0') || 0;
+                  const row = (icon, label, value) =>
+                    `<div style="display:flex;align-items:center;gap:14px;padding:10px 0;border-top:1px solid rgba(255,255,255,0.07)">
+                      <span style="font-size:22px;width:26px;text-align:center;flex-shrink:0">${icon}</span>
+                      <div>
+                        <div style="color:#888;font-size:10px;font-weight:600;letter-spacing:1.2px">${label}</div>
+                        <div style="color:#fff;font-size:20px;font-weight:700">${value}</div>
+                      </div>
+                    </div>`;
+                  return `<div style="width:100%;text-align:left">
+                    <div style="color:#888;font-size:11px;font-weight:600;letter-spacing:1.5px;padding-bottom:4px">📅 5 YEARS</div>
+                    ${row('🏠', 'HOME', Math.round(five).toLocaleString('hu-HU') + ' Ft')}
+                  </div>`;
+                ]]]
+            styles:
+              card:
+                - background-color: rgba(28, 28, 30, 0.95)
+                - border-radius: 16px
+                - padding: 16px 20px
+              grid:
+                - grid-template-areas: '"block"'
+                - grid-template-columns: 1fr
+                - grid-template-rows: 1fr
+              custom_fields:
+                block:
+                  - width: 100%
