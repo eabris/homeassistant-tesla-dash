@@ -1,3 +1,57 @@
+- id: tesla_drive_energy_session_start
+  alias: "Tesla - Capture drive session start (battery/odometer)"
+  description: >
+    Snapshots battery % and odometer the moment a drive starts, so the real
+    energy consumed during the drive can be computed when it ends.
+  trigger:
+    - trigger: state
+      entity_id: binary_sensor.tesla_driving_active
+      to: "on"
+  action:
+    - action: input_number.set_value
+      target:
+        entity_id: input_number.tesla_drive_start_battery_pct
+      data:
+        value: "{{ states('sensor.tesla_usable_battery_level') | float(0) }}"
+    - action: input_number.set_value
+      target:
+        entity_id: input_number.tesla_drive_start_odometer
+      data:
+        value: "{{ states('sensor.tesla_odometer') | float(0) }}"
+
+- id: tesla_drive_energy_session_end
+  alias: "Tesla - Log real energy consumed for completed drive"
+  description: >
+    When a drive ends, computes the energy actually consumed from the battery
+    (% drop x pack capacity) and adds it to the running total used to power
+    the real efficiency/energy-used analytics (see sensor.tesla_efficiency_kwh_per_km
+    and sensor.tesla_drive_energy_consumed_total).
+  trigger:
+    - trigger: state
+      entity_id: binary_sensor.tesla_driving_active
+      to: "off"
+  condition:
+    # Ignore tiny/noisy blips - only log real drives of at least 300 meters.
+    - condition: template
+      value_template: >
+        {% set start_odo = states('input_number.tesla_drive_start_odometer') | float(0) %}
+        {% set end_odo = states('sensor.tesla_odometer') | float(0) %}
+        {{ (end_odo - start_odo) >= 0.3 }}
+  action:
+    - action: input_number.set_value
+      target:
+        entity_id: input_number.tesla_drive_energy_consumed_total_kwh
+      data:
+        value: >
+          {% set start_pct = states('input_number.tesla_drive_start_battery_pct') | float(0) %}
+          {% set end_pct = states('sensor.tesla_usable_battery_level') | float(0) %}
+          {% set capacity = states('input_number.tesla_battery_capacity_kwh') | float(100) %}
+          {% set dropped_pct = start_pct - end_pct %}
+          {# Only count it if the battery actually dropped (ignore drives where it
+             charged/preconditioned and net gained %, to avoid negative energy). #}
+          {% set session_kwh = (dropped_pct / 100 * capacity) if dropped_pct > 0 else 0 %}
+          {{ (states('input_number.tesla_drive_energy_consumed_total_kwh') | float(0) + session_kwh) | round(3) }}
+
 - id: tesla_odometer_daily_baseline_midnight
   alias: Tesla - Reset daily odometer baseline
   description: Snapshot odometer at midnight so daily distance resets

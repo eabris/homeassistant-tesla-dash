@@ -29,9 +29,11 @@ views:
                     const v = parseFloat(String(raw || '0'));
                     return isNaN(v) || v <= 0 ? '–' : `${v.toFixed(dec)} ${unit}`;
                   };
+                  const currencySymbol = states['sensor.tesla_currency_symbol']?.state || 'Ft';
+                  const currencyLocale = states['sensor.tesla_currency_locale']?.state || 'hu-HU';
                   const ftm = (raw) => {
                     const v = parseFloat(String(raw || '0')) || 0;
-                    return v <= 0 ? 'Ft0' : 'Ft' + Math.round(v).toLocaleString('hu-HU');
+                    return v <= 0 ? currencySymbol + '0' : currencySymbol + Math.round(v).toLocaleString(currencyLocale);
                   };
                   const row = (icon, label, val, sub) =>
                     `<div style="display:flex;align-items:center;gap:12px;padding:8px 0;border-top:1px solid rgba(255,255,255,0.07)">
@@ -55,7 +57,7 @@ views:
                     ${row('🚗', 'DISTANCE', dist, `drive time ${driveT}`)}
                     ${row('⚡', 'ENERGY CHARGED', energy, `charge time ${chargeT}`)}
                     ${row('💰', 'ELECTRIC COST', elecCost, `vs fuel ${fuelEq}`)}
-                    ${saved > 0 ? row('✅', 'SAVED VS ICE', 'Ft' + Math.round(saved).toLocaleString('hu-HU'), '') : ''}
+                    ${saved > 0 ? row('✅', 'SAVED VS ICE', currencySymbol + Math.round(saved).toLocaleString(currencyLocale), '') : ''}
                   </div>`;
                 ]]]
             styles:
@@ -85,9 +87,11 @@ views:
                     const v = parseFloat(String(raw || '0'));
                     return isNaN(v) || v <= 0 ? '–' : `${v.toFixed(dec)} ${unit}`;
                   };
+                  const currencySymbol = states['sensor.tesla_currency_symbol']?.state || 'Ft';
+                  const currencyLocale = states['sensor.tesla_currency_locale']?.state || 'hu-HU';
                   const ftm = (raw) => {
                     const v = parseFloat(String(raw || '0')) || 0;
-                    return v <= 0 ? 'Ft0' : 'Ft' + Math.round(v).toLocaleString('hu-HU');
+                    return v <= 0 ? currencySymbol + '0' : currencySymbol + Math.round(v).toLocaleString(currencyLocale);
                   };
                   const row = (icon, label, val, sub) =>
                     `<div style="display:flex;align-items:center;gap:12px;padding:8px 0;border-top:1px solid rgba(255,255,255,0.07)">
@@ -109,7 +113,7 @@ views:
                     ${row('🚗', 'DISTANCE', dist, '')}
                     ${row('⚡', 'ENERGY CHARGED', energy, '')}
                     ${row('💰', 'ELECTRIC COST', elecCost, `vs fuel ${fuelEq}`)}
-                    ${saved > 0 ? row('✅', 'SAVED VS ICE', 'Ft' + Math.round(saved).toLocaleString('hu-HU'), '') : ''}
+                    ${saved > 0 ? row('✅', 'SAVED VS ICE', currencySymbol + Math.round(saved).toLocaleString(currencyLocale), '') : ''}
                   </div>`;
                 ]]]
             styles:
@@ -184,9 +188,11 @@ views:
                     const v = parseFloat(String(raw || '0'));
                     return isNaN(v) || v <= 0 ? '–' : `${v.toFixed(dec)} ${unit}`;
                   };
+                  const currencySymbol = states['sensor.tesla_currency_symbol']?.state || 'Ft';
+                  const currencyLocale = states['sensor.tesla_currency_locale']?.state || 'hu-HU';
                   const ftm = (raw) => {
                     const v = parseFloat(String(raw || '0')) || 0;
-                    return v <= 0 ? 'Ft0' : 'Ft' + Math.round(v).toLocaleString('hu-HU');
+                    return v <= 0 ? currencySymbol + '0' : currencySymbol + Math.round(v).toLocaleString(currencyLocale);
                   };
                   const row = (icon, label, val, sub) =>
                     `<div style="display:flex;align-items:center;gap:12px;padding:8px 0;border-top:1px solid rgba(255,255,255,0.07)">
@@ -208,7 +214,7 @@ views:
                     ${row('🚗', 'DISTANCE', dist, '')}
                     ${row('⚡', 'ENERGY CHARGED', energy, '')}
                     ${row('💰', 'ELECTRIC COST', elecCost, `vs fuel ${fuelEq}`)}
-                    ${saved > 0 ? row('✅', 'SAVED VS ICE', 'Ft' + Math.round(saved).toLocaleString('hu-HU'), '') : ''}
+                    ${saved > 0 ? row('✅', 'SAVED VS ICE', currencySymbol + Math.round(saved).toLocaleString(currencyLocale), '') : ''}
                   </div>`;
                 ]]]
             styles:
@@ -233,6 +239,7 @@ views:
       # ── 1. DISTANCE ──
       - type: custom:apexcharts-card
         graph_span: 30d
+        cache: true
         header:
           show: true
           title: Distance
@@ -287,6 +294,7 @@ views:
       # ── 2. ENERGY USED ──
       - type: custom:apexcharts-card
         graph_span: 30d
+        cache: true
         header:
           show: true
           title: Energy used
@@ -339,6 +347,7 @@ views:
       # ── 3. ELECTRIC COST ──
       - type: custom:apexcharts-card
         graph_span: 30d
+        cache: true
         header:
           show: true
           title: Electric cost
@@ -377,18 +386,16 @@ views:
         series:
           - entity: sensor.tesla_monthly_electric_cost
             name: TOTAL
-            unit: " Ft"
             show:
               in_chart: false
               legend_value: true
           - entity: sensor.tesla_electric_cost_per_km
             name: PER KILOMETER
-            unit: " Ft"
             show:
               in_chart: false
               legend_value: true
           - entity: sensor.tesla_daily_electric_cost
-            name: Ft
+            name: Cost
             type: column
             show:
               legend_value: false
@@ -400,6 +407,7 @@ views:
       # ── 4. FUEL COST ──
       - type: custom:apexcharts-card
         graph_span: 30d
+        cache: true
         header:
           show: true
           title: Fuel cost
@@ -436,7 +444,6 @@ views:
         series:
           - entity: sensor.tesla_monthly_fuel_cost
             name: TOTAL
-            unit: " Ft"
             show:
               in_chart: false
               legend_value: true
@@ -453,6 +460,7 @@ views:
       # ── 5. DURATION ──
       - type: custom:apexcharts-card
         graph_span: 30d
+        cache: true
         header:
           show: true
           title: Duration
@@ -509,6 +517,7 @@ views:
       # ── 6. SPEED ──
       - type: custom:apexcharts-card
         graph_span: 30d
+        cache: true
         header:
           show: true
           title: Speed
@@ -568,6 +577,7 @@ views:
       # ── 7. TOTAL DRIVES ──
       - type: custom:apexcharts-card
         graph_span: 30d
+        cache: true
         header:
           show: true
           title: Total drives
@@ -622,6 +632,7 @@ views:
       # ── 8. ENERGY EFFICIENCY ──
       - type: custom:apexcharts-card
         graph_span: 30d
+        cache: true
         header:
           show: true
           title: Energy efficiency
@@ -678,6 +689,7 @@ views:
       # ── 9. SPEED EFFICIENCY ──
       - type: custom:apexcharts-card
         graph_span: 30d
+        cache: true
         header:
           show: true
           title: Speed efficiency
@@ -754,6 +766,7 @@ views:
       # ── 10. TEMPERATURE EFFICIENCY ──
       - type: custom:apexcharts-card
         graph_span: 30d
+        cache: true
         header:
           show: true
           title: Temperature efficiency
@@ -835,6 +848,7 @@ views:
       # ── Charger Power ──
       - type: custom:apexcharts-card
         graph_span: 30d
+        cache: true
         header:
           show: true
           title: "Charger power"
@@ -867,6 +881,7 @@ views:
       # ── Energy Added ──
       - type: custom:apexcharts-card
         graph_span: 30d
+        cache: true
         header:
           show: true
           title: "Energy added"
@@ -906,6 +921,7 @@ views:
       # ── Charge Rate ──
       - type: custom:apexcharts-card
         graph_span: 30d
+        cache: true
         header:
           show: true
           title: "Charge rate"
@@ -938,6 +954,7 @@ views:
       # ── Charger Current ──
       - type: custom:apexcharts-card
         graph_span: 30d
+        cache: true
         header:
           show: true
           title: "Charger current"
@@ -976,6 +993,21 @@ views:
         content: |
           ## Settings & Configuration
 
+      # Currency Selector
+      - type: markdown
+        content: |
+          ## 💱 Currency
+
+          Choose the currency used for all cost calculations and displays
+          across both dashboards (electricity cost, fuel comparison, savings,
+          projections, history). The number you enter for rates below should
+          already be in this currency.
+
+      - type: custom:mushroom-select-card
+        entity: input_select.tesla_currency
+        name: "Currency"
+        icon: mdi:currency-usd
+
       # Electricity Cost Configuration
       - type: markdown
         content: |
@@ -984,8 +1016,7 @@ views:
       - type: custom:mushroom-number-card
         entity: input_number.tesla_default_electricity_cost
         name: "Default Electricity Rate"
-        icon: mdi:currency-eur
-        unit: "Ft/kWh"
+        icon: mdi:currency-usd
         min: 0
         max: 200
         step: 0.5
@@ -1014,8 +1045,7 @@ views:
       - type: custom:mushroom-number-card
         entity: input_number.comparison_fuel_price_per_liter
         name: "Fuel Price per Litre"
-        icon: mdi:currency-eur
-        unit: "Ft/L"
+        icon: mdi:currency-usd
         min: 0
         max: 2000
         step: 1
@@ -1026,20 +1056,23 @@ views:
           ---
           ## 📍 Saved Location Rates
 
+          Rates below are shown in whatever currency you set above (currently
+          **{{ states('input_select.tesla_currency') }} ({{ states('sensor.tesla_currency_symbol') }})**).
+
           ### Home (123 Main St)
-          - **Rate:** 60.0 Ft/kWh
+          - **Rate:** 60.0 {{ states('sensor.tesla_currency_symbol') }}/kWh
           - **Hours:** 00:00 – 00:00 (24/7)
           - **Active Days:** Mon–Sun
           - **Season:** Jan–Dec
 
           ### Solar / Off-Peak (Seasonal)
-          - **Rate:** 0.0 Ft/kWh (Solar surplus)
+          - **Rate:** 0.0 {{ states('sensor.tesla_currency_symbol') }}/kWh (Solar surplus)
           - **Hours:** 10:00 – 14:00
           - **Active Days:** Mon–Sun
           - **Season:** May–Sep
 
           ### Work Location (456 Office Ave)
-          - **Rate:** 75.0 Ft/kWh
+          - **Rate:** 75.0 {{ states('sensor.tesla_currency_symbol') }}/kWh
           - **Hours:** 06:00 – 18:00
           - **Active Days:** Mon–Fri
           - **Season:** Jan–Dec

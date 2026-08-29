@@ -130,24 +130,30 @@ input_datetime.tesla_next_departure             | input_datetime| helper        
 sensor.tesla_tires_status                        | sensor        | safety            | Tesla Tires Status              | Template: combined tire warning summary (Optimal / Check Tires)
 
 # --- EFFICIENCY (Templates) ---
-sensor.tesla_efficiency_kwh_per_km               | sensor        | efficiency        | Tesla Efficiency kWh/km         | Template: baseline 0.228 kWh/km (Tessie analytics)
+sensor.tesla_efficiency_kwh_per_km               | sensor        | efficiency        | Tesla Efficiency kWh/km         | Template: REAL rolling 7-day efficiency (tesla_weekly_drive_energy / tesla_weekly_distance); falls back to 0.228 kWh/km baseline until >5km logged in the last 7 days
 sensor.tesla_efficiency_wh_per_km                | sensor        | efficiency        | Tesla Efficiency Wh/km          | Template: efficiency in Wh/km (kWh/km * 1000)
-sensor.tesla_electric_cost_per_km                | sensor        | cost_tracking     | Tesla Electric Cost Per KM      | Template: home charging cost per km (60 Ft/kWh * efficiency)
-sensor.tesla_fuel_cost_per_km                    | sensor        | cost_tracking     | Tesla Fuel Cost per km          | Template: ICE equivalent fuel cost per km (6.5 L/100km @ 595 Ft/L)
+sensor.tesla_electric_cost_per_km                | sensor        | cost_tracking     | Tesla Electric Cost Per KM      | Template: efficiency * input_number.tesla_default_electricity_cost (was hardcoded to 60, now honors the configured rate); unit follows selected currency
+sensor.tesla_fuel_cost_per_km                    | sensor        | cost_tracking     | Tesla Fuel Cost per km          | Template: ICE equivalent fuel cost per km (comparison_ice_efficiency @ comparison_fuel_price_per_liter); unit follows selected currency
+sensor.tesla_drive_energy_consumed_total         | sensor        | efficiency        | Tesla Drive Energy Consumed Total | Template (device_class energy, state_class total_increasing): wraps input_number.tesla_drive_energy_consumed_total_kwh, an ever-increasing accumulator fed by the tesla_drive_energy_session_start/end automations, which compute REAL energy used per drive from (battery % drop x input_number.tesla_battery_capacity_kwh). Source for the daily/weekly/monthly drive-energy utility meters.
 
 # --- ENERGY TRACKING (Utility Meters + Templates) ---
 sensor.tesla_daily_charging_energy               | sensor        | energy_tracking   | Tesla Daily Charging Energy     | Utility meter: daily kWh from charge_energy_added
 sensor.tesla_weekly_charging_energy              | sensor        | energy_tracking   | Tesla Weekly Charging Energy    | Utility meter: weekly kWh from charge_energy_added
 sensor.tesla_monthly_charging_energy             | sensor        | energy_tracking   | Tesla Monthly Charging Energy   | Utility meter: monthly kWh from charge_energy_added
-sensor.tesla_daily_energy_consumed               | sensor        | energy_tracking   | Tesla Daily Energy Consumed     | Template: estimated drive consumption (daily_distance * efficiency)
-sensor.tesla_monthly_energy_consumed             | sensor        | energy_tracking   | Tesla Monthly Energy Consumed   | Template: mirrors monthly_charging_energy
+sensor.tesla_daily_drive_energy                  | sensor        | energy_tracking   | Tesla Daily Drive Energy        | Utility meter: daily kWh from sensor.tesla_drive_energy_consumed_total (real driving consumption, not charging)
+sensor.tesla_weekly_drive_energy                 | sensor        | energy_tracking   | Tesla Weekly Drive Energy       | Utility meter: weekly kWh from sensor.tesla_drive_energy_consumed_total; feeds the real efficiency calculation
+sensor.tesla_monthly_drive_energy                | sensor        | energy_tracking   | Tesla Monthly Drive Energy      | Utility meter: monthly kWh from sensor.tesla_drive_energy_consumed_total
+sensor.tesla_daily_energy_consumed               | sensor        | energy_tracking   | Tesla Daily Energy Consumed     | Template: uses REAL tesla_daily_drive_energy when available (>0), else falls back to estimate (daily_distance * efficiency)
+sensor.tesla_monthly_energy_consumed             | sensor        | energy_tracking   | Tesla Monthly Energy Consumed   | Template: uses REAL tesla_monthly_drive_energy when available (>0), else falls back to estimate (monthly_distance * efficiency)
 
 # --- COST TRACKING (Templates) ---
-sensor.tesla_daily_electric_cost                 | sensor        | cost_tracking     | Tesla Daily Electric Cost       | Template: daily energy * 60 Ft/kWh
-sensor.tesla_weekly_electric_cost                | sensor        | cost_tracking     | Tesla Weekly Electric Cost      | Template: weekly charging energy * 60 Ft/kWh
-sensor.tesla_monthly_electric_cost               | sensor        | cost_tracking     | Tesla Monthly Electric Cost     | Template: monthly energy * 60 Ft/kWh
-sensor.tesla_annual_electric_cost                | sensor        | cost_tracking     | Tesla Annual Electric Cost      | Template: monthly electric cost * 12 (projected)
-sensor.tesla_5year_electric_cost                 | sensor        | cost_tracking     | Tesla 5 Year Electric Cost      | Template: annual electric cost * 5 (projected); default_entity_id set for dashboard match
+sensor.tesla_currency_symbol                     | sensor        | settings          | Tesla Currency Symbol           | Template: maps input_select.tesla_currency (HUF/EUR/USD/GBP) to its display symbol (Ft/€/$/£); used as the dynamic unit_of_measurement for all cost sensors and in dashboard JS/markdown
+sensor.tesla_currency_locale                     | sensor        | settings          | Tesla Currency Locale           | Template: maps input_select.tesla_currency to a JS locale string (e.g. hu-HU) used for number formatting (thousands separators) in the dashboards
+sensor.tesla_daily_electric_cost                 | sensor        | cost_tracking     | Tesla Daily Electric Cost       | Template: daily energy * input_number.tesla_default_electricity_cost (now honors the configured rate instead of a hardcoded 60); unit follows selected currency
+sensor.tesla_weekly_electric_cost                | sensor        | cost_tracking     | Tesla Weekly Electric Cost      | Template: weekly charging energy * input_number.tesla_default_electricity_cost; unit follows selected currency
+sensor.tesla_monthly_electric_cost               | sensor        | cost_tracking     | Tesla Monthly Electric Cost     | Template: monthly energy * input_number.tesla_default_electricity_cost; unit follows selected currency
+sensor.tesla_annual_electric_cost                | sensor        | cost_tracking     | Tesla Annual Electric Cost      | Template: monthly electric cost * 12 (projected); unit follows selected currency
+sensor.tesla_5year_electric_cost                 | sensor        | cost_tracking     | Tesla 5 Year Electric Cost      | Template: annual electric cost * 5 (projected); unit follows selected currency; default_entity_id set for dashboard match
 sensor.tesla_daily_fuel_cost_equivalent          | sensor        | cost_tracking     | Tesla Daily Fuel Cost Equivalent | Template: daily_distance * fuel_cost_per_km
 sensor.tesla_weekly_fuel_cost                    | sensor        | cost_tracking     | Tesla Weekly Fuel Cost Equivalent | Template: weekly_distance * fuel_cost_per_km
 sensor.tesla_monthly_fuel_cost                   | sensor        | cost_tracking     | Tesla Monthly Fuel Cost Equivalent | Template: monthly_distance * fuel_cost_per_km; default_entity_id set for dashboard match
@@ -206,9 +212,14 @@ binary_sensor.tesla_anomaly_high_daily_cost      | binary_sensor | anomaly      
 # CUSTOM HELPERS - PHASE 1 (2026-06-23)
 # ============================================================
 
-input_number.tesla_default_electricity_cost            | input_number  | settings          | Default Electricity Cost             | Default grid rate for cost calculations (Ft/kWh). Used in cost templates. Default: 60.0
+input_number.tesla_default_electricity_cost            | input_number  | settings          | Default Electricity Cost             | Default grid rate for cost calculations (per kWh, in whatever currency you select). Used in cost templates. Default: 60.0
 input_number.comparison_ice_efficiency                 | input_number  | settings          | ICE Fuel Efficiency (Comparison)     | Baseline ICE fuel consumption for cost comparison (L/100km). Default: 6.5
-input_number.comparison_fuel_price_per_liter           | input_number  | settings          | Fuel Price per Litre                 | Current fuel market price for comparison calculations (Ft/L). Default: 595.0
+input_number.comparison_fuel_price_per_liter           | input_number  | settings          | Fuel Price per Litre                 | Current fuel market price for comparison calculations (per litre, in whatever currency you select). Default: 595.0
+input_select.tesla_currency                            | input_select  | settings          | Tesla Currency                       | Currency used for all cost calculations/display (HUF/EUR/USD/GBP). Default: HUF. Drives sensor.tesla_currency_symbol and sensor.tesla_currency_locale. Editable from the Analytics → Settings tab.
+input_number.tesla_battery_capacity_kwh                | input_number  | settings          | Tesla Battery Capacity               | Usable pack capacity (kWh) used to convert battery % drop into real kWh consumed while driving. Set this to your vehicle's actual capacity for accurate efficiency numbers. Default: 100.0
+input_number.tesla_drive_start_battery_pct             | input_number  | internal          | Tesla Drive Start Battery %          | Internal: battery % snapshot captured at the start of each drive (see automations.yaml). Not meant for dashboards.
+input_number.tesla_drive_start_odometer                | input_number  | internal          | Tesla Drive Start Odometer           | Internal: odometer snapshot captured at the start of each drive (see automations.yaml). Not meant for dashboards.
+input_number.tesla_drive_energy_consumed_total_kwh     | input_number  | internal          | Tesla Drive Energy Consumed Total    | Internal: lifetime accumulator of real energy consumed while driving, incremented by tesla_drive_energy_session_end automation. Wrapped by sensor.tesla_drive_energy_consumed_total for utility_meter/statistics use.
 
 # ============================================================
 # TESLAMATE INTEGRATION - PHASE 4 (PLANNED)

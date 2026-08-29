@@ -58,9 +58,28 @@ utility_meter:
     cycle: weekly
     name: "Tesla Weekly Distance Raw"
 
+  # Real driving energy consumption (accumulated from actual drive sessions,
+  # see automations.yaml: tesla_drive_energy_session_start/end).
+  tesla_daily_drive_energy:
+    source: sensor.tesla_drive_energy_consumed_total
+    cycle: daily
+    name: "Tesla Daily Drive Energy"
+
+  tesla_weekly_drive_energy:
+    source: sensor.tesla_drive_energy_consumed_total
+    cycle: weekly
+    name: "Tesla Weekly Drive Energy"
+
+  tesla_monthly_drive_energy:
+    source: sensor.tesla_drive_energy_consumed_total
+    cycle: monthly
+    name: "Tesla Monthly Drive Energy"
+
 sensor:
   - platform: history_stats
     name: "Tesla Driving Time Today Raw"
+    unique_id: tesla_driving_time_today_raw_v1
+    state_class: measurement
     entity_id: binary_sensor.tesla_driving_active
     state: "on"
     type: time
@@ -69,6 +88,8 @@ sensor:
 
   - platform: history_stats
     name: "Tesla Driving Time 7d Raw"
+    unique_id: tesla_driving_time_7d_raw_v1
+    state_class: measurement
     entity_id: binary_sensor.tesla_driving_active
     state: "on"
     type: time
@@ -77,6 +98,8 @@ sensor:
 
   - platform: history_stats
     name: "Tesla Charging Time Today Raw"
+    unique_id: tesla_charging_time_today_raw_v1
+    state_class: measurement
     entity_id: binary_sensor.tesla_charging_active
     state: "on"
     type: time
@@ -85,6 +108,8 @@ sensor:
 
   - platform: history_stats
     name: "Tesla Charging Time 7d Raw"
+    unique_id: tesla_charging_time_7d_raw_v1
+    state_class: measurement
     entity_id: binary_sensor.tesla_charging_active
     state: "on"
     type: time
@@ -93,6 +118,8 @@ sensor:
 
   - platform: history_stats
     name: "Tesla Drive Sessions Today"
+    unique_id: tesla_drive_sessions_today_v1
+    state_class: measurement
     entity_id: binary_sensor.tesla_driving_active
     state: "on"
     type: count
@@ -101,6 +128,8 @@ sensor:
 
   - platform: history_stats
     name: "Tesla Drive Sessions 7d"
+    unique_id: tesla_drive_sessions_7d_v1
+    state_class: measurement
     entity_id: binary_sensor.tesla_driving_active
     state: "on"
     type: count
@@ -109,6 +138,8 @@ sensor:
 
   - platform: history_stats
     name: "Tesla Charge Sessions Today"
+    unique_id: tesla_charge_sessions_today_v1
+    state_class: measurement
     entity_id: binary_sensor.tesla_charging_active
     state: "on"
     type: count
@@ -117,6 +148,8 @@ sensor:
 
   - platform: history_stats
     name: "Tesla Charge Sessions 7d"
+    unique_id: tesla_charge_sessions_7d_v1
+    state_class: measurement
     entity_id: binary_sensor.tesla_charging_active
     state: "on"
     type: count
@@ -125,6 +158,8 @@ sensor:
 
   - platform: history_stats
     name: "Tesla Charging Time 3d Raw"
+    unique_id: tesla_charging_time_3d_raw_v1
+    state_class: measurement
     entity_id: binary_sensor.tesla_charging_active
     state: "on"
     type: time
@@ -133,6 +168,8 @@ sensor:
 
   - platform: history_stats
     name: "Tesla Driving Time 30d Raw"
+    unique_id: tesla_driving_time_30d_raw_v1
+    state_class: measurement
     entity_id: binary_sensor.tesla_driving_active
     state: "on"
     type: time
@@ -141,11 +178,24 @@ sensor:
 
   - platform: history_stats
     name: "Tesla Drive Sessions 30d"
+    unique_id: tesla_drive_sessions_30d_v1
+    state_class: measurement
     entity_id: binary_sensor.tesla_driving_active
     state: "on"
     type: count
     start: "{{ now() - timedelta(days=30) }}"
     end: "{{ now() }}"
+
+input_select:
+  tesla_currency:
+    name: "Tesla Currency"
+    icon: mdi:currency-usd
+    options:
+      - "HUF"
+      - "EUR"
+      - "USD"
+      - "GBP"
+    initial: "HUF"
 
 input_number:
   tesla_odometer_daily_baseline:
@@ -203,6 +253,46 @@ input_number:
     icon: mdi:currency-eur
     mode: slider
     initial: 595.0
+
+  tesla_battery_capacity_kwh:
+    name: "Tesla Battery Capacity"
+    unit_of_measurement: "kWh"
+    min: 30
+    max: 200
+    step: 0.5
+    icon: mdi:battery-high
+    mode: box
+    initial: 100.0
+
+  tesla_drive_start_battery_pct:
+    name: "Tesla Drive Start Battery %"
+    unit_of_measurement: "%"
+    min: 0
+    max: 100
+    step: 0.1
+    mode: box
+    icon: mdi:battery-clock
+    initial: 0
+
+  tesla_drive_start_odometer:
+    name: "Tesla Drive Start Odometer"
+    unit_of_measurement: "km"
+    min: 0
+    max: 9999999
+    step: 0.01
+    mode: box
+    icon: mdi:counter
+    initial: 0
+
+  tesla_drive_energy_consumed_total_kwh:
+    name: "Tesla Drive Energy Consumed Total"
+    unit_of_measurement: "kWh"
+    min: 0
+    max: 999999
+    step: 0.001
+    mode: box
+    icon: mdi:lightning-bolt
+    initial: 0
 
 input_text:
   tesla_model:
@@ -480,6 +570,34 @@ template:
           {{ daily_cost > (weekly_avg * 1.8) and daily_cost > 800 }}
 
   - sensor:
+      # === Currency ===
+      - name: "Tesla Currency Symbol"
+        unique_id: tesla_currency_symbol_v1
+        icon: mdi:currency-usd
+        state: >
+          {% set c = states('input_select.tesla_currency') %}
+          {% set symbols = {'HUF': 'Ft', 'EUR': '€', 'USD': '$', 'GBP': '£'} %}
+          {{ symbols.get(c, 'Ft') }}
+
+      - name: "Tesla Currency Locale"
+        unique_id: tesla_currency_locale_v1
+        icon: mdi:earth
+        state: >
+          {% set c = states('input_select.tesla_currency') %}
+          {% set locales = {'HUF': 'hu-HU', 'EUR': 'de-DE', 'USD': 'en-US', 'GBP': 'en-GB'} %}
+          {{ locales.get(c, 'hu-HU') }}
+
+      # === Real Drive Energy Consumption (from actual battery drop while driving) ===
+      # Populated by automations tesla_drive_energy_session_start / _end in automations.yaml.
+      - name: "Tesla Drive Energy Consumed Total"
+        unique_id: tesla_drive_energy_consumed_total_v1
+        unit_of_measurement: "kWh"
+        device_class: energy
+        state_class: total_increasing
+        icon: mdi:lightning-bolt
+        state: >
+          {{ states('input_number.tesla_drive_energy_consumed_total_kwh') | float(0) | round(3) }}
+
       # === Vehicle Stats ===
       - name: "Tesla Tires Status"
         unique_id: tesla_tires_status_v4
@@ -499,11 +617,22 @@ template:
           {% endif %}
 
       # === Efficiency ===
+      # Real rolling efficiency computed from actual logged drive-energy consumption
+      # (battery % drop x pack capacity) over actual distance driven in the last 7 days.
+      # Falls back to a 0.228 kWh/km baseline estimate until enough real driving data
+      # has accumulated (needs > 5km driven in the last 7 days).
       - name: "Tesla Efficiency kWh/km"
-        unique_id: tesla_efficiency_kwh_per_km_v4
+        unique_id: tesla_efficiency_kwh_per_km_v5
         unit_of_measurement: "kWh/km"
         icon: mdi:car-electric
-        state: "0.228"
+        state: >
+          {% set dist_7d = states('sensor.tesla_weekly_distance') | float(0) %}
+          {% set energy_7d = states('sensor.tesla_weekly_drive_energy') | float(0) %}
+          {% if dist_7d > 5 and energy_7d > 0 %}
+            {{ (energy_7d / dist_7d) | round(3) }}
+          {% else %}
+            0.228
+          {% endif %}
 
       - name: "Tesla Efficiency Wh Per Km"
         unique_id: tesla_efficiency_wh_per_km_v5
@@ -547,50 +676,63 @@ template:
 
       # === Daily Tracking ===
       - name: "Tesla Daily Energy Consumed"
-        unique_id: tesla_daily_energy_consumed_v4
+        unique_id: tesla_daily_energy_consumed_v5
         unit_of_measurement: "kWh"
         icon: mdi:flash
         state: >
-          {% set dist_km = states('sensor.tesla_daily_distance') | float(0) %}
-          {% set eff = states('sensor.tesla_efficiency_kwh_per_km') | float(0.228) %}
-          {{ (dist_km * eff) | round(2) }}
+          {% set real = states('sensor.tesla_daily_drive_energy') | float(0) %}
+          {% if real > 0 %}
+            {{ real | round(2) }}
+          {% else %}
+            {% set dist_km = states('sensor.tesla_daily_distance') | float(0) %}
+            {% set eff = states('sensor.tesla_efficiency_kwh_per_km') | float(0.228) %}
+            {{ (dist_km * eff) | round(2) }}
+          {% endif %}
 
       - name: "Tesla Daily Electric Cost"
-        unique_id: tesla_daily_electric_cost_v4
-        unit_of_measurement: "Ft"
+        unique_id: tesla_daily_electric_cost_v5
+        unit_of_measurement: >
+          {{ states('sensor.tesla_currency_symbol') }}
         icon: mdi:cash
         state: >
           {% set energy = states('sensor.tesla_daily_charging_energy') | float(0) %}
-          {{ (energy * 60) | round(0) }}
+          {% set rate = states('input_number.tesla_default_electricity_cost') | float(60) %}
+          {{ (energy * rate) | round(0) }}
 
       # === Monthly + Projections ===
       - name: "Tesla Monthly Electric Cost"
-        unique_id: tesla_monthly_electric_cost_v4
-        unit_of_measurement: "Ft"
+        unique_id: tesla_monthly_electric_cost_v5
+        unit_of_measurement: >
+          {{ states('sensor.tesla_currency_symbol') }}
         icon: mdi:cash-multiple
         state: >
           {% set monthly_energy = states('sensor.tesla_monthly_charging_energy') | float(0) %}
-          {{ (monthly_energy * 60) | round(0) }}
+          {% set rate = states('input_number.tesla_default_electricity_cost') | float(60) %}
+          {{ (monthly_energy * rate) | round(0) }}
 
       - name: "Tesla Weekly Electric Cost"
-        unique_id: tesla_weekly_electric_cost_v1
-        unit_of_measurement: "Ft"
+        unique_id: tesla_weekly_electric_cost_v2
+        unit_of_measurement: >
+          {{ states('sensor.tesla_currency_symbol') }}
         icon: mdi:cash-multiple
         state: >
           {% set weekly_energy = states('sensor.tesla_weekly_charging_energy') | float(0) %}
-          {{ (weekly_energy * 60) | round(0) }}
+          {% set rate = states('input_number.tesla_default_electricity_cost') | float(60) %}
+          {{ (weekly_energy * rate) | round(0) }}
 
       - name: "Tesla Annual Electric Cost"
-        unique_id: tesla_annual_electric_cost_v4
-        unit_of_measurement: "Ft"
+        unique_id: tesla_annual_electric_cost_v5
+        unit_of_measurement: >
+          {{ states('sensor.tesla_currency_symbol') }}
         icon: mdi:cash-multiple
         state: >
           {% set monthly = states('sensor.tesla_monthly_electric_cost') | float(0) %}
           {{ (monthly * 12) | round(0) }}
 
       - name: "Tesla 5 Year Electric Cost"
-        unique_id: tesla_5year_electric_cost_v4
-        unit_of_measurement: "Ft"
+        unique_id: tesla_5year_electric_cost_v5
+        unit_of_measurement: >
+          {{ states('sensor.tesla_currency_symbol') }}
         icon: mdi:cash-multiple
         state: >
           {% set annual = states('sensor.tesla_annual_electric_cost') | float(0) %}
@@ -598,8 +740,9 @@ template:
 
       # === Equivalent Fuel Cost ===
       - name: "Tesla Fuel Cost per km"
-        unique_id: tesla_fuel_cost_per_km_v4
-        unit_of_measurement: "Ft/km"
+        unique_id: tesla_fuel_cost_per_km_v5
+        unit_of_measurement: >
+          {{ states('sensor.tesla_currency_symbol') }}/km
         icon: mdi:gas-station
         state: >
           {% set eff = states('input_number.comparison_ice_efficiency') | float(6.5) %}
@@ -607,8 +750,9 @@ template:
           {{ (eff / 100 * price) | round(2) }}
 
       - name: "Tesla Daily Fuel Cost Equivalent"
-        unique_id: tesla_daily_fuel_cost_equivalent_v4
-        unit_of_measurement: "Ft"
+        unique_id: tesla_daily_fuel_cost_equivalent_v5
+        unit_of_measurement: >
+          {{ states('sensor.tesla_currency_symbol') }}
         icon: mdi:gas-station
         state: >
           {% set dist = states('sensor.tesla_daily_distance') | float(0) %}
@@ -616,8 +760,9 @@ template:
           {{ (dist * fuel_per_km) | round(0) }}
 
       - name: "Tesla Monthly Fuel Cost"
-        unique_id: tesla_monthly_fuel_cost_v5
-        unit_of_measurement: "Ft"
+        unique_id: tesla_monthly_fuel_cost_v6
+        unit_of_measurement: >
+          {{ states('sensor.tesla_currency_symbol') }}
         icon: mdi:gas-station
         state: >
           {% set dist = states('sensor.tesla_monthly_distance') | float(0) %}
@@ -625,8 +770,9 @@ template:
           {{ (dist * fuel_per_km) | round(0) }}
 
       - name: "Tesla Weekly Fuel Cost Equivalent"
-        unique_id: tesla_weekly_fuel_cost_v1
-        unit_of_measurement: "Ft"
+        unique_id: tesla_weekly_fuel_cost_v2
+        unit_of_measurement: >
+          {{ states('sensor.tesla_currency_symbol') }}
         icon: mdi:gas-station
         state: >
           {% set dist = states('sensor.tesla_weekly_distance') | float(0) %}
@@ -634,20 +780,30 @@ template:
           {{ (dist * fuel_per_km) | round(0) }}
 
       - name: "Tesla Monthly Energy Consumed"
-        unique_id: tesla_monthly_energy_consumed_v4
+        unique_id: tesla_monthly_energy_consumed_v5
         unit_of_measurement: "kWh"
         device_class: energy
         state_class: total_increasing
         icon: mdi:flash
         state: >
-          {{ states('sensor.tesla_monthly_charging_energy') | float(0) | round(2) }}
+          {% set real = states('sensor.tesla_monthly_drive_energy') | float(0) %}
+          {% if real > 0 %}
+            {{ real | round(2) }}
+          {% else %}
+            {% set dist_km = states('sensor.tesla_monthly_distance') | float(0) %}
+            {% set eff = states('sensor.tesla_efficiency_kwh_per_km') | float(0.228) %}
+            {{ (dist_km * eff) | round(2) }}
+          {% endif %}
 
       - name: "Tesla Electric Cost Per KM"
-        unique_id: tesla_electric_cost_per_km_v4
-        unit_of_measurement: "Ft/km"
+        unique_id: tesla_electric_cost_per_km_v5
+        unit_of_measurement: >
+          {{ states('sensor.tesla_currency_symbol') }}/km
         icon: mdi:cash
         state: >
-          {{ (states('sensor.tesla_efficiency_kwh_per_km') | float(0) * 60) | round(2) }}
+          {% set eff = states('sensor.tesla_efficiency_kwh_per_km') | float(0) %}
+          {% set rate = states('input_number.tesla_default_electricity_cost') | float(60) %}
+          {{ (eff * rate) | round(2) }}
 
       # === Activity Time Tracking ===
       - name: "Tesla Driving Time Today"
