@@ -195,6 +195,53 @@ This requires **Docker** and **Docker Compose** on a machine that can stay on 24
 
 ---
 
+## 🔧 Maintenance
+
+### Renaming the `tesla_` entity prefix
+
+All entities/helpers in this project use a consistent lowercase `tesla_...`
+prefix (e.g. `sensor.tesla_odometer`, `unique_id: tesla_driving_time_today_raw_v1`).
+If you get a second car, or just want a different naming scheme, use:
+
+```bash
+# Preview changes only (safe, default — nothing is written):
+python3 scripts/rename_tesla_prefix.py --new-prefix modely
+
+# Apply the changes (originals are backed up first):
+python3 scripts/rename_tesla_prefix.py --new-prefix modely --apply
+```
+
+It only touches lowercase `tesla_` machine identifiers (entity IDs, unique
+IDs, automation IDs) — capitalized "Tesla" text in friendly names/comments is
+left alone by default (pass `--include-labels` to rename those too). Run
+`python3 scripts/rename_tesla_prefix.py --help` for full details.
+
+> ❓ **"If I rename the prefix after a month of use, do I lose my logged
+> stats?"** Short answer: **the raw history isn't deleted, but you lose
+> continuity** — renaming an entity's ID makes Home Assistant treat it as a
+> brand-new entity:
+> - Its history/graphs and long-term statistics (used by Statistics Graph
+>   cards, the Energy dashboard, and `apexcharts-card` history) start empty.
+>   The old data still exists in the database under the old (now orphaned)
+>   entity ID until it's purged by your normal retention settings, but it
+>   won't show up merged into the renamed entity.
+> - `utility_meter` helpers (the daily/weekly/monthly accumulators) reset
+>   their current cycle to 0 if you rename them.
+> - The lifetime real-efficiency accumulator
+>   (`input_number.tesla_drive_energy_consumed_total_kwh`) restores from its
+>   configured default (`0`) after a rename — the previously accumulated
+>   total is not automatically carried over.
+> - Old orphaned entities will show as `unavailable`; clean them up with
+>   `scripts/cleanup_legacy_entities.py`.
+>
+> **If continuity matters to you:** before renaming, note the current value
+> of `input_number.tesla_drive_energy_consumed_total_kwh` (Developer Tools →
+> States), then manually set it back on the newly-named entity after
+> restarting Home Assistant. Everything else (daily/weekly/monthly totals,
+> charts) will simply start accumulating fresh under the new name.
+
+---
+
 ## 🛠️ Troubleshooting
 
 | Problem | Fix |

@@ -559,3 +559,70 @@ apex_config:
   grid:
     borderColor: '#2D2D2D'
     strokeDashArray: 4
+
+### 4. Entity Prefix Naming & Renaming (`scripts/rename_tesla_prefix.py`)
+
+**Why there is no YAML "global variable" for the `tesla_` prefix:** Plain YAML
+has no string-interpolation feature — there's no way to define a value once
+and splice it into the middle of another string (e.g. `${prefix}_odometer`).
+YAML anchors (`&x` / `*x`) only substitute a whole scalar/mapping/list, not a
+fragment of text inside a string. Home Assistant also does not evaluate Jinja
+templates in `unique_id:`, `name:` (as a YAML key), or automation `id:`
+fields — those are static and read once at config load. So the `tesla_`
+prefix used across `configuration.yaml`, `packages/tesla/*.yaml`,
+`dashboards/*.yaml`, and `entities-list.txt` cannot be centralized in the
+YAML itself; it's a plain text convention.
+
+**Naming convention this repo relies on:** machine identifiers always use
+lowercase `tesla_...` (`unique_id: tesla_driving_time_today_raw_v1`,
+`sensor.tesla_odometer`, automation `id:` fields, utility_meter/input_number
+keys), while human-readable text uses capitalized `Tesla ...` (friendly
+`name:` strings, markdown, comments, brand references like "Tesla Fleet
+integration"). Any tooling that mass-renames the prefix must respect this
+distinction to avoid corrupting prose.
+
+**The rename tool:** `scripts/rename_tesla_prefix.py` performs a scoped
+find/replace across the known project files, matching only the lowercase
+`tesla_` token pattern by default (word-boundary anchored), with an opt-in
+`--include-labels` flag to also rewrite the capitalized `Tesla` word in
+friendly names. It's dry-run by default (prints a unified diff, changes
+nothing) and only writes changes with `--apply`, after backing up originals
+to `.backups/rename_tesla_prefix_<timestamp>/`. See the script's module
+docstring and `README.md`'s Maintenance section for usage.
+
+**Home Assistant side-effects of an entity_id/unique_id rename** (relevant
+when advising a user who wants to run this after already collecting weeks of
+history — see README FAQ for the user-facing version):
+* The Recorder's `states` table history is keyed by `entity_id`. Renaming an
+  entity means Home Assistant treats it as a **new** entity — old history
+  rows are **not deleted** (they remain in the DB until the normal purge
+  retention period), but they stay attached to the old, now-orphaned
+  `entity_id` and won't show up in the new entity's history/graphs.
+* Long-term statistics (`statistics` / `statistics_short_term` tables, used
+  by Statistics Graph cards, the Energy dashboard, and any `apexcharts-card`
+  `statistics:` series) are also keyed by `entity_id`/`statistic_id`. These
+  do **not** migrate — the renamed entity starts with an empty statistics
+  history.
+* `utility_meter` helpers (daily/weekly/monthly accumulators like
+  `tesla_daily_drive_energy`) store their current-cycle running total as
+  their own entity state, restored via Recorder on restart. If you rename the
+  utility_meter entity itself, its accumulated cycle value resets to 0 (it's
+  effectively a new entity). If you only rename its `source:` entity, the
+  meter loses its data source until you update `source:` to match.
+* YAML-defined `input_number` helpers (e.g.
+  `input_number.tesla_drive_energy_consumed_total_kwh`, the lifetime real-
+  energy accumulator) restore their last value via Recorder's restore-state
+  cache, keyed by `entity_id`. Renaming it means the new entity starts fresh
+  at its configured `initial:` value — the previously accumulated total is
+  orphaned unless manually copied over.
+* Old (now-unreferenced) entities remain in the Entity Registry showing
+  `unavailable`. Clean them up with the existing
+  `scripts/cleanup_legacy_entities.py` (set `LEGACY_PREFIX` to the old
+  prefix) after confirming the new prefix is working.
+
+**Recommended safe rename procedure:** before running with `--apply`, note
+down the current value of any lifetime accumulators you care about (chiefly
+`input_number.tesla_drive_energy_consumed_total_kwh` — Developer Tools →
+States) so you can manually restore them via
+`input_number.set_value` on the newly-named entity right after restarting HA,
+if continuity matters more than a fresh start.
