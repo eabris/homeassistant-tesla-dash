@@ -10,10 +10,27 @@ This README is written for **everyone**, including people who have never touched
 
 ## ✨ What you get
 
-- A Tesla **Overview** dashboard (battery, climate, charging, controls, tires, cost projections) styled like the Tessie app.
-- A Tesla **Analytics** dashboard (drive/charge/idle history, efficiency charts, cost & savings analysis).
+Two ready-made Lovelace dashboards, wired directly to your Tesla's native entities, styled to look and feel like the Tessie mobile app:
+
+### 🧭 Tesla Overview dashboard
+Six tabs covering everyday use of the car:
+- **Dashboard** — the main cockpit: header with vehicle name + battery/range readout, a conditional "Charging" status card (time remaining, amps/volts/kW), a 6-button quick-action row (lock, climate, frunk, trunk, flash lights, more), a tap-to-open location strip, and an info grid (climate, battery, schedule, tires, drives, charges, idles, activity, automation, profiler) plus a vehicle specs footer (model, VIN, plate, firmware, odometer, alerts).
+- **Controls** — window venting, sentry mode toggle, media playback, valet mode & speed limit.
+- **Climate** — interior/exterior temperature readout, a seat-heater map for all 6 seats + steering wheel heater, a temperature stepper, and quick toggles for Dog Mode, Camp Mode, Bio Defense, Climate, Defrost, and Cabin Overheat Protection.
+- **Battery** — battery level gauge, detailed telemetry table (range, drain, energy, pack temperature, amperage, voltage, lifetime energy used), a charge-limit slider, and start/stop charging + unlock charge port buttons.
+- **Tires** — real-time pressure readout for all 4 wheels plus a historical pressure graph with color-coded safe/warning zones.
+- **Cost Projections** — monthly/annual/5-year charging cost breakdown by network (home, Supercharger, other).
+
+### 📊 Tesla Analytics dashboard
+Two tabs for historical insight:
+- **History** — a unified, chronological timeline of every drive, charge, and idle/standby session, each with time, location, distance/energy, battery % change, and cost — tap a drive for a detail popup with an interactive route map and speed/altitude chart.
+- **Analytics** — a date-range selector (7 days / 30 days / 1 year / all time) driving KPI summary rows and a full suite of charts: cost comparison vs. a gas car, efficiency vs. speed, driving-time heatmaps, charging source breakdown, charging power curves, phantom-drain analysis, and macro vehicle-state (driving/charging/idling/sleeping) breakdowns.
+
+### ⚙️ Plus
+- A global cost/rate configuration layer (electricity rates by location & time-of-use schedule, Supercharger sync, fuel-comparison settings) so all cost/savings figures are accurate to your tariffs.
 - Optional integration with **TeslaMate** for long-term trip/charge history and Grafana-powered stats.
-- All metric units (km, °C, kWh, Ft/currency — easily adjustable).
+- Everything displayed in **metric units** (km, km/h, bar, °C, kWh, kW/A/V) and **Hungarian Forint (Ft)** currency — easily adjustable to your own units/currency.
+- A fully documented entity inventory (`entities-list.txt`) so you always know which sensors/helpers power which card.
 
 ---
 
