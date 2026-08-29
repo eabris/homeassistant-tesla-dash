@@ -22,15 +22,19 @@ Six tabs covering everyday use of the car:
 - **Cost Projections** — monthly/annual/5-year charging cost breakdown by network (home, Supercharger, other).
 
 ### 📊 Tesla Analytics dashboard
-Two tabs for historical insight:
+Four tabs for historical insight and configuration:
 - **History** — a unified, chronological timeline of every drive, charge, and idle/standby session, each with time, location, distance/energy, battery % change, and cost — tap a drive for a detail popup with an interactive route map and speed/altitude chart.
+- **Driving** — distance, real energy used, electric cost, duration, speed, drive count, and **real energy efficiency (Wh/km)** computed from actual battery-drop telemetry (not a fixed estimate), plus efficiency-vs-speed and efficiency-vs-temperature charts.
+- **Charging** — charging session breakdowns and power/current charts.
 - **Analytics** — a date-range selector (7 days / 30 days / 1 year / all time) driving KPI summary rows and a full suite of charts: cost comparison vs. a gas car, efficiency vs. speed, driving-time heatmaps, charging source breakdown, charging power curves, phantom-drain analysis, and macro vehicle-state (driving/charging/idling/sleeping) breakdowns.
+- **Settings** — pick your **currency** (HUF/EUR/USD/GBP — all cost figures across both dashboards update instantly), set your electricity rate, fuel-comparison baseline, and edit your **Saved Location Rates** (Home / Solar-Off-Peak / Work — name, rate, hours, active days, season) directly from the dashboard, no YAML editing required.
 
 ### ⚙️ Plus
-- A global cost/rate configuration layer (electricity rates by location & time-of-use schedule, Supercharger sync, fuel-comparison settings) so all cost/savings figures are accurate to your tariffs.
+- A currency selector and per-location rate cards (editable straight from the Settings tab) so all cost/savings figures are shown and calculated in your own currency and tariffs — no more hardcoded Forints.
 - Optional integration with **TeslaMate** for long-term trip/charge history and Grafana-powered stats.
-- Everything displayed in **metric units** (km, km/h, bar, °C, kWh, kW/A/V) and **Hungarian Forint (Ft)** currency — easily adjustable to your own units/currency.
+- Everything displayed in **metric units** (km, km/h, bar, °C, kWh, kW/A/V) with your choice of **currency** — defaults to Hungarian Forint (HUF) but switchable in Settings.
 - A fully documented entity inventory (`entities-list.txt`) so you always know which sensors/helpers power which card.
+- A `scripts/rename_tesla_prefix.py` maintenance tool to safely rename the `tesla_` entity prefix project-wide (e.g. for a second vehicle) — see the Maintenance section below.
 
 ---
 
@@ -196,6 +200,19 @@ This requires **Docker** and **Docker Compose** on a machine that can stay on 24
 ---
 
 ## 🔧 Maintenance
+
+### Currency & Saved Location Rates
+
+Go to **Tesla Analytics → Settings** to:
+- Pick your **currency** (HUF, EUR, USD, GBP) — every cost figure across both dashboards (electricity cost, fuel comparison, savings, projections, history) switches instantly.
+- Set your **default electricity rate** and **fuel comparison** baseline (ICE efficiency + fuel price) used in the actual cost calculations.
+- Edit the **Saved Location Rates** cards (Home / Solar-Off-Peak / Work) — name, rate, hours, active days, season — directly from entity rows on the dashboard.
+
+> ⚠️ Note: the Saved Location Rate cards are currently **informational/manual**
+> — actual cost math on the dashboards still uses the single flat **Default
+> Electricity Rate**, not automatic time-of-use or per-location rate
+> switching. Use them to document your tariffs for now; smarter rate-aware
+> calculations may come in a future update.
 
 ### Renaming the `tesla_` entity prefix
 

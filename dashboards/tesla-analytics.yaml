@@ -1050,7 +1050,7 @@ views:
         max: 2000
         step: 1
 
-      # Rate Schedules Documentation
+      # Rate Schedules — Saved Location Rates (live, editable)
       - type: markdown
         content: |
           ---
@@ -1058,24 +1058,91 @@ views:
 
           Rates below are shown in whatever currency you set above (currently
           **{{ states('input_select.tesla_currency') }} ({{ states('sensor.tesla_currency_symbol') }})**).
+          Edit any value using the entity rows underneath each location.
 
-          ### Home (123 Main St)
-          - **Rate:** 60.0 {{ states('sensor.tesla_currency_symbol') }}/kWh
-          - **Hours:** 00:00 – 00:00 (24/7)
-          - **Active Days:** Mon–Sun
-          - **Season:** Jan–Dec
+      - type: markdown
+        content: >
+          ### {{ states('input_text.tesla_rate_home_name') }}
 
-          ### Solar / Off-Peak (Seasonal)
-          - **Rate:** 0.0 {{ states('sensor.tesla_currency_symbol') }}/kWh (Solar surplus)
-          - **Hours:** 10:00 – 14:00
-          - **Active Days:** Mon–Sun
-          - **Season:** May–Sep
+          - **Rate:** {{ states('input_number.tesla_rate_home_per_kwh') }} {{
+          states('sensor.tesla_currency_symbol') }}/kWh
 
-          ### Work Location (456 Office Ave)
-          - **Rate:** 75.0 {{ states('sensor.tesla_currency_symbol') }}/kWh
-          - **Hours:** 06:00 – 18:00
-          - **Active Days:** Mon–Fri
-          - **Season:** Jan–Dec
+          - **Hours:** {{ states('input_text.tesla_rate_home_hours') }}
 
+          - **Active Days:** {{ states('input_text.tesla_rate_home_days') }}
+
+          - **Season:** {{ states('input_text.tesla_rate_home_season') }}
+      - type: entities
+        title: Edit Home Rate
+        entities:
+          - entity: input_text.tesla_rate_home_name
+            name: Location name
+          - entity: input_number.tesla_rate_home_per_kwh
+            name: Rate
+          - entity: input_text.tesla_rate_home_hours
+            name: Hours
+          - entity: input_text.tesla_rate_home_days
+            name: Active days
+          - entity: input_text.tesla_rate_home_season
+            name: Season
+
+      - type: markdown
+        content: >
+          ### {{ states('input_text.tesla_rate_solar_name') }}
+
+          - **Rate:** {{ states('input_number.tesla_rate_solar_per_kwh') }} {{
+          states('sensor.tesla_currency_symbol') }}/kWh
+
+          - **Hours:** {{ states('input_text.tesla_rate_solar_hours') }}
+
+          - **Active Days:** {{ states('input_text.tesla_rate_solar_days') }}
+
+          - **Season:** {{ states('input_text.tesla_rate_solar_season') }}
+      - type: entities
+        title: Edit Solar / Off-Peak Rate
+        entities:
+          - entity: input_text.tesla_rate_solar_name
+            name: Location name
+          - entity: input_number.tesla_rate_solar_per_kwh
+            name: Rate
+          - entity: input_text.tesla_rate_solar_hours
+            name: Hours
+          - entity: input_text.tesla_rate_solar_days
+            name: Active days
+          - entity: input_text.tesla_rate_solar_season
+            name: Season
+
+      - type: markdown
+        content: >
+          ### {{ states('input_text.tesla_rate_work_name') }}
+
+          - **Rate:** {{ states('input_number.tesla_rate_work_per_kwh') }} {{
+          states('sensor.tesla_currency_symbol') }}/kWh
+
+          - **Hours:** {{ states('input_text.tesla_rate_work_hours') }}
+
+          - **Active Days:** {{ states('input_text.tesla_rate_work_days') }}
+
+          - **Season:** {{ states('input_text.tesla_rate_work_season') }}
+      - type: entities
+        title: Edit Work Rate
+        entities:
+          - entity: input_text.tesla_rate_work_name
+            name: Location name
+          - entity: input_number.tesla_rate_work_per_kwh
+            name: Rate
+          - entity: input_text.tesla_rate_work_hours
+            name: Hours
+          - entity: input_text.tesla_rate_work_days
+            name: Active days
+          - entity: input_text.tesla_rate_work_season
+            name: Season
+
+      - type: markdown
+        content: |
           ---
-          **Note:** Edit these rates directly in `configuration.yaml` under `input_number:` for now. Full UI editor coming in a future update.
+          **Note:** These are informational/manual rate profiles — the actual
+          cost calculations on the Overview/Analytics dashboards currently use
+          `input_number.tesla_default_electricity_cost` as a single flat rate.
+          Automatic time-of-use / location-aware rate switching is not wired
+          up yet; use these cards to document your tariffs for now.

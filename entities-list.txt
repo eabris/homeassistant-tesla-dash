@@ -221,6 +221,27 @@ input_number.tesla_drive_start_battery_pct             | input_number  | interna
 input_number.tesla_drive_start_odometer                | input_number  | internal          | Tesla Drive Start Odometer           | Internal: odometer snapshot captured at the start of each drive (see automations.yaml). Not meant for dashboards.
 input_number.tesla_drive_energy_consumed_total_kwh     | input_number  | internal          | Tesla Drive Energy Consumed Total    | Internal: lifetime accumulator of real energy consumed while driving, incremented by tesla_drive_energy_session_end automation. Wrapped by sensor.tesla_drive_energy_consumed_total for utility_meter/statistics use.
 
+# --- Saved Location Rates (editable via Analytics -> Settings tab) ---
+# Informational/manual rate profiles per location. NOTE: cost calculations
+# still use the single flat input_number.tesla_default_electricity_cost —
+# these are for documentation/reference only until location-aware rate
+# switching is implemented.
+input_number.tesla_rate_home_per_kwh                   | input_number  | settings          | Home Rate                            | Manual rate for the "Home" saved location card (per kWh, selected currency). Default: 60.0
+input_text.tesla_rate_home_name                        | input_text    | settings          | Home Location Name                   | Display name for the "Home" saved location card. Default: "Home (123 Main St)"
+input_text.tesla_rate_home_hours                       | input_text    | settings          | Home Rate Hours                      | Free-text active hours shown on the "Home" saved location card. Default: "00:00 – 00:00 (24/7)"
+input_text.tesla_rate_home_days                        | input_text    | settings          | Home Rate Active Days                | Free-text active days shown on the "Home" saved location card. Default: "Mon–Sun"
+input_text.tesla_rate_home_season                      | input_text    | settings          | Home Rate Season                     | Free-text active season shown on the "Home" saved location card. Default: "Jan–Dec"
+input_number.tesla_rate_solar_per_kwh                  | input_number  | settings          | Solar / Off-Peak Rate                | Manual rate for the "Solar / Off-Peak" saved location card (per kWh, selected currency). Default: 0.0
+input_text.tesla_rate_solar_name                       | input_text    | settings          | Solar/Off-Peak Location Name         | Display name for the "Solar / Off-Peak" saved location card. Default: "Solar / Off-Peak (Seasonal)"
+input_text.tesla_rate_solar_hours                      | input_text    | settings          | Solar/Off-Peak Rate Hours            | Free-text active hours shown on the "Solar / Off-Peak" saved location card. Default: "10:00 – 14:00"
+input_text.tesla_rate_solar_days                       | input_text    | settings          | Solar/Off-Peak Active Days           | Free-text active days shown on the "Solar / Off-Peak" saved location card. Default: "Mon–Sun"
+input_text.tesla_rate_solar_season                     | input_text    | settings          | Solar/Off-Peak Season                | Free-text active season shown on the "Solar / Off-Peak" saved location card. Default: "May–Sep"
+input_number.tesla_rate_work_per_kwh                   | input_number  | settings          | Work Rate                            | Manual rate for the "Work" saved location card (per kWh, selected currency). Default: 75.0
+input_text.tesla_rate_work_name                        | input_text    | settings          | Work Location Name                   | Display name for the "Work" saved location card. Default: "Work (456 Office Ave)"
+input_text.tesla_rate_work_hours                       | input_text    | settings          | Work Rate Hours                      | Free-text active hours shown on the "Work" saved location card. Default: "06:00 – 18:00"
+input_text.tesla_rate_work_days                        | input_text    | settings          | Work Rate Active Days                | Free-text active days shown on the "Work" saved location card. Default: "Mon–Fri"
+input_text.tesla_rate_work_season                      | input_text    | settings          | Work Rate Season                     | Free-text active season shown on the "Work" saved location card. Default: "Jan–Dec"
+
 # ============================================================
 # TESLAMATE INTEGRATION - PHASE 4 (PLANNED)
 # ============================================================

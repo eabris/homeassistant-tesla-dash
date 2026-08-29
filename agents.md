@@ -487,7 +487,7 @@ This section maps the structural interface forms required to handle backend fina
 * **Supercharging Status Handlers:** Block text reads: *"Supercharging. Tessie automatically syncs Supercharging costs with your Tesla account."* Accompanied by two horizontal action buttons: `Select` and `Resync`.
 * **Fallback Universal Rate Row:** Label text reads: *"Default. Set a default rate when no other rate is found."* Features an interactive numeric entry box showing the fallback parameter rate value (e.g., `Ft60.00 / kWh`), mapping entries back to a central global utility entity helper: `input_number.tesla_default_electricity_cost`.
 
-### 2. Location-Specific Rate & Schedule Customizer (Edit 123 Main St)
+### 2. Location-Specific Rate & Schedule Customizer (Edit "Home" Location)
 * **UI Layout:** Configuration form card interface containing two sub-navigation tabs labeled **Settings** and **Costs** (with **Costs** active by default). This form handles flat rates, per-minute structures, and dynamic time-of-use schedule rules.
 * **Per kWh Input:** Numeric tracking box field matching flat-rate energy delivery pricing structures. Default initial state value text: `60.0`.
 * **Per minute Input:** Data text block targeting infrastructure segments that calculate billing dynamically based on exact connection uptime windows. Default state: `0.00`.

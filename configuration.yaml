@@ -294,6 +294,39 @@ input_number:
     icon: mdi:lightning-bolt
     initial: 0
 
+  # --- Saved Location Rates (used by the Analytics > Settings "Saved Location
+  # Rates" card). Each location has a rate + a free-text schedule description.
+  # Edit these values in the Settings tab or here directly.
+  tesla_rate_home_per_kwh:
+    name: "Home Rate"
+    unit_of_measurement: "/kWh"
+    min: 0
+    max: 200
+    step: 0.5
+    icon: mdi:home-lightning-bolt
+    mode: box
+    initial: 60.0
+
+  tesla_rate_solar_per_kwh:
+    name: "Solar / Off-Peak Rate"
+    unit_of_measurement: "/kWh"
+    min: 0
+    max: 200
+    step: 0.5
+    icon: mdi:solar-power
+    mode: box
+    initial: 0.0
+
+  tesla_rate_work_per_kwh:
+    name: "Work Rate"
+    unit_of_measurement: "/kWh"
+    min: 0
+    max: 200
+    step: 0.5
+    icon: mdi:office-building
+    mode: box
+    initial: 75.0
+
 input_text:
   tesla_model:
     name: "Tesla Model"
@@ -307,6 +340,58 @@ input_text:
     name: "Tesla Plate"
     initial: "XXYY-123"
     icon: mdi:card-text
+
+  # --- Saved Location Rates: names + schedule descriptions ---
+  tesla_rate_home_name:
+    name: "Home Location Name"
+    initial: "Home (123 Main St)"
+    icon: mdi:map-marker
+  tesla_rate_home_hours:
+    name: "Home Rate Hours"
+    initial: "00:00 – 00:00 (24/7)"
+    icon: mdi:clock-outline
+  tesla_rate_home_days:
+    name: "Home Rate Active Days"
+    initial: "Mon–Sun"
+    icon: mdi:calendar-week
+  tesla_rate_home_season:
+    name: "Home Rate Season"
+    initial: "Jan–Dec"
+    icon: mdi:calendar-range
+
+  tesla_rate_solar_name:
+    name: "Solar/Off-Peak Location Name"
+    initial: "Solar / Off-Peak (Seasonal)"
+    icon: mdi:map-marker
+  tesla_rate_solar_hours:
+    name: "Solar/Off-Peak Rate Hours"
+    initial: "10:00 – 14:00"
+    icon: mdi:clock-outline
+  tesla_rate_solar_days:
+    name: "Solar/Off-Peak Active Days"
+    initial: "Mon–Sun"
+    icon: mdi:calendar-week
+  tesla_rate_solar_season:
+    name: "Solar/Off-Peak Season"
+    initial: "May–Sep"
+    icon: mdi:calendar-range
+
+  tesla_rate_work_name:
+    name: "Work Location Name"
+    initial: "Work (456 Office Ave)"
+    icon: mdi:map-marker
+  tesla_rate_work_hours:
+    name: "Work Rate Hours"
+    initial: "06:00 – 18:00"
+    icon: mdi:clock-outline
+  tesla_rate_work_days:
+    name: "Work Rate Active Days"
+    initial: "Mon–Fri"
+    icon: mdi:calendar-week
+  tesla_rate_work_season:
+    name: "Work Rate Season"
+    initial: "Jan–Dec"
+    icon: mdi:calendar-range
 
 input_boolean:
   tesla_enable_smart_charging:
