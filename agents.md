@@ -103,8 +103,10 @@ Use whatever the integration creates. Typical patterns (exact IDs in `/entities-
 
 #### Custom Helpers & Templates (you create these)
 **Prefix consistently**:
-- `tesla_` for global / shared
-- `<vehicle_name>_` or `tesla_<model>_` for vehicle-specific (e.g. `tesla_model_y_`, `tesla_cybertruck_`)
+- `tesla_` for global / shared, non-Fleet-passthrough custom sensors/helpers/scripts/automations
+- `vehicle_` — **reserved** for the Fleet Sensor Alias layer only (see Technical
+  Appendix §5). Never use `vehicle_` for anything else, and never let a user
+  name their actual vehicle `vehicle` (`input_text.tesla_car_name`).
 
 **Good examples**:
 - `sensor.tesla_estimated_range_km` (template)
@@ -627,3 +629,56 @@ down the current value of any lifetime accumulators you care about (chiefly
 States) so you can manually restore them via
 `input_number.set_value` on the newly-named entity right after restarting HA,
 if continuity matters more than a fresh start.
+
+### 5. Fleet Sensor Alias Layer (`vehicle_*` prefix) — vehicle-name-agnostic design
+
+**What it is:** `configuration.yaml` defines ~24 template entities named
+`sensor.vehicle_*` / `binary_sensor.vehicle_*` (e.g. `sensor.vehicle_odometer`,
+`sensor.vehicle_battery_level`, `binary_sensor.vehicle_status`). These are
+pure pass-through aliases — each one reads `input_text.tesla_car_name` and
+dynamically looks up `sensor.<car>_odometer`, `sensor.<car>_battery_level`,
+etc. from the *real* Tesla Fleet integration entity for whatever the user's
+vehicle is actually named. All dashboards (`dashboards/*.yaml`) and
+automations (`packages/tesla/automations.yaml`) that need a raw Fleet
+attribute (odometer, battery level/range, charge rate/power/voltage/current,
+charging state, inside/outside temp, shift state, speed, time to full charge,
+tyre pressures + warnings, charge cable) read the `vehicle_*` alias, **never**
+the literal `sensor.tesla_*` Fleet entity directly. This is what lets a user
+rename their car (`input_text.tesla_car_name`) to anything — `tesla`, `x`,
+`0`, `42`, `my_model_y` — without touching a single dashboard/automation file.
+
+**Why the prefix is `vehicle_` and not `tesla_`:** this project originally
+named the alias layer `sensor.tesla_*` (matching the repo's own default
+`tesla_` convention). That broke the day a user's actual vehicle device was
+also named "tesla" — the alias `sensor.tesla_odometer` ended up dynamically
+constructing and reading `sensor.tesla_odometer` (itself), a self-reference
+that gets stuck permanently on `unknown`/`unavailable`. `vehicle_` was chosen
+as a fixed, structurally-separate namespace precisely so the alias's own
+entity_id can never collide with the entity_id it dynamically builds from
+`input_text.tesla_car_name` — **unless the user names their car exactly
+`vehicle`**, which is the one remaining reserved word. A guard automation,
+`tesla_reserved_car_name_guard` in `packages/tesla/automations.yaml`, fires a
+`persistent_notification` if `input_text.tesla_car_name` is ever set to
+`vehicle`, so this edge case fails loudly instead of silently.
+
+**Rules for future agents when touching this layer:**
+* Never let the alias layer's own fixed prefix equal a value the alias reads
+  from user input. If you ever rename the alias namespace again (e.g. away
+  from `vehicle_`), update `tesla_reserved_car_name_guard`'s condition to
+  match the new reserved word, and update the README (Step 5) and
+  `entities-list.txt` header note accordingly — all three must stay in sync.
+* When adding a new raw Fleet attribute to the dashboards, add a matching
+  `sensor.vehicle_*`/`binary_sensor.vehicle_*` alias in `configuration.yaml`
+  first, reference the alias everywhere (not the literal `tesla_*` Fleet
+  entity), and document the new alias in `entities-list.txt` under the
+  "vehicle_ prefix" note near the top of that file.
+* Downstream custom/derived sensors that are NOT raw Fleet pass-throughs
+  (e.g. `sensor.tesla_daily_distance`, `sensor.tesla_efficiency_kwh_km`,
+  `binary_sensor.tesla_driving_active`) correctly keep the `tesla_` prefix —
+  only the raw alias layer uses `vehicle_`. Don't rename those.
+* This is documented for end-users in `README.md` under "Step 5 — Check your
+  entities" (section: *"Your vehicle's name/prefix can be anything"*) and in
+  `entities-list.txt`'s header comment. Keep those three docs (`agents.md`,
+  `README.md`, `entities-list.txt`) consistent whenever this layer changes —
+  update all of them together, in the same commit, per the standard workflow
+  in Section 1 of this file.
