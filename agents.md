@@ -985,7 +985,10 @@ convention already used across this repo:
   "Scrubbing real addresses from repo" was a prior incident of this exact
   mistake).
 - VIN / license plate → `5YJ12345678901234`-style obviously-fake example
-  or a clearly labeled placeholder.
+  (the exact placeholder already used as the `input_text.tesla_vin` default
+  in `configuration.yaml` — reuse it, don't invent a new "example" VIN,
+  since a plausible-looking fake VIN that happens to match a real one is
+  exactly how this mistake happened before)
 
 **Why this matters:** this repo is public on GitHub. Anything committed —
 even briefly — is visible to crawlers, search indexes (GitHub code
@@ -1006,6 +1009,23 @@ history. This is disruptive (rewrites every commit hash, requires
 collaborators to re-clone) and does **not** retroactively purge external
 caches/crawlers that may have already indexed the exposed window — so
 prevention up front is far cheaper than the cleanup.
+
+**Second incident precedent:** the "Vehicle Specifications Footer" spec
+example in this very file (`agents.md`) and its mirrored row in
+`entities-list.txt` used what looked like a plausible "example" VIN
+(`5YJ12345678901234`) and license plate (`XXYY-123`) — but they were
+actually the user's **real** VIN and plate, copied in as a "realistic
+example" early on without realizing it. This is an easy trap: a
+made-up-looking value can accidentally be a real one if it was ever typed
+while thinking about the user's actual vehicle. Required the same
+`git filter-repo --replace-text` treatment (two more strings scrubbed
+across all history) plus a force-push. **Lesson:** when writing "example"
+values for VIN, plate, phone, email, coordinates, etc., either (a) reuse
+an already-established fake placeholder from this file/config (e.g. the
+`5YJ12345678901234` / `XXYY-123` defaults already in `configuration.yaml`),
+or (b) use a value from a well-known public fictional/test source, or (c)
+explicitly ask the user "is this a real value?" before committing it —
+never assume a value is safe just because it "looks like an example."
 
 **Before committing, double-check:** any `--url`, `--token`, address,
 phone, or similar example/default value you write into a script, YAML
