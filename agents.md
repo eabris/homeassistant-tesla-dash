@@ -367,7 +367,7 @@ Monitors deep state indicators, capacity buffers, and current limit configuratio
 | Parameter Name | Target Mapping Sensor / String Structure |
 | :--- | :--- |
 | **LEVEL** | `46%` |
-| **RANGE** | `189 km (164 km)` *(Displays rated expected estimate vs raw unadjusted baseline buffer value)* |
+| **RANGE** | `189 km (164 km)` *(Official rated range, with a wheel-size-adjusted calculated range in brackets — see "Wheel Size Selector" in the Technical Appendix)* |
 | **DRAIN** | `0.00%` |
 | **ENERGY** | `44.90 / 100.00 kWh` |
 | **TEMPERATURE** | `33.0 - 36.5°C` *(Tracks absolute cell variance minimum to maximum temperature peaks)* |
@@ -390,7 +390,7 @@ Monitors deep state indicators, capacity buffers, and current limit configuratio
 Displays real-time rolling pressure monitoring system values alongside historic line logs.
 
 #### 1. Target Value Header Notice
-* **Visual Layout:** Minimal thin notification banner layout reading: `💡 Recommended cold pressure: 2.9 bar`.
+* **Visual Layout:** Minimal thin notification banner layout reading: `💡 Recommended cold pressure (22" wheels): 2.9 bar` — wheel size and pressure are both user-configurable on the Settings tab (see "Wheel Size Selector" in the Technical Appendix); `2.9 bar` / `22"` are just the shipped defaults.
 
 #### 2. Real-Time Wheel Matrix Layout
 * **Visual Layout:** 2x2 grid card arrangement corresponding to physical wheelbase coordinates.
@@ -925,5 +925,47 @@ stored in bar; converted to psi for display via the same unit-system logic
 as everywhere else), editable on the Analytics Settings tab ("🛞
 Recommended Cold Tire Pressure"). Default 2.9 bar preserved as a
 placeholder until the user enters their actual placard value.
+
+### 9. Wheel Size Selector (`input_select.tesla_wheel_size`) & Wheel-Adjusted Range
+
+**What it is:** a Settings-tab dropdown (Analytics → Settings → 🛞 Wheels &
+Recommended Cold Tire Pressure) with options `18"`/`19"`/`20"`/`21"`/`22"`,
+default `22"`. It exists to drive two other values automatically via the
+`tesla_wheel_size_auto_adjust` automation (`packages/tesla/automations.yaml`),
+triggered on `input_select.tesla_wheel_size` state change:
+
+1. `input_number.tesla_recommended_tire_pressure` — set via a per-size
+   lookup dict in the automation (`2.9` bar for 18"/19"/20"/22", `3.1` bar
+   for 21").
+2. `input_number.tesla_wheel_range_adjustment_pct` (new helper, 0–25%,
+   default 14) — set via a second per-size lookup dict (`0` for 18",
+   `3`/`6`/`10`/`14` for 19"/20"/21"/22").
+
+**Both are only starting estimates, not pulled from any Tesla API** —
+Tesla doesn't expose either value per wheel size via Fleet API. The
+pressure defaults are commonly-cited Tesla community placard values; the
+range-adjustment defaults are rough community-sourced estimates of how
+much larger/heavier wheels increase rolling resistance and reduce
+real-world range below the vehicle's official rated range. Both sliders
+remain fully editable after the auto-set fires, so users can tune them to
+their actual placard/observed values — this mirrors the same
+"auto-default + user-override" pattern as the tire pressure helper itself
+(never silently claim false precision for a value the Fleet API can't
+supply).
+
+**Wheel-adjusted range display, consistent everywhere:** every place in
+`dashboards/tesla-overview.yaml` that shows the vehicle's range now
+displays `{official} ({calculated}) {unit}` — official = raw
+`sensor.vehicle_battery_range` (rated range as reported by Tesla), and
+calculated = official × `(1 - tesla_wheel_range_adjustment_pct / 100)`.
+Updated in 4 places for consistency: the Dashboard tab's header battery
+badge, the Info Overview Grid's Battery tile, the Controls tab's hero
+status card, and the dedicated Battery tab RANGE row. The Battery tab
+RANGE row previously showed the vehicle's separate "ideal" range concept
+(`sensor.vehicle_ideal_battery_range`) in brackets instead — that's been
+replaced by the wheel-adjusted calculation per user request, since "ideal
+range" isn't wheel-size-aware and was a less actionable number for this
+purpose. (`sensor.vehicle_ideal_battery_range` itself is untouched and
+still defined, just no longer read by this specific card.)
 
 

@@ -295,3 +295,43 @@
           {{ states('input_number.tesla_target_charge_limit') }}% target.
           It'll resume automatically tomorrow if still plugged in.
   mode: single
+
+- id: tesla_wheel_size_auto_adjust
+  alias: "Tesla - Auto-set Tire Pressure & Range Adjustment for Wheel Size"
+  description: >
+    When you change input_select.tesla_wheel_size (Settings tab), automatically
+    updates input_number.tesla_recommended_tire_pressure and
+    input_number.tesla_wheel_range_adjustment_pct to Tesla community-typical
+    defaults for that size. These are starting estimates only, not pulled
+    from any Tesla API — after switching sizes, feel free to edit either
+    slider by hand if you know your own vehicle's exact placard pressure or
+    have observed a different real-world range impact.
+  trigger:
+    - trigger: state
+      entity_id: input_select.tesla_wheel_size
+  action:
+    - variables:
+        size: "{{ trigger.to_state.state }}"
+        pressure_map:
+          '18"': 2.9
+          '19"': 2.9
+          '20"': 2.9
+          '21"': 3.1
+          '22"': 2.9
+        adjustment_map:
+          '18"': 0
+          '19"': 3
+          '20"': 6
+          '21"': 10
+          '22"': 14
+    - action: input_number.set_value
+      target:
+        entity_id: input_number.tesla_recommended_tire_pressure
+      data:
+        value: "{{ pressure_map.get(size, 2.9) }}"
+    - action: input_number.set_value
+      target:
+        entity_id: input_number.tesla_wheel_range_adjustment_pct
+      data:
+        value: "{{ adjustment_map.get(size, 0) }}"
+  mode: single

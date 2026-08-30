@@ -37,11 +37,14 @@ views:
                 const rangeKm = (!rawRange || rawRange === 'unknown' || rawRange === 'unavailable')
                   ? soc * 4.1
                   : parseFloat(rawRange);
+                const adjPct = parseFloat(states['input_number.tesla_wheel_range_adjustment_pct']?.state || '0');
+                const calcKm = rangeKm * (1 - adjPct / 100);
                 const unitSys = states['input_select.tesla_unit_system']?.state || 'Metric (km, °C, bar)';
                 const isMi = unitSys !== 'Metric (km, °C, bar)';
                 const range = Math.round(isMi ? rangeKm * 0.621371 : rangeKm);
+                const calc = Math.round(isMi ? calcKm * 0.621371 : calcKm);
                 const unit = isMi ? 'mi' : 'km';
-                return `${soc.toFixed(0)}% • ${range} ${unit}`;
+                return `${soc.toFixed(0)}% • ${range} (${calc}) ${unit}`;
               ]]]
             styles:
               card:
@@ -267,15 +270,22 @@ views:
                 const unitSys = states['input_select.tesla_unit_system']?.state || 'Metric (km, °C, bar)';
                 const isMi = unitSys !== 'Metric (km, °C, bar)';
                 const unit = isMi ? 'mi' : 'km';
+                const adjPct = parseFloat(states['input_number.tesla_wheel_range_adjustment_pct']?.state || '0');
                 const range = String(states['sensor.vehicle_battery_range']?.state || '');
+                let km, approx;
                 if (!range || range === 'unknown' || range === 'unavailable') {
                   const soc = parseFloat(String(states['sensor.vehicle_battery_level']?.state || '0'));
                   if (isNaN(soc)) return `– ${unit}`;
-                  const km = soc * 4.1;
-                  return `~${Math.round(isMi ? km * 0.621371 : km)} ${unit}`;
+                  km = soc * 4.1;
+                  approx = true;
+                } else {
+                  km = parseFloat(range);
+                  approx = false;
                 }
-                const km = parseFloat(range);
-                return `${Math.round(isMi ? km * 0.621371 : km)} ${unit}`;
+                const calcKm = km * (1 - adjPct / 100);
+                const est = Math.round(isMi ? km * 0.621371 : km);
+                const calc = Math.round(isMi ? calcKm * 0.621371 : calcKm);
+                return `${approx ? '~' : ''}${est} (${calc}) ${unit}`;
               ]]]
             styles:
               card:
@@ -449,7 +459,9 @@ views:
               const isMi = unitSys !== 'Metric (km, °C, bar)';
               const rangeUnit = isMi ? 'mi' : 'km';
               const rangeKm = (!range || range === 'unknown') ? (soc * 4.1) : parseFloat(range);
-              const rangeStr = `${Math.round(isMi ? rangeKm * 0.621371 : rangeKm)} ${rangeUnit}`;
+              const adjPct = parseFloat(states['input_number.tesla_wheel_range_adjustment_pct']?.state || '0');
+              const calcKm = rangeKm * (1 - adjPct / 100);
+              const rangeStr = `${Math.round(isMi ? rangeKm * 0.621371 : rangeKm)} (${Math.round(isMi ? calcKm * 0.621371 : calcKm)}) ${rangeUnit}`;
 
               let statePill, stateColor;
               if (!online) {
@@ -1069,13 +1081,14 @@ views:
                 const estKm = (!rawEst || rawEst === 'unknown' || rawEst === 'unavailable')
                   ? soc * 4.1
                   : parseFloat(rawEst);
-                const rawIdeal = String(states['sensor.vehicle_ideal_battery_range']?.state || '');
-                const idealKm = (!rawIdeal || rawIdeal === 'unknown' || rawIdeal === 'unavailable')
-                  ? estKm * 0.9
-                  : parseFloat(rawIdeal);
+                // Bracket value = official range adjusted down by the
+                // wheel-size-based range impact % (Settings tab), not the
+                // vehicle's separate "ideal" range concept.
+                const adjPct = parseFloat(states['input_number.tesla_wheel_range_adjustment_pct']?.state || '0');
+                const calcKm = estKm * (1 - adjPct / 100);
                 const estVal = Math.round(conv(estKm));
-                const idealVal = Math.round(conv(idealKm));
-                return isNaN(estVal) ? `– ${unit}` : `${estVal} ${unit} (${idealVal} ${unit})`;
+                const calcVal = Math.round(conv(calcKm));
+                return isNaN(estVal) ? `– ${unit}` : `${estVal} ${unit} (${calcVal} ${unit})`;
               ]]]
             tap_action:
               action: none
@@ -1241,7 +1254,8 @@ views:
         content: >
           {% set p = states('input_number.tesla_recommended_tire_pressure') | float(2.9) %}
           {% set is_psi = states('input_select.tesla_unit_system') == 'US Imperial (mi, °F, psi)' %}
-          💡 **Recommended cold pressure: {{ (p * 14.5038) | round(0) ~ ' psi' if is_psi else p | round(2) ~ ' bar' }}**
+          {% set size = states('input_select.tesla_wheel_size') %}
+          💡 **Recommended cold pressure ({{ size }} wheels): {{ (p * 14.5038) | round(0) ~ ' psi' if is_psi else p | round(2) ~ ' bar' }}**
 
       # 5.2 Wheel Pressure Matrix (2×2)
       - type: grid

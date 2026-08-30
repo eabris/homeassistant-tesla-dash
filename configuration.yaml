@@ -212,6 +212,28 @@ input_select:
       - "UK (mi, °C, bar)"
     initial: "Metric (km, °C, bar)"
 
+  tesla_wheel_size:
+    name: "Tesla Wheel Size"
+    icon: mdi:tire
+    # Drives two things automatically (see automation
+    # tesla_wheel_size_auto_adjust in packages/tesla/automations.yaml):
+    #  1. input_number.tesla_recommended_tire_pressure — cold pressure
+    #     placard value.
+    #  2. input_number.tesla_wheel_range_adjustment_pct — how much larger/
+    #     heavier wheels typically reduce real-world range vs the smallest
+    #     stock size.
+    # Both auto-set values are only starting estimates for your selected
+    # size (see comments on those two input_numbers below) — after
+    # switching sizes here, double-check/edit those sliders against your
+    # own driver's-door placard and real-world range experience.
+    options:
+      - '18"'
+      - '19"'
+      - '20"'
+      - '21"'
+      - '22"'
+    initial: '22"'
+
 input_number:
   tesla_odometer_monthly_baseline:
     name: "Tesla Odometer Monthly Baseline"
@@ -285,6 +307,14 @@ input_number:
     # placard. Always stored here in bar (the placard's metric figure);
     # the Tires tab banner converts to psi for display when the unit system
     # selector is set to US Imperial.
+    #
+    # Auto-set whenever input_select.tesla_wheel_size changes (see
+    # tesla_wheel_size_auto_adjust in packages/tesla/automations.yaml) using
+    # commonly-cited Tesla community values per size — 2.9 bar / 42 psi for
+    # 18"/19"/20"/22", 3.1 bar / 45 psi for 21" (larger/performance wheels
+    # are sometimes rated slightly higher). These are starting estimates
+    # only, not pulled from any Tesla API — always verify against your own
+    # driver's door placard and edit this slider if it differs.
     unit_of_measurement: "bar"
     min: 1.5
     max: 3.8
@@ -292,6 +322,31 @@ input_number:
     icon: mdi:gauge
     mode: box
     initial: 2.9
+
+  tesla_wheel_range_adjustment_pct:
+    name: "Tesla Wheel Range Adjustment"
+    # Larger/heavier wheels increase rolling resistance and aerodynamic
+    # drag, reducing real-world range below the vehicle's official rated
+    # range (which reflects your car's factory/EPA configuration, not
+    # necessarily the wheels currently mounted). This is the % subtracted
+    # from the official rated range to estimate a more realistic figure —
+    # shown in brackets next to "official" range throughout both
+    # dashboards (Overview header, Info Grid, Battery tab, Controls tab).
+    #
+    # Auto-set whenever input_select.tesla_wheel_size changes (see
+    # tesla_wheel_size_auto_adjust in packages/tesla/automations.yaml) using
+    # rough Tesla-community-sourced estimates: 0% (18", baseline/most
+    # efficient), 3% (19"), 6% (20"), 10% (21"), 14% (22"). These are ROUGH
+    # ESTIMATES, not measured for your specific vehicle — tune this slider
+    # over time based on your own observed real-world range if it doesn't
+    # match.
+    unit_of_measurement: "%"
+    min: 0
+    max: 25
+    step: 0.5
+    icon: mdi:speedometer
+    mode: box
+    initial: 14
 
   tesla_drive_start_battery_pct:
     name: "Tesla Drive Start Battery %"

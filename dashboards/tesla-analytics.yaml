@@ -1076,14 +1076,23 @@ views:
       # Recommended Tire Pressure Configuration
       - type: markdown
         content: |
-          ## 🛞 Recommended Cold Tire Pressure
+          ## 🛞 Wheels & Recommended Cold Tire Pressure
 
           Tesla's Fleet API only reports each wheel's *live* pressure — it
-          doesn't expose a manufacturer-recommended value. The correct
-          number depends on your specific wheel size and isn't universal
-          — check the placard on your driver's door jamb and enter it here
-          (always in bar; converts to psi on the Tires tab automatically if
-          you're using US Imperial units).
+          doesn't expose a manufacturer-recommended value, and the correct
+          number depends on your specific wheel size (it isn't universal).
+
+          Pick your wheel size below and the pressure + range-adjustment
+          sliders auto-fill with Tesla community-typical starting values —
+          then double-check the pressure against the placard on your
+          driver's door jamb and edit if it differs. Pressure is always
+          stored in bar; it converts to psi on the Tires tab automatically
+          if you're using US Imperial units.
+
+      - type: custom:mushroom-select-card
+        entity: input_select.tesla_wheel_size
+        name: "Wheel Size"
+        icon: mdi:tire
 
       - type: custom:mushroom-number-card
         entity: input_number.tesla_recommended_tire_pressure
@@ -1092,6 +1101,24 @@ views:
         min: 1.5
         max: 3.8
         step: 0.05
+
+      - type: markdown
+        content: |
+          **Range adjustment:** larger/heavier wheels increase rolling
+          resistance, reducing real-world range below the vehicle's
+          official rated range. This % is subtracted from the official
+          range to estimate a more realistic figure — shown in brackets
+          next to the official range throughout both dashboards. It's a
+          rough estimate; tune it over time based on your own observed
+          real-world range if it doesn't match.
+
+      - type: custom:mushroom-number-card
+        entity: input_number.tesla_wheel_range_adjustment_pct
+        name: "Wheel Range Adjustment"
+        icon: mdi:speedometer
+        min: 0
+        max: 25
+        step: 0.5
 
       # Electricity Cost Configuration
       - type: markdown
