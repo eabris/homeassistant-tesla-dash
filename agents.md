@@ -853,4 +853,16 @@ Tires-tab chart (`dashboards/tesla-overview.yaml`, "Historical Pressure
 Chart") as the reference pattern for how to pair `conditional` cards with a
 `transform:`-adjusted series and matching axis bounds.
 
+**Recommended tire pressure is now user-configurable, not hardcoded:** the
+Tires tab's "Recommended cold pressure" banner used to hardcode `2.9 bar`
+(`42 psi`) as a guess. Tesla's Fleet API does **not** expose a
+manufacturer-recommended pressure — only each wheel's live reading — and
+the correct value depends on wheel size (varies per vehicle/wheel combo,
+printed on the driver's door placard), so it can't be derived from any
+sensor. Fixed via `input_number.tesla_recommended_tire_pressure` (always
+stored in bar; converted to psi for display via the same unit-system logic
+as everywhere else), editable on the Analytics Settings tab ("🛞
+Recommended Cold Tire Pressure"). Default 2.9 bar preserved as a
+placeholder until the user enters their actual placard value.
+
 

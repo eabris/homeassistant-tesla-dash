@@ -1232,10 +1232,16 @@ views:
     icon: mdi:tire
     cards:
       # 5.1 Target Pressure Notice
+      # Value comes from input_number.tesla_recommended_tire_pressure
+      # (editable on the Settings tab) — Tesla's Fleet API doesn't expose a
+      # placard/recommended pressure, only live per-wheel readings, and the
+      # correct value depends on your specific wheel size (see your car's
+      # driver-door placard). Stored in bar; converted to psi for display.
       - type: markdown
         content: >
-          💡 **Recommended cold pressure:
-          {{ '42 psi' if states('input_select.tesla_unit_system') == 'US Imperial (mi, °F, psi)' else '2.9 bar' }}**
+          {% set p = states('input_number.tesla_recommended_tire_pressure') | float(2.9) %}
+          {% set is_psi = states('input_select.tesla_unit_system') == 'US Imperial (mi, °F, psi)' %}
+          💡 **Recommended cold pressure: {{ (p * 14.5038) | round(0) ~ ' psi' if is_psi else p | round(2) ~ ' bar' }}**
 
       # 5.2 Wheel Pressure Matrix (2×2)
       - type: grid

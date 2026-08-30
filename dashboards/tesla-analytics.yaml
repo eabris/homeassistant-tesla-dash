@@ -1061,6 +1061,26 @@ views:
         name: "Unit System"
         icon: mdi:ruler-square-compass
 
+      # Recommended Tire Pressure Configuration
+      - type: markdown
+        content: |
+          ## 🛞 Recommended Cold Tire Pressure
+
+          Tesla's Fleet API only reports each wheel's *live* pressure — it
+          doesn't expose a manufacturer-recommended value. The correct
+          number depends on your specific wheel size and isn't universal
+          — check the placard on your driver's door jamb and enter it here
+          (always in bar; converts to psi on the Tires tab automatically if
+          you're using US Imperial units).
+
+      - type: custom:mushroom-number-card
+        entity: input_number.tesla_recommended_tire_pressure
+        name: "Recommended Cold Pressure"
+        icon: mdi:gauge
+        min: 1.5
+        max: 3.8
+        step: 0.05
+
       # Electricity Cost Configuration
       - type: markdown
         content: |
