@@ -2,10 +2,10 @@
 """
 Delete orphaned legacy entities from Home Assistant after a vehicle rename
 or alias-prefix migration (e.g. after running rename_tesla_prefix.py, or
-renaming a vehicle from "daddy_taxi" to "tesla" in your YAML).
+renaming a vehicle from "cybertruck" to "tesla" in your YAML).
 
 Before running, set LEGACY_PREFIX below to the old vehicle entity prefix
-(e.g. "my_model_x", "model_y", "cybertruck", "daddy_taxi").
+(e.g. "my_model_x", "model_y", "cybertruck").
 
 By default this only touches sensor/binary_sensor entities (safe default,
 matches historical behavior). Pass --all-domains to also clean up orphaned

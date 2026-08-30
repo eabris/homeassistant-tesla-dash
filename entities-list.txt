@@ -10,34 +10,47 @@
 #
 # Last updated: 2026-06-23 (distance/time reliability fixes)
 # ============================================================
+#
+# NOTE ON THE "vehicle_" PREFIX (Fleet Sensor Aliases):
+# All entity_ids below starting with sensor.vehicle_* / binary_sensor.vehicle_*
+# are NOT raw Tesla Fleet entities. They are dashboard-stability aliases defined
+# in configuration.yaml that dynamically read from sensor.<car>_* / binary_
+# sensor.<car>_* using input_text.tesla_car_name, so dashboards/automations
+# never need editing if the vehicle is renamed. "vehicle_" is a deliberately
+# reserved, fixed prefix — DO NOT ever name your actual vehicle "vehicle" in
+# input_text.tesla_car_name, or these aliases will read their own state and
+# get stuck on "unknown" (see automation "tesla_reserved_car_name_guard" in
+# packages/tesla/automations.yaml, which warns if this happens). Any car name
+# is otherwise safe, including "tesla", single letters, or numbers ("x", "0", "42").
+# ============================================================
 
 # ============================================================
 # TESLA FLEET - TESLA VEHICLE ENTITIES
 # ============================================================
 
 # --- CHARGING & ENERGY ---
-binary_sensor.tesla_charge_cable                 | binary_sensor | charging          | Charge cable                         | Charge cable connected status
+binary_sensor.vehicle_charge_cable                 | binary_sensor | charging          | Charge cable                         | Charge cable connected status
 sensor.tesla_charge_cable                        | sensor        | charging          | Charge cable                         | (detailed charge cable state)
 lock.tesla_charge_cable_lock                     | lock          | charging          | Charge cable lock                    | Lock/unlock the charge port cable
 number.tesla_charge_current                      | number        | charging          | Charge current                       | Charging current (Amps)
-sensor.tesla_charge_energy_added                 | sensor        | charging          | Charge energy added                  | kWh added in current charging session
+sensor.vehicle_charge_energy_added                 | sensor        | charging          | Charge energy added                  | kWh added in current charging session
 number.tesla_charge_limit                        | number        | charging          | Charge limit                         | Target State of Charge % (user adjustable)
 cover.tesla_charge_port_door                     | cover         | charging          | Charge port door                     | Open/close charge port
-sensor.tesla_charge_rate                         | sensor        | charging          | Charge rate                          | Charging speed (km/h or mi/h)
-sensor.tesla_charger_current                     | sensor        | charging          | Charger current                      | Current from wall connector
-sensor.tesla_charger_power                       | sensor        | charging          | Charger power                        | Power draw from charger (kW)
-sensor.tesla_charger_voltage                     | sensor        | charging          | Charger voltage                      | Voltage from charger
-sensor.tesla_charging                            | sensor        | charging          | Charging                             | Charging status / state
+sensor.vehicle_charge_rate                         | sensor        | charging          | Charge rate                          | Charging speed (km/h or mi/h)
+sensor.vehicle_charger_current                     | sensor        | charging          | Charger current                      | Current from wall connector
+sensor.vehicle_charger_power                       | sensor        | charging          | Charger power                        | Power draw from charger (kW)
+sensor.vehicle_charger_voltage                     | sensor        | charging          | Charger voltage                      | Voltage from charger
+sensor.vehicle_charging                            | sensor        | charging          | Charging                             | Charging status / state
 sensor.tesla_power                               | sensor        | charging          | Power                                | Current power usage / battery power
-sensor.tesla_time_to_full_charge                 | sensor        | charging          | Time to full charge                  | Estimated time until battery is full
+sensor.vehicle_time_to_full_charge                 | sensor        | charging          | Time to full charge                  | Estimated time until battery is full
 binary_sensor.tesla_scheduled_charging_pending   | binary_sensor | charging          | Scheduled charging pending           | Scheduled charge is waiting to start
 binary_sensor.tesla_trip_charging                | binary_sensor | charging          | Trip charging                        | Charging during a trip
 
 # --- CLIMATE & COMFORT ---
 climate.tesla_climate                            | climate       | climate           | Climate                              | Main climate control (HVAC)
 sensor.tesla_driver_temperature_setting          | sensor        | climate           | Driver temperature setting           | Driver side target temperature
-sensor.tesla_inside_temperature                  | sensor        | climate           | Inside temperature                   | Cabin temperature
-sensor.tesla_outside_temperature                 | sensor        | climate           | Outside temperature                  | Ambient temperature
+sensor.vehicle_inside_temperature                  | sensor        | climate           | Inside temperature                   | Cabin temperature
+sensor.vehicle_outside_temperature                 | sensor        | climate           | Outside temperature                  | Ambient temperature
 sensor.tesla_passenger_temperature_setting       | sensor        | climate           | Passenger temperature setting        | Passenger side target temperature
 binary_sensor.tesla_preconditioning              | binary_sensor | climate           | Preconditioning                      | Preconditioning active
 binary_sensor.tesla_preconditioning_enabled      | binary_sensor | climate           | Preconditioning enabled              | Preconditioning feature enabled
@@ -66,17 +79,17 @@ binary_sensor.tesla_rear_passenger_window        | binary_sensor | access       
 # --- SAFETY, SECURITY & SENTRY ---
 lock.tesla_lock                                  | lock          | safety            | Lock                                 | Vehicle doors lock/unlock
 switch.tesla_sentry_mode                         | switch        | safety            | Sentry mode                          | Sentry mode on/off
-binary_sensor.tesla_status                       | binary_sensor | safety            | Status                               | Main vehicle status / online availability
+binary_sensor.vehicle_status                       | binary_sensor | safety            | Status                               | Main vehicle status / online availability
 binary_sensor.tesla_user_present                 | binary_sensor | safety            | User present                         | User detected in/near vehicle
 binary_sensor.tesla_dashcam                      | binary_sensor | safety            | Dashcam                              | Dashcam recording status
-binary_sensor.tesla_tyre_pressure_warning_front_left   | binary_sensor | safety      | Tyre pressure warning front left     | Low pressure warning
-binary_sensor.tesla_tyre_pressure_warning_front_right  | binary_sensor | safety      | Tyre pressure warning front right    | Low pressure warning
-binary_sensor.tesla_tyre_pressure_warning_rear_left    | binary_sensor | safety      | Tyre pressure warning rear left      | Low pressure warning
-binary_sensor.tesla_tyre_pressure_warning_rear_right   | binary_sensor | safety      | Tyre pressure warning rear right     | Low pressure warning
-sensor.tesla_tyre_pressure_front_left            | sensor        | safety            | Tyre pressure front left             | Current pressure (bar/psi)
-sensor.tesla_tyre_pressure_front_right           | sensor        | safety            | Tyre pressure front right            | Current pressure (bar/psi)
-sensor.tesla_tyre_pressure_rear_left             | sensor        | safety            | Tyre pressure rear left              | Current pressure (bar/psi)
-sensor.tesla_tyre_pressure_rear_right            | sensor        | safety            | Tyre pressure rear right             | Current pressure (bar/psi)
+binary_sensor.vehicle_tyre_pressure_warning_front_left   | binary_sensor | safety      | Tyre pressure warning front left     | Low pressure warning
+binary_sensor.vehicle_tyre_pressure_warning_front_right  | binary_sensor | safety      | Tyre pressure warning front right    | Low pressure warning
+binary_sensor.vehicle_tyre_pressure_warning_rear_left    | binary_sensor | safety      | Tyre pressure warning rear left      | Low pressure warning
+binary_sensor.vehicle_tyre_pressure_warning_rear_right   | binary_sensor | safety      | Tyre pressure warning rear right     | Low pressure warning
+sensor.vehicle_tyre_pressure_front_left            | sensor        | safety            | Tyre pressure front left             | Current pressure (bar/psi)
+sensor.vehicle_tyre_pressure_front_right           | sensor        | safety            | Tyre pressure front right            | Current pressure (bar/psi)
+sensor.vehicle_tyre_pressure_rear_left             | sensor        | safety            | Tyre pressure rear left              | Current pressure (bar/psi)
+sensor.vehicle_tyre_pressure_rear_right            | sensor        | safety            | Tyre pressure rear right             | Current pressure (bar/psi)
 
 # --- LOCATION & NAVIGATION ---
 device_tracker.tesla_location                    | device_tracker| location          | Location                             | Current GPS location (for zones/automations)
@@ -92,10 +105,10 @@ media_player.tesla_media_player                  | media_player  | media        
 # --- MAINTENANCE, DIAGNOSTICS & GENERAL ---
 sensor.tesla_estimate_battery_range              | sensor        | vehicle_stats     | Estimate battery range               | Estimated range (ideal?)
 sensor.tesla_ideal_battery_range                 | sensor        | vehicle_stats     | Ideal battery range                  | Ideal / rated battery range
-sensor.tesla_odometer                            | sensor        | vehicle_stats     | Odometer                             | Total distance driven
-sensor.tesla_shift_state                         | sensor        | vehicle_stats     | Shift state                          | Park / Drive / Reverse / Neutral
-sensor.tesla_speed                               | sensor        | vehicle_stats     | Speed                                | Current vehicle speed
-sensor.tesla_usable_battery_level                | sensor        | vehicle_stats     | Usable battery level                 | Current usable State of Charge %
+sensor.vehicle_odometer                            | sensor        | vehicle_stats     | Odometer                             | Total distance driven
+sensor.vehicle_shift_state                         | sensor        | vehicle_stats     | Shift state                          | Park / Drive / Reverse / Neutral
+sensor.vehicle_speed                               | sensor        | vehicle_stats     | Speed                                | Current vehicle speed
+sensor.vehicle_battery_level                | sensor        | vehicle_stats     | Usable battery level                 | Current usable State of Charge %
 update.tesla_update                              | update        | maintenance       | Update                               | Software / firmware update status
 sensor.tesla_fast_charger_type                   | sensor        | charging          | Fast charger type                    | Type of fast charger connected (if any)
 
@@ -123,10 +136,10 @@ input_boolean.tesla_enable_smart_charging       | input_boolean | helper        
 input_datetime.tesla_next_departure             | input_datetime| helper            | Tesla Next Departure            | Helper datetime for departure-based automation planning
 
 # --- VEHICLE STATS (use Tesla Fleet natively in dashboards) ---
-# sensor.tesla_usable_battery_level              | sensor        | vehicle_stats     | Usable battery level                 | Tesla Fleet — use directly (replaces battery_level template)
+# sensor.vehicle_battery_level              | sensor        | vehicle_stats     | Usable battery level                 | Tesla Fleet — use directly (replaces battery_level template)
 # sensor.tesla_estimate_battery_range            | sensor        | vehicle_stats     | Estimate battery range               | Tesla Fleet — use directly (replaces estimated_range template)
 # sensor.tesla_ideal_battery_range               | sensor        | vehicle_stats     | Ideal battery range                  | Tesla Fleet — use directly (replaces ideal_range template)
-# sensor.tesla_time_to_full_charge                 | sensor        | charging          | Time to full charge                  | Tesla Fleet — use directly (replaces time_to_full_charge_minutes template)
+# sensor.vehicle_time_to_full_charge                 | sensor        | charging          | Time to full charge                  | Tesla Fleet — use directly (replaces time_to_full_charge_minutes template)
 sensor.tesla_tires_status                        | sensor        | safety            | Tesla Tires Status              | Template: combined tire warning summary (Optimal / Check Tires)
 
 # --- EFFICIENCY (Templates) ---
@@ -199,7 +212,7 @@ binary_sensor.tesla_anomaly_high_daily_cost      | binary_sensor | anomaly      
 #    - Give them clear friendly_names starting with "Tesla ..." or "Tesla ...".
 #    - Set proper device_class, state_class, unit_of_measurement, and unique_id.
 # 6. Common useful additions you might want:
-#    - Use sensor.tesla_usable_battery_level directly (no template wrapper needed)
+#    - Use sensor.vehicle_battery_level directly (no template wrapper needed)
 #    - sensor.tesla_remaining_range (template combining usable_battery_level + ideal_battery_range)
 #    - input_number.tesla_target_charge_limit (user-friendly slider for charge limit)
 #    - input_boolean.tesla_enable_smart_charging

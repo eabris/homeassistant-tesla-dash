@@ -1,3 +1,34 @@
+- id: tesla_reserved_car_name_guard
+  alias: "Tesla - Warn if car name collides with reserved alias prefix"
+  description: >
+    The dashboard's "Fleet Sensor Aliases" (sensor.vehicle_*, binary_sensor.vehicle_*)
+    read from sensor.<car>_* / binary_sensor.<car>_* using input_text.tesla_car_name.
+    This only works if the car name is never literally "vehicle" — otherwise the
+    aliases would try to read their own state and get stuck on "unknown" (the
+    same bug that happened when the car was named "tesla" against a tesla_*
+    alias prefix). This automation fires a persistent notification if that
+    reserved word is ever used, so you get an immediate warning instead of a
+    silent breakage.
+  trigger:
+    - trigger: homeassistant
+      event: start
+    - trigger: state
+      entity_id: input_text.tesla_car_name
+  condition:
+    - condition: template
+      value_template: "{{ states('input_text.tesla_car_name') | lower == 'vehicle' }}"
+  action:
+    - action: persistent_notification.create
+      data:
+        title: "⚠️ Tesla Dashboard Configuration Conflict"
+        message: >
+          input_text.tesla_car_name is set to "vehicle", which collides with
+          this project's reserved "vehicle_" alias prefix (sensor.vehicle_odometer,
+          etc.). This will cause those sensors to read their own state and get
+          stuck on "unknown". Please rename your vehicle to anything else
+          (e.g. "tesla", "car1", "myev") and update input_text.tesla_car_name
+          to match your Tesla Fleet integration's real entity prefix.
+
 - id: tesla_drive_energy_session_start
   alias: "Tesla - Capture drive session start (battery/odometer)"
   description: >
@@ -12,12 +43,12 @@
       target:
         entity_id: input_number.tesla_drive_start_battery_pct
       data:
-        value: "{{ states('sensor.tesla_usable_battery_level') | float(0) }}"
+        value: "{{ states('sensor.vehicle_battery_level') | float(0) }}"
     - action: input_number.set_value
       target:
         entity_id: input_number.tesla_drive_start_odometer
       data:
-        value: "{{ states('sensor.tesla_odometer') | float(0) }}"
+        value: "{{ states('sensor.vehicle_odometer') | float(0) }}"
 
 - id: tesla_drive_energy_session_end
   alias: "Tesla - Log real energy consumed for completed drive"
@@ -35,7 +66,7 @@
     - condition: template
       value_template: >
         {% set start_odo = states('input_number.tesla_drive_start_odometer') | float(0) %}
-        {% set end_odo = states('sensor.tesla_odometer') | float(0) %}
+        {% set end_odo = states('sensor.vehicle_odometer') | float(0) %}
         {{ (end_odo - start_odo) >= 0.3 }}
   action:
     - action: input_number.set_value
@@ -44,7 +75,7 @@
       data:
         value: >
           {% set start_pct = states('input_number.tesla_drive_start_battery_pct') | float(0) %}
-          {% set end_pct = states('sensor.tesla_usable_battery_level') | float(0) %}
+          {% set end_pct = states('sensor.vehicle_battery_level') | float(0) %}
           {% set capacity = states('input_number.tesla_battery_capacity_kwh') | float(100) %}
           {% set dropped_pct = start_pct - end_pct %}
           {# Only count it if the battery actually dropped (ignore drives where it
@@ -63,7 +94,7 @@
       target:
         entity_id: input_number.tesla_odometer_daily_baseline
       data:
-        value: "{{ states('sensor.tesla_odometer') | float(0) }}"
+        value: "{{ states('sensor.vehicle_odometer') | float(0) }}"
 
 - id: tesla_odometer_monthly_baseline
   alias: Tesla - Reset monthly odometer baseline
@@ -79,7 +110,7 @@
       target:
         entity_id: input_number.tesla_odometer_monthly_baseline
       data:
-        value: "{{ states('sensor.tesla_odometer') | float(0) }}"
+        value: "{{ states('sensor.vehicle_odometer') | float(0) }}"
 
 - id: tesla_odometer_baseline_startup
   alias: Tesla - Init odometer baselines on startup
@@ -97,7 +128,7 @@
               target:
                 entity_id: input_number.tesla_odometer_daily_baseline
               data:
-                value: "{{ states('sensor.tesla_odometer') | float(0) }}"
+                value: "{{ states('sensor.vehicle_odometer') | float(0) }}"
     - choose:
         - conditions:
             - condition: template
@@ -107,7 +138,7 @@
               target:
                 entity_id: input_number.tesla_odometer_monthly_baseline
               data:
-                value: "{{ states('sensor.tesla_odometer') | float(0) }}"
+                value: "{{ states('sensor.vehicle_odometer') | float(0) }}"
 
 
 - id: tesla_precondition_before_departure
@@ -124,7 +155,7 @@
         {% if departure in ['unknown', 'unavailable', None] %}
           false
         {% else %}
-          {% set dep_time = strptime(departure, '%Y-%m-%d %H:%M:%S') %}
+          {% set dep_time = as_local(strptime(departure, '%Y-%m-%d %H:%M:%S')) %}
           {% set precondition_time = dep_time - timedelta(minutes=40) %}
           {{ now() >= precondition_time and now() < dep_time }}
         {% endif %}

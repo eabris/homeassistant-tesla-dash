@@ -34,27 +34,27 @@ http:
 
 utility_meter:
   tesla_daily_distance_raw:
-    source: sensor.tesla_odometer
+    source: sensor.vehicle_odometer
     cycle: daily
     name: "Tesla Daily Distance Raw"
 
   tesla_daily_charging_energy:
-    source: sensor.tesla_charge_energy_added
+    source: sensor.vehicle_charge_energy_added
     cycle: daily
     name: "Tesla Daily Charging Energy"
 
   tesla_weekly_charging_energy:
-    source: sensor.tesla_charge_energy_added
+    source: sensor.vehicle_charge_energy_added
     cycle: weekly
     name: "Tesla Weekly Charging Energy"
 
   tesla_monthly_charging_energy:
-    source: sensor.tesla_charge_energy_added
+    source: sensor.vehicle_charge_energy_added
     cycle: monthly
     name: "Tesla Monthly Charging Energy"
 
   tesla_weekly_distance_raw:
-    source: sensor.tesla_odometer
+    source: sensor.vehicle_odometer
     cycle: weekly
     name: "Tesla Weekly Distance Raw"
 
@@ -406,12 +406,26 @@ input_datetime:
     icon: mdi:calendar-clock
 
 template:
-  # ===== FLEET SENSOR ALIASES =====
-  # These read dynamically from input_text.tesla_car_name.
-  # Change that helper value → all aliases (and anything built on them) update automatically.
+  # ===== FLEET SENSOR ALIASES ("vehicle_" namespace) =====
+  # These read dynamically from input_text.tesla_car_name, so the rest of the
+  # project (dashboards, cost/efficiency sensors, automations) can always use
+  # a stable sensor.vehicle_* / binary_sensor.vehicle_* name no matter what
+  # your actual vehicle's Tesla Fleet integration prefix is (tesla, x, 0, 42,
+  # daddy_taxi, anything).
+  #
+  # IMPORTANT — why "vehicle_" and not "tesla_":
+  # These aliases must have an entity_id that can NEVER equal the raw
+  # integration entity_id they read from, no matter what input_text.tesla_car_name
+  # is set to. If the alias were named e.g. "tesla_odometer" and the vehicle's
+  # real prefix was also "tesla", the alias would try to read its own state
+  # (sensor.vehicle_odometer -> sensor.vehicle_odometer) and get stuck on
+  # "unknown" forever — this happened in this project and is why the prefix
+  # was changed to "vehicle_" here. As long as you never name your vehicle's
+  # HA device/prefix literally "vehicle", this can't recur. (A startup check
+  # in automations.yaml warns you with a persistent_notification if you do.)
   - sensor:
-      - name: "Tesla Odometer"
-        unique_id: tesla_odometer_alias_v1
+      - name: "Vehicle Odometer"
+        unique_id: vehicle_odometer_alias_v1
         state: >
           {% set car = states('input_text.tesla_car_name') %}
           {{ states('sensor.' + car + '_odometer') }}
@@ -420,8 +434,8 @@ template:
         state_class: total_increasing
         icon: mdi:counter
 
-      - name: "Tesla Charge Energy Added"
-        unique_id: tesla_charge_energy_added_alias_v1
+      - name: "Vehicle Charge Energy Added"
+        unique_id: vehicle_charge_energy_added_alias_v1
         state: >
           {% set car = states('input_text.tesla_car_name') %}
           {{ states('sensor.' + car + '_charge_energy_added') }}
@@ -430,8 +444,8 @@ template:
         state_class: total_increasing
         icon: mdi:ev-station
 
-      - name: "Tesla Battery Level"
-        unique_id: tesla_battery_level_alias_v1
+      - name: "Vehicle Battery Level"
+        unique_id: vehicle_battery_level_alias_v1
         state: >
           {% set car = states('input_text.tesla_car_name') %}
           {{ states('sensor.' + car + '_usable_battery_level') }}
@@ -440,24 +454,24 @@ template:
         state_class: measurement
         icon: mdi:battery
 
-      - name: "Tesla Battery Range"
-        unique_id: tesla_battery_range_alias_v1
+      - name: "Vehicle Battery Range"
+        unique_id: vehicle_battery_range_alias_v1
         state: >
           {% set car = states('input_text.tesla_car_name') %}
           {{ states('sensor.' + car + '_estimate_battery_range') }}
         unit_of_measurement: "km"
         icon: mdi:map-marker-distance
 
-      - name: "Tesla Charge Rate"
-        unique_id: tesla_charge_rate_alias_v1
+      - name: "Vehicle Charge Rate"
+        unique_id: vehicle_charge_rate_alias_v1
         state: >
           {% set car = states('input_text.tesla_car_name') %}
           {{ states('sensor.' + car + '_charge_rate') }}
         unit_of_measurement: "km/h"
         icon: mdi:speedometer
 
-      - name: "Tesla Charger Current"
-        unique_id: tesla_charger_current_alias_v1
+      - name: "Vehicle Charger Current"
+        unique_id: vehicle_charger_current_alias_v1
         state: >
           {% set car = states('input_text.tesla_car_name') %}
           {{ states('sensor.' + car + '_charger_current') }}
@@ -465,8 +479,8 @@ template:
         device_class: current
         icon: mdi:sine-wave
 
-      - name: "Tesla Charger Power"
-        unique_id: tesla_charger_power_alias_v1
+      - name: "Vehicle Charger Power"
+        unique_id: vehicle_charger_power_alias_v1
         state: >
           {% set car = states('input_text.tesla_car_name') %}
           {{ states('sensor.' + car + '_charger_power') }}
@@ -474,8 +488,8 @@ template:
         device_class: power
         icon: mdi:flash
 
-      - name: "Tesla Charger Voltage"
-        unique_id: tesla_charger_voltage_alias_v1
+      - name: "Vehicle Charger Voltage"
+        unique_id: vehicle_charger_voltage_alias_v1
         state: >
           {% set car = states('input_text.tesla_car_name') %}
           {{ states('sensor.' + car + '_charger_voltage') }}
@@ -483,15 +497,15 @@ template:
         device_class: voltage
         icon: mdi:flash
 
-      - name: "Tesla Charging"
-        unique_id: tesla_charging_alias_v1
+      - name: "Vehicle Charging"
+        unique_id: vehicle_charging_alias_v1
         state: >
           {% set car = states('input_text.tesla_car_name') %}
           {{ states('sensor.' + car + '_charging') }}
         icon: mdi:ev-station
 
-      - name: "Tesla Inside Temperature"
-        unique_id: tesla_inside_temperature_alias_v1
+      - name: "Vehicle Inside Temperature"
+        unique_id: vehicle_inside_temperature_alias_v1
         state: >
           {% set car = states('input_text.tesla_car_name') %}
           {{ states('sensor.' + car + '_inside_temperature') }}
@@ -500,8 +514,8 @@ template:
         state_class: measurement
         icon: mdi:thermometer
 
-      - name: "Tesla Outside Temperature"
-        unique_id: tesla_outside_temperature_alias_v1
+      - name: "Vehicle Outside Temperature"
+        unique_id: vehicle_outside_temperature_alias_v1
         state: >
           {% set car = states('input_text.tesla_car_name') %}
           {{ states('sensor.' + car + '_outside_temperature') }}
@@ -510,15 +524,15 @@ template:
         state_class: measurement
         icon: mdi:thermometer
 
-      - name: "Tesla Shift State"
-        unique_id: tesla_shift_state_alias_v1
+      - name: "Vehicle Shift State"
+        unique_id: vehicle_shift_state_alias_v1
         state: >
           {% set car = states('input_text.tesla_car_name') %}
           {{ states('sensor.' + car + '_shift_state') }}
         icon: mdi:car-shift-pattern
 
-      - name: "Tesla Speed"
-        unique_id: tesla_speed_alias_v1
+      - name: "Vehicle Speed"
+        unique_id: vehicle_speed_alias_v1
         state: >
           {% set car = states('input_text.tesla_car_name') %}
           {{ states('sensor.' + car + '_speed') }}
@@ -526,15 +540,15 @@ template:
         state_class: measurement
         icon: mdi:speedometer
 
-      - name: "Tesla Time To Full Charge"
-        unique_id: tesla_time_to_full_charge_alias_v1
+      - name: "Vehicle Time To Full Charge"
+        unique_id: vehicle_time_to_full_charge_alias_v1
         state: >
           {% set car = states('input_text.tesla_car_name') %}
           {{ states('sensor.' + car + '_time_to_full_charge') }}
         icon: mdi:battery-clock
 
-      - name: "Tesla Tyre Pressure Front Left"
-        unique_id: tesla_tyre_pressure_fl_alias_v1
+      - name: "Vehicle Tyre Pressure Front Left"
+        unique_id: vehicle_tyre_pressure_fl_alias_v1
         state: >
           {% set car = states('input_text.tesla_car_name') %}
           {{ states('sensor.' + car + '_tyre_pressure_front_left') }}
@@ -543,8 +557,8 @@ template:
         state_class: measurement
         icon: mdi:tire
 
-      - name: "Tesla Tyre Pressure Front Right"
-        unique_id: tesla_tyre_pressure_fr_alias_v1
+      - name: "Vehicle Tyre Pressure Front Right"
+        unique_id: vehicle_tyre_pressure_fr_alias_v1
         state: >
           {% set car = states('input_text.tesla_car_name') %}
           {{ states('sensor.' + car + '_tyre_pressure_front_right') }}
@@ -553,8 +567,8 @@ template:
         state_class: measurement
         icon: mdi:tire
 
-      - name: "Tesla Tyre Pressure Rear Left"
-        unique_id: tesla_tyre_pressure_rl_alias_v1
+      - name: "Vehicle Tyre Pressure Rear Left"
+        unique_id: vehicle_tyre_pressure_rl_alias_v1
         state: >
           {% set car = states('input_text.tesla_car_name') %}
           {{ states('sensor.' + car + '_tyre_pressure_rear_left') }}
@@ -563,8 +577,8 @@ template:
         state_class: measurement
         icon: mdi:tire
 
-      - name: "Tesla Tyre Pressure Rear Right"
-        unique_id: tesla_tyre_pressure_rr_alias_v1
+      - name: "Vehicle Tyre Pressure Rear Right"
+        unique_id: vehicle_tyre_pressure_rr_alias_v1
         state: >
           {% set car = states('input_text.tesla_car_name') %}
           {{ states('sensor.' + car + '_tyre_pressure_rear_right') }}
@@ -574,68 +588,71 @@ template:
         icon: mdi:tire
 
   - binary_sensor:
-      - name: "Tesla Tyre Pressure Warning Front Left"
-        unique_id: tesla_tyre_pressure_warning_fl_alias_v1
+      - name: "Vehicle Tyre Pressure Warning Front Left"
+        unique_id: vehicle_tyre_pressure_warning_fl_alias_v1
         state: >
           {% set car = states('input_text.tesla_car_name') %}
           {{ is_state('binary_sensor.' + car + '_tyre_pressure_warning_front_left', 'on') }}
         device_class: problem
         icon: mdi:tire-alert
 
-      - name: "Tesla Tyre Pressure Warning Front Right"
-        unique_id: tesla_tyre_pressure_warning_fr_alias_v1
+      - name: "Vehicle Tyre Pressure Warning Front Right"
+        unique_id: vehicle_tyre_pressure_warning_fr_alias_v1
         state: >
           {% set car = states('input_text.tesla_car_name') %}
           {{ is_state('binary_sensor.' + car + '_tyre_pressure_warning_front_right', 'on') }}
         device_class: problem
         icon: mdi:tire-alert
 
-      - name: "Tesla Tyre Pressure Warning Rear Left"
-        unique_id: tesla_tyre_pressure_warning_rl_alias_v1
+      - name: "Vehicle Tyre Pressure Warning Rear Left"
+        unique_id: vehicle_tyre_pressure_warning_rl_alias_v1
         state: >
           {% set car = states('input_text.tesla_car_name') %}
           {{ is_state('binary_sensor.' + car + '_tyre_pressure_warning_rear_left', 'on') }}
         device_class: problem
         icon: mdi:tire-alert
 
-      - name: "Tesla Tyre Pressure Warning Rear Right"
-        unique_id: tesla_tyre_pressure_warning_rr_alias_v1
+      - name: "Vehicle Tyre Pressure Warning Rear Right"
+        unique_id: vehicle_tyre_pressure_warning_rr_alias_v1
         state: >
           {% set car = states('input_text.tesla_car_name') %}
           {{ is_state('binary_sensor.' + car + '_tyre_pressure_warning_rear_right', 'on') }}
         device_class: problem
         icon: mdi:tire-alert
 
-      - name: "Tesla Status"
-        unique_id: tesla_status_alias_v1
+      - name: "Vehicle Status"
+        unique_id: vehicle_status_alias_v1
         state: >
           {% set car = states('input_text.tesla_car_name') %}
           {{ is_state('binary_sensor.' + car + '_status', 'on') }}
         icon: mdi:car-connected
 
-      - name: "Tesla Charge Cable"
-        unique_id: tesla_charge_cable_alias_v1
+      - name: "Vehicle Charge Cable"
+        unique_id: vehicle_charge_cable_alias_v1
         state: >
           {% set car = states('input_text.tesla_car_name') %}
           {{ is_state('binary_sensor.' + car + '_charge_cable', 'on') }}
         device_class: plug
         icon: mdi:power-plug
 
-  # ===== CUSTOM SENSORS (built on top of aliases — rename-proof) =====
+  # ===== CUSTOM SENSORS =====
+  # These build on the sensor.vehicle_* / binary_sensor.vehicle_* aliases above
+  # (not directly on the raw Fleet integration entities), so they work no
+  # matter what your vehicle's real entity prefix is.
   - binary_sensor:
       - name: "Tesla Driving Active"
         unique_id: tesla_driving_active_v1
         icon: mdi:car
         state: >
-          {% set shift = states('sensor.tesla_shift_state') | upper %}
-          {% set speed = states('sensor.tesla_speed') | float(0) %}
+          {% set shift = states('sensor.vehicle_shift_state') | upper %}
+          {% set speed = states('sensor.vehicle_speed') | float(0) %}
           {{ shift in ['D', 'R', 'N'] or (shift in ['UNKNOWN', 'UNAVAILABLE', 'NONE', ''] and speed > 1) }}
 
       - name: "Tesla Charging Active"
         unique_id: tesla_charging_active_v1
         icon: mdi:ev-station
         state: >
-          {{ states('sensor.tesla_charging') | lower in ['charging', 'preconditioning'] }}
+          {{ states('sensor.vehicle_charging') | lower in ['charging', 'preconditioning'] }}
 
       - name: "Tesla Anomaly No Charge 3d"
         unique_id: tesla_anomaly_no_charge_3d_v1
@@ -689,10 +706,10 @@ template:
         icon: mdi:tire
         state: >
           {% set warning_entities = [
-            'binary_sensor.tesla_tyre_pressure_warning_front_left',
-            'binary_sensor.tesla_tyre_pressure_warning_front_right',
-            'binary_sensor.tesla_tyre_pressure_warning_rear_left',
-            'binary_sensor.tesla_tyre_pressure_warning_rear_right'
+            'binary_sensor.vehicle_tyre_pressure_warning_front_left',
+            'binary_sensor.vehicle_tyre_pressure_warning_front_right',
+            'binary_sensor.vehicle_tyre_pressure_warning_rear_left',
+            'binary_sensor.vehicle_tyre_pressure_warning_rear_right'
           ] %}
           {% set active_warnings = warning_entities | select('is_state', 'on') | list | count %}
           {% if active_warnings > 0 %}
@@ -748,7 +765,7 @@ template:
         state_class: measurement
         icon: mdi:map-marker-distance
         state: >
-          {% set odom_raw = states('sensor.tesla_odometer') %}
+          {% set odom_raw = states('sensor.vehicle_odometer') %}
           {% set base_raw = states('input_number.tesla_odometer_monthly_baseline') %}
           {% if odom_raw in ['unknown', 'unavailable', 'none'] or base_raw in ['unknown', 'unavailable', 'none'] %}
             {% set prev = this.state | float(0) %}

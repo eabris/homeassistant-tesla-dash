@@ -559,14 +559,14 @@ views:
             show: true
             position: bottom
         series:
-          - entity: sensor.tesla_speed
+          - entity: sensor.vehicle_speed
             name: AVERAGE
             type: column
             unit: " km/h"
             group_by:
               func: avg
               duration: 1d
-          - entity: sensor.tesla_speed
+          - entity: sensor.vehicle_speed
             name: MAX
             type: column
             unit: " km/h"
@@ -755,7 +755,7 @@ views:
             group_by:
               func: last
               duration: 1d
-          - entity: sensor.tesla_speed
+          - entity: sensor.vehicle_speed
             name: "km/h"
             type: line
             yaxis_id: speed
@@ -831,7 +831,7 @@ views:
             group_by:
               func: last
               duration: 1d
-          - entity: sensor.tesla_outside_temperature
+          - entity: sensor.vehicle_outside_temperature
             name: "°C"
             type: line
             yaxis_id: temp
@@ -874,7 +874,7 @@ views:
           colors:
             - '#1E88E5'
         series:
-          - entity: sensor.tesla_charger_power
+          - entity: sensor.vehicle_charger_power
             name: "kW"
             type: column
 
@@ -914,7 +914,7 @@ views:
             show:
               in_chart: false
               legend_value: true
-          - entity: sensor.tesla_charge_energy_added
+          - entity: sensor.vehicle_charge_energy_added
             name: "kWh"
             type: column
 
@@ -947,7 +947,7 @@ views:
           colors:
             - '#4CAF50'
         series:
-          - entity: sensor.tesla_charge_rate
+          - entity: sensor.vehicle_charge_rate
             name: "km/h"
             type: column
 
@@ -980,7 +980,7 @@ views:
           colors:
             - '#9C27B0'
         series:
-          - entity: sensor.tesla_charger_current
+          - entity: sensor.vehicle_charger_current
             name: "A"
             type: column
 

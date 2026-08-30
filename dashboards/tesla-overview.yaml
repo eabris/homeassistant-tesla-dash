@@ -22,14 +22,14 @@ views:
                 - padding: 8px
 
           - type: custom:button-card
-            entity: sensor.tesla_battery_range
+            entity: sensor.vehicle_battery_range
             icon: mdi:battery
             name: "km"
             show_label: true
             label: |
               [[[
-                const soc = parseFloat(String(states['sensor.tesla_battery_level']?.state || '0'));
-                const rawRange = String(states['sensor.tesla_battery_range']?.state || '');
+                const soc = parseFloat(String(states['sensor.vehicle_battery_level']?.state || '0'));
+                const rawRange = String(states['sensor.vehicle_battery_range']?.state || '');
                 const range = (!rawRange || rawRange === 'unknown' || rawRange === 'unavailable')
                   ? `~${Math.round(soc * 4.1)}`
                   : rawRange;
@@ -39,7 +39,7 @@ views:
               card:
                 - background-color: >
                     [[[
-                      const soc = parseFloat(String(states['sensor.tesla_battery_level']?.state || '0'));
+                      const soc = parseFloat(String(states['sensor.vehicle_battery_level']?.state || '0'));
                       if (soc > 70) return 'rgba(76, 175, 80, 0.3)';
                       if (soc > 40) return 'rgba(255, 193, 7, 0.3)';
                       return 'rgba(244, 67, 54, 0.3)';
@@ -50,16 +50,16 @@ views:
       # 1.2 Charging Status Card (Conditional)
       - type: conditional
         conditions:
-          - entity: binary_sensor.tesla_charge_cable
+          - entity: binary_sensor.vehicle_charge_cable
             state: "on"
         card:
           type: custom:button-card
-          entity: binary_sensor.tesla_charge_cable
+          entity: binary_sensor.vehicle_charge_cable
           name: "CHARGING >"
           show_label: true
           label: |
             [[[
-              const raw = String(states['sensor.tesla_time_to_full_charge']?.state || '');
+              const raw = String(states['sensor.vehicle_time_to_full_charge']?.state || '');
               if (!raw || raw === 'unknown' || raw === 'unavailable') return 'Calculating...';
               const endTime = new Date(raw);
               const now = new Date();
@@ -196,13 +196,13 @@ views:
         cards:
           # Climate
           - type: custom:button-card
-            entity: sensor.tesla_inside_temperature
+            entity: sensor.vehicle_inside_temperature
             icon: mdi:thermometer
             name: "Climate"
             show_label: true
             label: |
               [[[
-                const tempStr = String(states['sensor.tesla_inside_temperature']?.state || '0');
+                const tempStr = String(states['sensor.vehicle_inside_temperature']?.state || '0');
                 const temp = parseFloat(tempStr);
                 return isNaN(temp) ? 'N/A' : `${temp.toFixed(1)}°`;
               ]]]
@@ -212,15 +212,15 @@ views:
 
           # Battery
           - type: custom:button-card
-            entity: sensor.tesla_battery_range
+            entity: sensor.vehicle_battery_range
             icon: mdi:battery
             name: "Battery"
             show_label: true
             label: |
               [[[
-                const range = String(states['sensor.tesla_battery_range']?.state || '');
+                const range = String(states['sensor.vehicle_battery_range']?.state || '');
                 if (!range || range === 'unknown' || range === 'unavailable') {
-                  const soc = parseFloat(String(states['sensor.tesla_battery_level']?.state || '0'));
+                  const soc = parseFloat(String(states['sensor.vehicle_battery_level']?.state || '0'));
                   return isNaN(soc) ? '– km' : `~${Math.round(soc * 4.1)} km`;
                 }
                 return `${range} km`;
@@ -310,8 +310,8 @@ views:
             show_label: true
             label: |
               [[[
-                const shift = String(states['sensor.tesla_shift_state']?.state || '').toUpperCase();
-                const charging = String(states['sensor.tesla_charging']?.state || '').toLowerCase();
+                const shift = String(states['sensor.vehicle_shift_state']?.state || '').toUpperCase();
+                const charging = String(states['sensor.vehicle_charging']?.state || '').toLowerCase();
                 const driving = states['binary_sensor.tesla_driving_active']?.state === 'true';
                 if (driving) return 'Driving';
                 if (['charging','preconditioning'].includes(charging)) return 'Charging';
@@ -324,13 +324,13 @@ views:
 
           # Activity
           - type: custom:button-card
-            entity: sensor.tesla_shift_state
+            entity: sensor.vehicle_shift_state
             icon: mdi:state-machine
             name: "Activity"
             show_label: true
             label: |
               [[[
-                const state = String(states['sensor.tesla_shift_state']?.state || '');
+                const state = String(states['sensor.vehicle_shift_state']?.state || '');
                 if (!state || state === 'unknown' || state === 'unavailable') return 'Parked';
                 return state.toUpperCase();
               ]]]
@@ -366,7 +366,7 @@ views:
           **{{ states('input_text.tesla_model') | default('Tesla Model X') }}** • VIN: {{ states('input_text.tesla_vin') | default('Unknown') }} • Plate: {{ states('input_text.tesla_plate') | default('Unknown') }}
           
           {% set car = states('input_text.tesla_car_name') %}
-          Firmware: {{ state_attr('update.' + car + '_update', 'installed_version') | default('Unknown') }}{{ ' ⬆️' if states('update.' + car + '_update') == 'on' else '' }} • Odometer: {{ states('sensor.tesla_odometer') | round(0) }} km • Status: {{ 'Online' if is_state('binary_sensor.tesla_status', 'on') else 'Offline' }}
+          Firmware: {{ state_attr('update.' + car + '_update', 'installed_version') | default('Unknown') }}{{ ' ⬆️' if states('update.' + car + '_update') == 'on' else '' }} • Odometer: {{ states('sensor.vehicle_odometer') | float(0) | round(0) }} km • Status: {{ 'Online' if is_state('binary_sensor.vehicle_status', 'on') else 'Offline' }}
 
   # ========== VIEW 2: CONTROLS ==========
   - title: Controls
@@ -384,11 +384,11 @@ views:
           status: |
             [[[
               const car = states['input_text.tesla_car_name']?.state || 'tesla';
-              const online = states['binary_sensor.tesla_status']?.state === 'on';
+              const online = states['binary_sensor.vehicle_status']?.state === 'on';
               const driving = states['binary_sensor.tesla_driving_active']?.state === 'true';
               const charging = states['binary_sensor.tesla_charging_active']?.state === 'true';
-              const soc = parseFloat(states['sensor.tesla_battery_level']?.state || '0');
-              const range = states['sensor.tesla_battery_range']?.state;
+              const soc = parseFloat(states['sensor.vehicle_battery_level']?.state || '0');
+              const range = states['sensor.vehicle_battery_range']?.state;
               const rangeStr = (!range || range === 'unknown') ? `~${Math.round(soc * 4.1)} km` : `${Math.round(parseFloat(range))} km`;
 
               let statePill, stateColor;
@@ -420,7 +420,7 @@ views:
           details: |
             [[[
               const car = states['input_text.tesla_car_name']?.state || 'tesla';
-              const online = states['binary_sensor.tesla_status']?.state === 'on';
+              const online = states['binary_sensor.vehicle_status']?.state === 'on';
               const sentry = states['switch.' + car + '_sentry_mode']?.state === 'on';
               const lock = states['lock.' + car + '_lock']?.state;
               const windows = states['cover.' + car + '_windows']?.state;
@@ -464,7 +464,7 @@ views:
         show_label: true
         label: |
           [[[
-            const online = states['binary_sensor.tesla_status']?.state === 'on';
+            const online = states['binary_sensor.vehicle_status']?.state === 'on';
             return online ? '✅ Vehicle is awake' : '💤 Tap to wake from sleep';
           ]]]
         tap_action:
@@ -474,14 +474,14 @@ views:
           card:
             - background-color: |
                 [[[
-                  return states['binary_sensor.tesla_status']?.state === 'on'
+                  return states['binary_sensor.vehicle_status']?.state === 'on'
                     ? 'rgba(76, 175, 80, 0.15)'
                     : 'rgba(255, 193, 7, 0.2)';
                 ]]]
           icon:
             - color: |
                 [[[
-                  return states['binary_sensor.tesla_status']?.state === 'on'
+                  return states['binary_sensor.vehicle_status']?.state === 'on'
                     ? 'rgb(76, 175, 80)'
                     : 'rgb(255, 193, 7)';
                 ]]]
@@ -613,13 +613,13 @@ views:
                 - background-color: rgba(0, 0, 0, 0.3)
 
           - type: custom:button-card
-            entity: sensor.tesla_outside_temperature
+            entity: sensor.vehicle_outside_temperature
             icon: mdi:weather-sunny
             name: "Outdoor"
             show_label: true
             label: |
               [[[
-                const temp = parseFloat(String(states['sensor.tesla_outside_temperature']?.state || '0'));
+                const temp = parseFloat(String(states['sensor.vehicle_outside_temperature']?.state || '0'));
                 return `${temp.toFixed(1)}°`;
               ]]]
             styles:
@@ -628,12 +628,12 @@ views:
 
       # Interior Temp Hero
       - type: custom:button-card
-        entity: sensor.tesla_inside_temperature
+        entity: sensor.vehicle_inside_temperature
         name: "INTERIOR"
         show_label: true
         label: |
           [[[
-            const temp = parseFloat(String(states['sensor.tesla_inside_temperature']?.state || '0'));
+            const temp = parseFloat(String(states['sensor.vehicle_inside_temperature']?.state || '0'));
             return `${temp.toFixed(1)}°`;
           ]]]
         styles:
@@ -924,7 +924,7 @@ views:
     cards:
       # 4.1 Primary Battery Gauge
       - type: custom:button-card
-        entity: sensor.tesla_battery_level
+        entity: sensor.vehicle_battery_level
         show_icon: false
         show_name: false
         show_state: false
@@ -933,7 +933,7 @@ views:
         custom_fields:
           bar: |
             [[[
-              const soc = parseFloat(states['sensor.tesla_battery_level']?.state || '0');
+              const soc = parseFloat(states['sensor.vehicle_battery_level']?.state || '0');
               const car = states['input_text.tesla_car_name']?.state || 'tesla';
               const limit = parseFloat(states['number.' + car + '_charge_limit']?.state || '100');
               const color = soc > 70 ? '#4CAF50' : soc > 40 ? '#FFC107' : '#F44336';
@@ -956,13 +956,13 @@ views:
         cards:
           # LEVEL
           - type: custom:button-card
-            entity: sensor.tesla_battery_level
+            entity: sensor.vehicle_battery_level
             icon: mdi:percent
             name: "LEVEL"
             show_label: true
             label: |
               [[[
-                const level = parseFloat(String(states['sensor.tesla_battery_level']?.state || '0'));
+                const level = parseFloat(String(states['sensor.vehicle_battery_level']?.state || '0'));
                 return `${level.toFixed(0)}%`;
               ]]]
             tap_action:
@@ -973,14 +973,14 @@ views:
 
           # RANGE
           - type: custom:button-card
-            entity: sensor.tesla_battery_range
+            entity: sensor.vehicle_battery_range
             icon: mdi:map-marker-distance
             name: "RANGE"
             show_label: true
             label: |
               [[[
-                const soc = parseFloat(String(states['sensor.tesla_battery_level']?.state || '0'));
-                const rawEst = String(states['sensor.tesla_battery_range']?.state || '');
+                const soc = parseFloat(String(states['sensor.vehicle_battery_level']?.state || '0'));
+                const rawEst = String(states['sensor.vehicle_battery_range']?.state || '');
                 const estVal = (!rawEst || rawEst === 'unknown' || rawEst === 'unavailable')
                   ? Math.round(soc * 4.1)
                   : Math.round(parseFloat(rawEst));
@@ -996,13 +996,13 @@ views:
 
           # DRAIN
           - type: custom:button-card
-            entity: sensor.tesla_battery_level
+            entity: sensor.vehicle_battery_level
             icon: mdi:water-remove
             name: "DRAIN"
             show_label: true
             label: |
               [[[
-                const charging = String(states['sensor.tesla_charging']?.state || '').toLowerCase();
+                const charging = String(states['sensor.vehicle_charging']?.state || '').toLowerCase();
                 const driving = states['binary_sensor.tesla_driving_active']?.state === 'true';
                 if (charging === 'charging') return '+charging';
                 if (driving) return 'Driving';
@@ -1016,13 +1016,13 @@ views:
 
           # ENERGY
           - type: custom:button-card
-            entity: sensor.tesla_battery_level
+            entity: sensor.vehicle_battery_level
             icon: mdi:lightning-bolt
             name: "ENERGY"
             show_label: true
             label: |
               [[[
-                const soc = parseFloat(String(states['sensor.tesla_battery_level']?.state || '0'));
+                const soc = parseFloat(String(states['sensor.vehicle_battery_level']?.state || '0'));
                 const currentKwh = (soc).toFixed(2);
                 return `${currentKwh} / 100.00 kWh`;
               ]]]
@@ -1035,13 +1035,13 @@ views:
 
           # AMPERAGE
           - type: custom:button-card
-            entity: sensor.tesla_charger_current
+            entity: sensor.vehicle_charger_current
             icon: mdi:sine-wave
             name: "AMPERAGE"
             show_label: true
             label: |
               [[[
-                const ampStr = String(states['sensor.tesla_charger_current']?.state || '0');
+                const ampStr = String(states['sensor.vehicle_charger_current']?.state || '0');
                 const amp = parseFloat(ampStr);
                 return isNaN(amp) ? '0.0 A' : `${amp.toFixed(1)} A`;
               ]]]
@@ -1053,13 +1053,13 @@ views:
 
           # VOLTAGE
           - type: custom:button-card
-            entity: sensor.tesla_charger_voltage
+            entity: sensor.vehicle_charger_voltage
             icon: mdi:flash
             name: "VOLTAGE"
             show_label: true
             label: |
               [[[
-                const voltStr = String(states['sensor.tesla_charger_voltage']?.state || '0');
+                const voltStr = String(states['sensor.vehicle_charger_voltage']?.state || '0');
                 const volt = parseFloat(voltStr);
                 return isNaN(volt) ? '0 V' : `${volt.toFixed(0)} V`;
               ]]]
@@ -1071,13 +1071,13 @@ views:
 
           # ENERGY USED (Lifetime estimated)
           - type: custom:button-card
-            entity: sensor.tesla_odometer
+            entity: sensor.vehicle_odometer
             icon: mdi:meter-gas
             name: "ENERGY USED"
             show_label: true
             label: |
               [[[
-                const odom = parseFloat(states['sensor.tesla_odometer']?.state || '0');
+                const odom = parseFloat(states['sensor.vehicle_odometer']?.state || '0');
                 const kwh = (odom * 0.228).toFixed(0);
                 return isNaN(odom) || odom === 0 ? '– kWh' : `~${parseFloat(kwh).toLocaleString('hu-HU')} kWh`;
               ]]]
@@ -1149,13 +1149,13 @@ views:
         cards:
           # FL
           - type: custom:button-card
-            entity: sensor.tesla_tyre_pressure_front_left
+            entity: sensor.vehicle_tyre_pressure_front_left
             icon: mdi:tire
             name: "FL"
             show_label: true
             label: |
               [[[
-                const pressStr = String(states['sensor.tesla_tyre_pressure_front_left']?.state || '0');
+                const pressStr = String(states['sensor.vehicle_tyre_pressure_front_left']?.state || '0');
                 const pressure = parseFloat(pressStr);
                 return isNaN(pressure) ? '0.00 bar' : `${pressure.toFixed(2)} bar`;
               ]]]
@@ -1167,13 +1167,13 @@ views:
 
           # FR
           - type: custom:button-card
-            entity: sensor.tesla_tyre_pressure_front_right
+            entity: sensor.vehicle_tyre_pressure_front_right
             icon: mdi:tire
             name: "FR"
             show_label: true
             label: |
               [[[
-                const pressStr = String(states['sensor.tesla_tyre_pressure_front_right']?.state || '0');
+                const pressStr = String(states['sensor.vehicle_tyre_pressure_front_right']?.state || '0');
                 const pressure = parseFloat(pressStr);
                 return isNaN(pressure) ? '0.00 bar' : `${pressure.toFixed(2)} bar`;
               ]]]
@@ -1185,13 +1185,13 @@ views:
 
           # RL
           - type: custom:button-card
-            entity: sensor.tesla_tyre_pressure_rear_left
+            entity: sensor.vehicle_tyre_pressure_rear_left
             icon: mdi:tire
             name: "RL"
             show_label: true
             label: |
               [[[
-                const pressStr = String(states['sensor.tesla_tyre_pressure_rear_left']?.state || '0');
+                const pressStr = String(states['sensor.vehicle_tyre_pressure_rear_left']?.state || '0');
                 const pressure = parseFloat(pressStr);
                 return isNaN(pressure) ? '0.00 bar' : `${pressure.toFixed(2)} bar`;
               ]]]
@@ -1203,13 +1203,13 @@ views:
 
           # RR
           - type: custom:button-card
-            entity: sensor.tesla_tyre_pressure_rear_right
+            entity: sensor.vehicle_tyre_pressure_rear_right
             icon: mdi:tire
             name: "RR"
             show_label: true
             label: |
               [[[
-                const pressStr = String(states['sensor.tesla_tyre_pressure_rear_right']?.state || '0');
+                const pressStr = String(states['sensor.vehicle_tyre_pressure_rear_right']?.state || '0');
                 const pressure = parseFloat(pressStr);
                 return isNaN(pressure) ? '0.00 bar' : `${pressure.toFixed(2)} bar`;
               ]]]
@@ -1243,19 +1243,19 @@ views:
             area:
               fillTo: zero
         series:
-          - entity: sensor.tesla_tyre_pressure_front_left
+          - entity: sensor.vehicle_tyre_pressure_front_left
             name: "Front Left"
             type: line
             stroke_width: 2
-          - entity: sensor.tesla_tyre_pressure_front_right
+          - entity: sensor.vehicle_tyre_pressure_front_right
             name: "Front Right"
             type: line
             stroke_width: 2
-          - entity: sensor.tesla_tyre_pressure_rear_left
+          - entity: sensor.vehicle_tyre_pressure_rear_left
             name: "Rear Left"
             type: line
             stroke_width: 2
-          - entity: sensor.tesla_tyre_pressure_rear_right
+          - entity: sensor.vehicle_tyre_pressure_rear_right
             name: "Rear Right"
             type: line
             stroke_width: 2
