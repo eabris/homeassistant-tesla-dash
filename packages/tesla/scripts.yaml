@@ -58,42 +58,6 @@ tesla_climate_off:
       target:
         entity_id: climate.tesla_climate
 
-tesla_dog_mode:
-  alias: "Tesla Dog Mode"
-  description: "Keep cabin comfortable at 20 C"
-  icon: mdi:dog-side
-  sequence:
-    - action: climate.turn_on
-      target:
-        entity_id: climate.tesla_climate
-    - action: climate.set_temperature
-      target:
-        entity_id: climate.tesla_climate
-      data:
-        temperature: 20
-    - action: persistent_notification.create
-      data:
-        title: "Tesla"
-        message: "Dog Mode preset applied (20 C)."
-
-tesla_camp_mode:
-  alias: "Tesla Camp Mode"
-  description: "Keep cabin warm at 18 C"
-  icon: mdi:campfire
-  sequence:
-    - action: climate.turn_on
-      target:
-        entity_id: climate.tesla_climate
-    - action: climate.set_temperature
-      target:
-        entity_id: climate.tesla_climate
-      data:
-        temperature: 18
-    - action: persistent_notification.create
-      data:
-        title: "Tesla"
-        message: "Camp Mode preset applied (18 C)."
-
 tesla_smart_charge_to_target:
   alias: "Tesla - Smart Charge to Target"
   description: "Set the charge limit to the value in input_number.tesla_target_charge_limit"
@@ -319,6 +283,7 @@ tesla_steering_heater_next:
 
 tesla_dog_mode:
   alias: "Tesla Dog Mode"
+  description: "Keep cabin comfortable at 20 C"
   icon: mdi:dog-side
   sequence:
     - action: climate.turn_on
@@ -329,9 +294,14 @@ tesla_dog_mode:
         entity_id: "{{ 'climate.' + states('input_text.tesla_car_name') + '_climate' }}"
       data:
         temperature: 20
+    - action: persistent_notification.create
+      data:
+        title: "Tesla"
+        message: "Dog Mode preset applied (20 C)."
 
 tesla_camp_mode:
   alias: "Tesla Camp Mode"
+  description: "Keep cabin warm at 18 C"
   icon: mdi:campfire
   sequence:
     - action: climate.turn_on
@@ -342,4 +312,8 @@ tesla_camp_mode:
         entity_id: "{{ 'climate.' + states('input_text.tesla_car_name') + '_climate' }}"
       data:
         temperature: 18
+    - action: persistent_notification.create
+      data:
+        title: "Tesla"
+        message: "Camp Mode preset applied (18 C)."
 
