@@ -1,15 +1,28 @@
 #!/usr/bin/env python3
 """
-Delete orphaned legacy sensor/binary_sensor entities from Home Assistant
-after a vehicle rename or alias layer migration.
+Delete orphaned legacy entities from Home Assistant after a vehicle rename
+or alias-prefix migration (e.g. after running rename_tesla_prefix.py, or
+renaming a vehicle from "daddy_taxi" to "tesla" in your YAML).
 
 Before running, set LEGACY_PREFIX below to the old vehicle entity prefix
-(e.g. "my_model_x", "model_y", "cybertruck").
+(e.g. "my_model_x", "model_y", "cybertruck", "daddy_taxi").
 
-Keeps all input_* helpers, scripts, and automation entities.
+By default this only touches sensor/binary_sensor entities (safe default,
+matches historical behavior). Pass --all-domains to also clean up orphaned
+script, automation, and input_* helper entities left behind in the Entity
+Registry after you've renamed those in YAML and reloaded HA — those old
+entries don't get removed automatically just because YAML no longer
+defines them.
+
+Note: renaming (instead of deleting) is NOT offered as an option here.
+Once YAML has been updated to the new prefix, HA already created fresh
+entities with new unique_ids for the new names; the orphaned old entities
+cannot be "reconnected" to them, and per-entity_id-keyed history/statistics
+don't carry over on rename anyway (see agents.md Technical Appendix,
+section 4). Deleting the orphans is the only thing that actually helps.
 
 Usage:
-  python3 scripts/cleanup_legacy_entities.py --url https://your-homeassistant-url --token YOUR_TOKEN
+  python3 scripts/cleanup_legacy_entities.py --url https://your-homeassistant-url --token YOUR_TOKEN [--all-domains] [--dry-run]
 
 Get a Long-Lived Access Token from:
   HA Profile → Long-Lived Access Tokens → Create Token
@@ -31,11 +44,18 @@ from urllib.parse import urlparse
 # ---- CONFIGURE THIS ----
 # Set this to the old vehicle entity prefix you want to clean up.
 # Example: "my_model_x", "model_y", "cybertruck"
-LEGACY_PREFIX = "my_model_x"
+LEGACY_PREFIX = "cybertruck"
 # -------------------------
 
-# Domains to scan for removal
+# Domains to scan for removal by default (safe: no user-configured helpers)
 DELETE_DOMAINS = {"sensor", "binary_sensor"}
+
+# Extra domains included when --all-domains is passed. These are the ones
+# that show up as orphaned scripts/automations/input_* rows after a rename.
+ALL_DOMAINS_EXTRA = {
+    "script", "automation",
+    "input_number", "input_boolean", "input_text", "input_datetime", "input_select",
+}
 
 # Specific entity IDs to KEEP even if they match LEGACY_PREFIX in the above domains
 # (Add any you want to preserve)
@@ -182,9 +202,16 @@ def main():
     parser.add_argument("--token", required=True, help="Long-Lived Access Token")
     parser.add_argument("--dry-run", action="store_true", help="List without deleting")
     parser.add_argument("--no-verify-ssl", action="store_true", help="Skip SSL certificate verification")
+    parser.add_argument(
+        "--all-domains", action="store_true",
+        help="Also clean up orphaned script/automation/input_* entities "
+             "(not just sensor/binary_sensor). Use this after renaming a "
+             "vehicle prefix in YAML and reloading HA.",
+    )
     args = parser.parse_args()
 
     base_url = args.url.rstrip("/")
+    domains = DELETE_DOMAINS | ALL_DOMAINS_EXTRA if args.all_domains else DELETE_DOMAINS
 
     print("Connecting to Home Assistant WebSocket API...")
     try:
@@ -204,7 +231,7 @@ def main():
     candidates = [
         e for e in entities
         if LEGACY_PREFIX in e["entity_id"]
-        and e["entity_id"].split(".")[0] in DELETE_DOMAINS
+        and e["entity_id"].split(".")[0] in domains
         and e["entity_id"] not in KEEP_ENTITIES
     ]
 
