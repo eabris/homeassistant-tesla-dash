@@ -968,4 +968,48 @@ range" isn't wheel-size-aware and was a less actionable number for this
 purpose. (`sensor.vehicle_ideal_battery_range` itself is untouched and
 still defined, just no longer read by this specific card.)
 
+### 10. Never Commit Real Personal/Private Information
+
+**Rule:** Never hardcode a real Home Assistant URL, Long-Lived Access
+Token, physical address, VIN, license plate, phone number, email, or any
+other personally-identifying value into any file in this repo — scripts,
+YAML, docs, commit messages, or code comments. This applies to example
+usage strings in docstrings/help text too, not just active config.
+
+**Always use placeholders instead**, consistent with the existing
+convention already used across this repo:
+- Home Assistant URL → `https://your-homeassistant-url`
+- Access token → `YOUR_TOKEN`
+- Street address → a generic placeholder like `123 Main St` or
+  `Home (saved location)` — never a real address (see checkpoint history:
+  "Scrubbing real addresses from repo" was a prior incident of this exact
+  mistake).
+- VIN / license plate → `5YJ12345678901234`-style obviously-fake example
+  or a clearly labeled placeholder.
+
+**Why this matters:** this repo is public on GitHub. Anything committed —
+even briefly — is visible to crawlers, search indexes (GitHub code
+search, Sourcegraph, grep.app, etc.), and any implicit forks/clones the
+moment it's pushed, regardless of whether it's later removed in a
+follow-up commit. A normal `git revert` or `edit` + commit does **not**
+remove the secret from history — every prior commit still contains it.
+
+**Incident precedent:** an earlier version of `scripts/cleanup_tesla_entities.py`
+shipped with a real personal HA hostname hardcoded in its docstring usage
+example, present in every commit from the repo's initial commit onward.
+It had to be removed after the fact via `git filter-repo --replace-text`
+(for text blobs) plus `git filter-repo --path ... --invert-paths` (to
+fully strip an old compiled `.pyc` cache blob that `--replace-text` can't
+safely touch, since it skips binary blobs containing NUL bytes to avoid
+corruption), followed by a force-push to rewrite the public remote's
+history. This is disruptive (rewrites every commit hash, requires
+collaborators to re-clone) and does **not** retroactively purge external
+caches/crawlers that may have already indexed the exposed window — so
+prevention up front is far cheaper than the cleanup.
+
+**Before committing, double-check:** any `--url`, `--token`, address,
+phone, or similar example/default value you write into a script, YAML
+comment, or doc is a placeholder, not something copy-pasted from a real
+running instance.
+
 
