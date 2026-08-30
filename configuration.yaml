@@ -724,7 +724,7 @@ template:
         unit_of_measurement: "Wh/km"
         icon: mdi:car-electric
         state: >
-          {{ (states('sensor.tesla_efficiency_kwh_per_km') | float(0.228) * 1000) | round(0) }}
+          {{ (states('sensor.tesla_efficiency_kwh_km') | float(0.228) * 1000) | round(0) }}
 
       # === Distance ===
       - name: "Tesla Daily Distance"
@@ -770,7 +770,7 @@ template:
             {{ real | round(2) }}
           {% else %}
             {% set dist_km = states('sensor.tesla_daily_distance') | float(0) %}
-            {% set eff = states('sensor.tesla_efficiency_kwh_per_km') | float(0.228) %}
+            {% set eff = states('sensor.tesla_efficiency_kwh_km') | float(0.228) %}
             {{ (dist_km * eff) | round(2) }}
           {% endif %}
 
@@ -876,7 +876,7 @@ template:
             {{ real | round(2) }}
           {% else %}
             {% set dist_km = states('sensor.tesla_monthly_distance') | float(0) %}
-            {% set eff = states('sensor.tesla_efficiency_kwh_per_km') | float(0.228) %}
+            {% set eff = states('sensor.tesla_efficiency_kwh_km') | float(0.228) %}
             {{ (dist_km * eff) | round(2) }}
           {% endif %}
 
@@ -886,7 +886,7 @@ template:
           {{ states('sensor.tesla_currency_symbol') }}/km
         icon: mdi:cash
         state: >
-          {% set eff = states('sensor.tesla_efficiency_kwh_per_km') | float(0) %}
+          {% set eff = states('sensor.tesla_efficiency_kwh_km') | float(0) %}
           {% set rate = states('input_number.tesla_default_electricity_cost') | float(60) %}
           {{ (eff * rate) | round(2) }}
 

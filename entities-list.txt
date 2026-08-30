@@ -130,7 +130,7 @@ input_datetime.tesla_next_departure             | input_datetime| helper        
 sensor.tesla_tires_status                        | sensor        | safety            | Tesla Tires Status              | Template: combined tire warning summary (Optimal / Check Tires)
 
 # --- EFFICIENCY (Templates) ---
-sensor.tesla_efficiency_kwh_per_km               | sensor        | efficiency        | Tesla Efficiency kWh/km         | Template: REAL rolling 7-day efficiency (tesla_weekly_drive_energy / tesla_weekly_distance); falls back to 0.228 kWh/km baseline until >5km logged in the last 7 days
+sensor.tesla_efficiency_kwh_km               | sensor        | efficiency        | Tesla Efficiency kWh/km         | Template: REAL rolling 7-day efficiency (tesla_weekly_drive_energy / tesla_weekly_distance); falls back to 0.228 kWh/km baseline until >5km logged in the last 7 days
 sensor.tesla_efficiency_wh_per_km                | sensor        | efficiency        | Tesla Efficiency Wh/km          | Template: efficiency in Wh/km (kWh/km * 1000)
 sensor.tesla_electric_cost_per_km                | sensor        | cost_tracking     | Tesla Electric Cost Per KM      | Template: efficiency * input_number.tesla_default_electricity_cost (was hardcoded to 60, now honors the configured rate); unit follows selected currency
 sensor.tesla_fuel_cost_per_km                    | sensor        | cost_tracking     | Tesla Fuel Cost per km          | Template: ICE equivalent fuel cost per km (comparison_ice_efficiency @ comparison_fuel_price_per_liter); unit follows selected currency

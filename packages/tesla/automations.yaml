@@ -24,7 +24,7 @@
   description: >
     When a drive ends, computes the energy actually consumed from the battery
     (% drop x pack capacity) and adds it to the running total used to power
-    the real efficiency/energy-used analytics (see sensor.tesla_efficiency_kwh_per_km
+    the real efficiency/energy-used analytics (see sensor.tesla_efficiency_kwh_km
     and sensor.tesla_drive_energy_consumed_total).
   trigger:
     - trigger: state
