@@ -305,6 +305,31 @@ left alone by default (pass `--include-labels` to rename those too). Run
 | YAML errors after restart | Check **Settings → System → Logs**, or validate YAML in the File editor — usually an indentation issue. |
 | Entity names don't match dashboard | See Step 5 — either rename your entities or edit the dashboard/template YAML to match. |
 | TeslaMate can't connect to Tesla | Make sure you completed its browser-based Tesla login wizard at `http://<server-ip>:4000`. |
+| Some sensors show `Entity not available` in dashboard charts, and a full restart didn't fix it | An old, orphaned entity is probably still squatting on the exact entity_id the new sensor wants, so Home Assistant had to create it with a `_2` suffix instead (check **Settings → Devices & Services → Entities**, search the name without a domain filter — if you see two rows, one ending in `_2`, this is it). See the "Start clean" recipe below. |
+
+> 🧹 **"Start clean" — wipe and re-create all Tesla entities from scratch:**
+> If you've renamed things, run a cleanup script, or just want a truly fresh
+> set of entities with no leftover `_2` duplicates, use
+> `scripts/cleanup_legacy_entities.py` with explicit flags instead of hand-editing it:
+> ```bash
+> # 1. Preview what would be deleted (nothing is touched yet):
+> python3 scripts/cleanup_legacy_entities.py --url https://your-ha-url --token YOUR_TOKEN \
+>   --prefix tesla --domains sensor,binary_sensor,script,automation --dry-run
+>
+> # 2. Looks right? Run it for real:
+> python3 scripts/cleanup_legacy_entities.py --url https://your-ha-url --token YOUR_TOKEN \
+>   --prefix tesla --domains sensor,binary_sensor,script,automation
+>
+> # 3. Then do a FULL restart (Settings → System → Restart → "Restart Home
+> #    Assistant" — not just a YAML/template reload), so every sensor/
+> #    script/automation gets re-created fresh with its correct plain
+> #    entity_id.
+> ```
+> This deliberately **excludes** `input_number`/`input_boolean`/`input_text`/
+> `input_datetime`/`input_select` helpers, so your configured values
+> (electricity rate, tire pressure, smart-charge window, car name, lifetime
+> energy accumulator, etc.) are never reset. Only sensors/scripts/automations
+> get wiped and cleanly re-created from YAML.
 
 ---
 

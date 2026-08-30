@@ -5,14 +5,15 @@ or alias-prefix migration (e.g. after running rename_tesla_prefix.py, or
 renaming a vehicle from "cybertruck" to "tesla" in your YAML).
 
 Before running, set LEGACY_PREFIX below to the old vehicle entity prefix
-(e.g. "my_model_x", "model_y", "cybertruck").
+(e.g. "my_model_x", "model_y", "cybertruck") — or pass --prefix on the
+command line instead of editing the file.
 
 By default this only touches sensor/binary_sensor entities (safe default,
 matches historical behavior). Pass --all-domains to also clean up orphaned
 script, automation, and input_* helper entities left behind in the Entity
 Registry after you've renamed those in YAML and reloaded HA — those old
 entries don't get removed automatically just because YAML no longer
-defines them.
+defines them. Use --domains for precise control instead (see below).
 
 Note: renaming (instead of deleting) is NOT offered as an option here.
 Once YAML has been updated to the new prefix, HA already created fresh
@@ -21,8 +22,25 @@ cannot be "reconnected" to them, and per-entity_id-keyed history/statistics
 don't carry over on rename anyway (see agents.md Technical Appendix,
 section 4). Deleting the orphans is the only thing that actually helps.
 
+--- "Start clean" full wipe (e.g. after entities got stuck with a "_2"
+suffix because an old orphaned entity was still squatting on the plain
+entity_id when YAML got reloaded) ---
+
+  python3 scripts/cleanup_legacy_entities.py --url https://your-ha-url \
+      --token YOUR_TOKEN --prefix tesla \
+      --domains sensor,binary_sensor,script,automation --dry-run
+
+Review the list, then re-run without --dry-run. This deliberately EXCLUDES
+input_number/input_boolean/input_text/input_datetime/input_select so your
+configured values (electricity rate, tire pressure, smart-charge window,
+car name, lifetime energy accumulator, etc.) are never touched. After it
+finishes, do a FULL Home Assistant restart (Settings → System → Restart →
+"Restart Home Assistant", not just a YAML/template reload) so every
+sensor/script/automation gets re-created fresh from YAML with its correct
+plain entity_id — no more "_2" duplicates blocking them.
+
 Usage:
-  python3 scripts/cleanup_legacy_entities.py --url https://your-homeassistant-url --token YOUR_TOKEN [--all-domains] [--dry-run]
+  python3 scripts/cleanup_legacy_entities.py --url https://your-homeassistant-url --token YOUR_TOKEN [--prefix PREFIX] [--domains d1,d2,...] [--all-domains] [--dry-run]
 
 Get a Long-Lived Access Token from:
   HA Profile → Long-Lived Access Tokens → Create Token
@@ -208,10 +226,29 @@ def main():
              "(not just sensor/binary_sensor). Use this after renaming a "
              "vehicle prefix in YAML and reloading HA.",
     )
+    parser.add_argument(
+        "--prefix", default=None,
+        help=f"Entity_id substring to match, overriding the LEGACY_PREFIX "
+             f"constant in this file (currently {LEGACY_PREFIX!r}). "
+             f"Use e.g. --prefix tesla for a full 'start clean' wipe.",
+    )
+    parser.add_argument(
+        "--domains", default=None,
+        help="Comma-separated list of exact domains to include (overrides "
+             "--all-domains / the DELETE_DOMAINS default). Example: "
+             "--domains sensor,binary_sensor,script,automation "
+             "— deliberately omit input_number/input_boolean/input_text/"
+             "input_datetime/input_select to protect your configured "
+             "helper values from resetting to their YAML 'initial:'.",
+    )
     args = parser.parse_args()
 
     base_url = args.url.rstrip("/")
-    domains = DELETE_DOMAINS | ALL_DOMAINS_EXTRA if args.all_domains else DELETE_DOMAINS
+    legacy_prefix = args.prefix if args.prefix is not None else LEGACY_PREFIX
+    if args.domains is not None:
+        domains = {d.strip() for d in args.domains.split(",") if d.strip()}
+    else:
+        domains = DELETE_DOMAINS | ALL_DOMAINS_EXTRA if args.all_domains else DELETE_DOMAINS
 
     print("Connecting to Home Assistant WebSocket API...")
     try:
@@ -230,13 +267,13 @@ def main():
 
     candidates = [
         e for e in entities
-        if LEGACY_PREFIX in e["entity_id"]
+        if legacy_prefix in e["entity_id"]
         and e["entity_id"].split(".")[0] in domains
         and e["entity_id"] not in KEEP_ENTITIES
     ]
 
     if not candidates:
-        print(f"✅ No orphaned {LEGACY_PREFIX} sensor/binary_sensor entities found.")
+        print(f"✅ No orphaned {legacy_prefix!r} entities found in domains {sorted(domains)}.")
         ws.close()
         return
 

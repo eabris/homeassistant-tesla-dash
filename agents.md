@@ -632,7 +632,8 @@ history — see README FAQ for the user-facing version):
 * Old (now-unreferenced) entities remain in the Entity Registry showing
   `unavailable`. Clean them up with the existing
   `scripts/cleanup_legacy_entities.py` (set `LEGACY_PREFIX` to the old
-  prefix) after confirming the new prefix is working.
+  prefix, or pass `--prefix` on the CLI) after confirming the new prefix is
+  working.
 
 **Recommended safe rename procedure:** before running with `--apply`, note
 down the current value of any lifetime accumulators you care about (chiefly
@@ -640,6 +641,48 @@ down the current value of any lifetime accumulators you care about (chiefly
 States) so you can manually restore them via
 `input_number.set_value` on the newly-named entity right after restarting HA,
 if continuity matters more than a fresh start.
+
+**Known failure mode: entities get stuck with a `_2` suffix after a bulk
+delete + reapply-config cycle.** If a user deletes Tesla entities (via the
+HA UI, or by running `cleanup_legacy_entities.py` against only a subset of
+domains) and then reapplies/reloads the current YAML *without* also
+clearing every matching entity first, some *new* template
+sensors/utility_meters can end up registered as e.g.
+`sensor.tesla_daily_electric_cost_2` instead of the plain
+`sensor.tesla_daily_electric_cost`. This happens because, at the moment HA
+assigns the entity_id, the plain name was still occupied by an old
+orphaned registry entry (from a previous naming iteration or a partial
+cleanup) — and once HA picks the `_2` suffix, it is **permanent**; deleting
+the old blocker afterward does **not** retroactively rename the `_2`
+entity back to the plain name, even after a full restart. Symptom: the
+current dashboard/template YAML references the plain entity_id (e.g.
+`sensor.tesla_daily_electric_cost`), Home Assistant actually created
+`sensor.tesla_daily_electric_cost_2`, and `apexcharts-card` reports
+`Entity not available` for the plain name — even after a genuine full
+restart (Settings → System → Restart), because the plain entity_id simply
+doesn't exist anywhere.
+
+**Diagnosis:** Settings → Devices & Services → Entities → search the bare
+name without a domain prefix (e.g. "daily_electric_cost") — if two rows
+show up (one with a `_2` suffix), this is the cause. **Fix:** delete the
+`_2`-suffixed entity from the registry (Settings → Entities → click it →
+gear/Settings tab → Delete), then do a full restart — the currently-loaded
+YAML will now recreate it cleanly with the plain entity_id, since nothing
+is squatting on it anymore. For a bulk/"start clean" version of this fix
+across many entities at once, `scripts/cleanup_legacy_entities.py` now
+accepts `--prefix` and `--domains` overrides so it isn't limited to the
+hardcoded `LEGACY_PREFIX` constant or the sensor/binary_sensor default:
+```bash
+python3 scripts/cleanup_legacy_entities.py --url https://your-ha-url --token YOUR_TOKEN \
+  --prefix tesla --domains sensor,binary_sensor,script,automation --dry-run
+```
+Deliberately omit `input_number`/`input_boolean`/`input_text`/
+`input_datetime`/`input_select` from `--domains` for this use case — those
+hold user-configured values (rates, tire pressure, smart-charge window,
+car name, lifetime accumulator) that would reset to their YAML `initial:`
+if wiped and would need to be re-entered manually. After the delete step,
+a full HA restart re-creates every sensor/script/automation fresh from
+YAML with correct, unsuffixed entity_ids.
 
 ### 5. Fleet Sensor Alias Layer (`vehicle_*` prefix) — vehicle-name-agnostic design
 
