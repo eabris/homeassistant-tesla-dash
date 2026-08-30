@@ -32,17 +32,32 @@ this is more collateral damage than necessary.
 
 This script instead:
   1. Fetches the entity registry AND the live states.
-  2. Finds every "sensor.foo_2" (or _3, _4, ...) whose base "sensor.foo"
-     also exists in the registry.
-  3. Uses live state to figure out which one is the real orphan: if
-     exactly one of the pair has state 'unavailable' (or no state at all)
-     and the other has a real value, the unavailable one is the orphan.
-  4. Deletes the orphan, then renames the live "_2" entity back to the
-     clean "foo" slug — so dashboards referencing the plain entity_id work
-     again immediately, no restart needed.
-  5. If a group is ambiguous (both live, or both unavailable, or more than
-     one live candidate), it is SKIPPED and printed for manual review —
-     this script never guesses when it isn't sure.
+  2. Finds every "sensor.foo_2" (or _3, _4, ...) and groups it with its
+     de-suffixed base "sensor.foo" — whether or not that plain entity_id
+     still exists. Two situations are handled:
+       a) True duplicate pair: "sensor.foo" (orphan, still registered but
+          dead) + "sensor.foo_2" (live) both exist. This is the common case
+          right after a unique_id bump.
+       b) Orphanless leftover: "sensor.foo" was already deleted (by hand,
+          or by a previous cleanup pass) but "sensor.foo_2" was never
+          renamed back — nothing blocks the plain slug anymore, so it's
+          safe to rename directly with no delete step at all. This is what
+          you'll see if you already cleaned up the orphan yourself before
+          running this script.
+  3. Uses live state to figure out which candidate is the real orphan (if
+     any): if exactly one candidate has a real value and the rest are
+     'unavailable'/'unknown'/missing entirely, the ones without a real
+     value are the orphans.
+  4. Deletes any orphans, then renames the live entity back to the clean
+     "foo" slug — so dashboards referencing the plain entity_id work again
+     immediately, no restart needed.
+  5. If a group is ambiguous (more than one live candidate, or none at
+     all), it is SKIPPED and printed for manual review — this script never
+     guesses when it isn't sure. For the orphanless case (1b), a rename is
+     only ever proposed when the plain slug is confirmed completely free —
+     absent from both the registry and the live states — so it won't touch
+     an entity that coincidentally ends in a digit as part of its real name
+     (e.g. a second vehicle/charger that was never a "_2" collision).
 
 --- Usage ---
 Always dry-run first to review what it found:
@@ -226,10 +241,11 @@ _SUFFIX_RE = re.compile(r"^(?P<base>.+)_(?P<num>\d+)$")
 
 
 def find_duplicate_groups(entities: list[dict], prefix: str) -> dict[str, list[str]]:
-    """Group entity_ids by their de-suffixed base, keeping only groups where
-    the plain base entity_id ALSO exists in the registry (true collision,
-    not just a coincidentally-numbered name)."""
-    all_ids = {e["entity_id"] for e in entities}
+    """Group numerically-suffixed entity_ids (_2, _3, ...) by their
+    de-suffixed base — regardless of whether the plain base entity_id still
+    exists in the registry. Whether each group is actually actionable (a
+    real collision vs. a coincidentally-numbered name) is decided later in
+    main() using live state, not here."""
     groups: dict[str, list[str]] = {}
 
     for e in entities:
@@ -241,8 +257,7 @@ def find_duplicate_groups(entities: list[dict], prefix: str) -> dict[str, list[s
         if not m:
             continue
         base_eid = f"{domain}.{m.group('base')}"
-        if base_eid in all_ids:
-            groups.setdefault(base_eid, []).append(eid)
+        groups.setdefault(base_eid, []).append(eid)
 
     return groups
 
@@ -287,29 +302,56 @@ def main():
         ws.close()
         return
 
+    all_ids = {e["entity_id"] for e in entities}
     print(f"\nFound {len(groups)} potential duplicate group(s):\n")
 
     UNAVAILABLE_STATES = {"unavailable", "unknown", None}
-    plan = []  # list of (orphan_eid, live_eid)
+    # Each planned action: (base_eid, orphans_to_delete: list[str], live_eid_to_rename_or_None)
+    plan: list[tuple[str, list[str], str | None]] = []
     skipped = []
 
     for base_eid, dupes in sorted(groups.items()):
-        candidates = [base_eid] + sorted(dupes)
+        base_in_registry = base_eid in all_ids
+        # Only include the plain base as a candidate if it's actually still
+        # registered. If it isn't, this is the "orphanless" case — nothing
+        # to delete, only a possible rename of the surviving suffixed one.
+        candidates = ([base_eid] if base_in_registry else []) + sorted(dupes)
         live = [c for c in candidates if states.get(c) not in UNAVAILABLE_STATES]
         dead = [c for c in candidates if states.get(c) in UNAVAILABLE_STATES]
 
-        print(f"  Group: {', '.join(candidates)}")
+        label = ", ".join(candidates)
+        if not base_in_registry:
+            label += f"  (base {base_eid!r} not in registry — orphanless case)"
+        print(f"  Group: {label}")
         for c in candidates:
             print(f"    - {c:<55} state={states.get(c, '(no state)')}")
 
-        if len(live) == 1 and len(dead) == len(candidates) - 1:
-            live_eid = live[0]
-            for orphan_eid in dead:
-                plan.append((orphan_eid, live_eid if live_eid != base_eid else None))
-            print(f"    -> PLAN: keep {live_eid!r} (rename to {base_eid!r} if different), delete {dead}")
-        else:
+        if not (len(live) == 1 and len(dead) == len(candidates) - 1):
             skipped.append(candidates)
             print(f"    -> SKIPPED (ambiguous: {len(live)} live, {len(dead)} dead) — review manually")
+            print()
+            continue
+
+        live_eid = live[0]
+
+        if not base_in_registry and states.get(base_eid) not in UNAVAILABLE_STATES:
+            # Extra safety net: the plain slug isn't in the registry but
+            # something is nonetheless reporting a live state under that
+            # exact entity_id (very unusual) — don't touch it.
+            skipped.append(candidates)
+            print(f"    -> SKIPPED ({base_eid!r} has an unexpected live state outside the registry — review manually)")
+            print()
+            continue
+
+        rename_needed = live_eid != base_eid
+        plan.append((base_eid, dead, live_eid if rename_needed else None))
+
+        if dead and rename_needed:
+            print(f"    -> PLAN: delete {dead}, then rename {live_eid!r} -> {base_eid!r}")
+        elif dead:
+            print(f"    -> PLAN: delete {dead} (already correctly named {base_eid!r})")
+        elif rename_needed:
+            print(f"    -> PLAN: rename {live_eid!r} -> {base_eid!r} (no delete needed — base already free)")
         print()
 
     if not plan:
@@ -326,19 +368,8 @@ def main():
     msg_id = 3
     fixed = 0
     failed = 0
-    # Group plan by base to only rename once per group
-    handled_bases = set()
-    for base_eid, dupes in sorted(groups.items()):
-        candidates = [base_eid] + sorted(dupes)
-        live = [c for c in candidates if states.get(c) not in UNAVAILABLE_STATES]
-        dead = [c for c in candidates if states.get(c) in UNAVAILABLE_STATES]
-        if not (len(live) == 1 and len(dead) == len(candidates) - 1):
-            continue
-
-        live_eid = live[0]
-
-        # Delete all orphans first
-        for orphan_eid in dead:
+    for base_eid, orphans, rename_from in plan:
+        for orphan_eid in orphans:
             ok = delete_entity(ws, msg_id, orphan_eid)
             msg_id += 1
             if ok:
@@ -348,15 +379,14 @@ def main():
                 print(f"  ⚠️  Could not delete: {orphan_eid}")
                 failed += 1
 
-        # Rename the live entity back to the clean base slug, if needed
-        if live_eid != base_eid:
-            ok, resp = rename_entity(ws, msg_id, live_eid, base_eid)
+        if rename_from:
+            ok, resp = rename_entity(ws, msg_id, rename_from, base_eid)
             msg_id += 1
             if ok:
-                print(f"  ✅ Renamed {live_eid} -> {base_eid}")
+                print(f"  ✅ Renamed {rename_from} -> {base_eid}")
                 fixed += 1
             else:
-                print(f"  ⚠️  Could not rename {live_eid} -> {base_eid}: {resp}")
+                print(f"  ⚠️  Could not rename {rename_from} -> {base_eid}: {resp}")
                 failed += 1
 
     ws.close()

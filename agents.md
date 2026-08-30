@@ -693,6 +693,19 @@ version-bumped `unique_id`s (`_v2` through `_v6`) had accumulated stale
 specifically to fix that batch in one pass instead of ~17 manual
 delete+rename operations in the UI.
 
+**Refinement — "orphanless" leftovers:** the first version of this script
+only matched a `_2` as a duplicate if the plain-named entity *still existed*
+in the registry (a true pair). In practice, if the orphan was already
+deleted by hand (or by a partial cleanup pass) before the `_2` sibling was
+ever renamed back, nothing blocks the plain slug anymore — but the old
+logic reported "no duplicate entity_id groups found" and left the `_2`
+entity stuck (this happened for real with `tesla_monthly_fuel_cost_2`).
+The script now also detects this orphanless case and proposes a plain
+rename with no delete step, but only when the target slug is confirmed
+completely free — absent from both the entity registry and live states —
+so it won't touch an entity that legitimately ends in a digit as part of
+its real name.
+
 **Manual fix (single entity, no script needed):** delete the **orphaned
 plain-named entity** (the one with state `unavailable`/no live data — NOT
 the `_2` one, which is the live entity with real values) from the registry
