@@ -809,6 +809,24 @@ they don't do any math. Energy/power/current (kWh/kW/A/V) are **not**
 affected by this selector at all — that's universal across all EVs
 regardless of region, so there was nothing to convert.
 
+**Critical scope limitation — the underlying entities are NEVER
+converted, only dashboard display is:** every `unit_of_measurement: "km"`
+/ `"km/h"` / `"bar"` / `"°C"` you see on `sensor.vehicle_*` template
+entities in `configuration.yaml` (Section 5's alias layer) is a permanent,
+hardcoded static value — it does **not** read `input_select.tesla_unit_system`
+and never will. This is intentional, not an oversight: these sensors have
+`device_class`/`state_class` set for Home Assistant's Long-Term Statistics
+(Energy dashboard, `statistics-graph` cards, history). Dynamically
+templating a stats-tracked sensor's `unit_of_measurement` at runtime
+triggers HA's "unit of measurement changed" repair/migration warnings and
+can disrupt recorded statistics. So: **Developer Tools → States**, native
+Logbook/History entries, and any plain `history-graph`/`statistics-graph`
+card added outside the two custom dashboards will always show km/bar/°C,
+regardless of the unit selector. Only the specific dashboard cards listed
+below actually convert for display — everywhere else in Home Assistant,
+these entities are metric-only by design. This distinction is documented
+for the end user directly in the Settings tab's Unit System card text.
+
 **Why this couldn't reuse the currency-selector pattern:** the currency
 selector (`input_select.tesla_currency` + `sensor.tesla_currency_symbol`)
 does **no math** — it only swaps a displayed symbol, because the user is

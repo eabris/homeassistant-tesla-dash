@@ -1056,6 +1056,18 @@ views:
           Settings tab, the Overview dashboard, and the History tab's
           Today/Week/Month summary cards fully respect it for now.
 
+          **Also note:** this only changes how these *custom dashboard
+          cards* display values — the underlying sensors (odometer, range,
+          tire pressure, temperature, etc.) always store km/bar/°C
+          internally, matching what the Tesla Fleet integration natively
+          reports. So if you check a value in **Developer Tools → States**,
+          a native History/Logbook entry, or a plain `history-graph` /
+          `statistics-graph` card outside these dashboards, it'll always
+          show km/bar/°C no matter what you pick above. (This is
+          intentional — dynamically changing a stats-tracked sensor's unit
+          at runtime would trigger Home Assistant's "unit changed" repair
+          warnings and can disrupt Long-Term Statistics.)
+
       - type: custom:mushroom-select-card
         entity: input_select.tesla_unit_system
         name: "Unit System"
