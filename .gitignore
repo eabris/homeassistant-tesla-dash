@@ -1,3 +1,5 @@
 .backups
 .idea
 .env
+__pycache__/
+*.pyc
