@@ -1054,8 +1054,14 @@ template:
 
       - name: "Tesla Daily Electric Cost"
         unique_id: tesla_daily_electric_cost_v5
-        unit_of_measurement: >
-          {{ states('sensor.tesla_currency_symbol') }}
+        # unit_of_measurement can NEVER be a live Jinja template in Home
+        # Assistant (it's validated as a plain cv.string, unlike state/icon/
+        # name which are cv.template) - a template here would render as
+        # literal unrendered text on every dashboard card. Hardcoded to
+        # match the currently selected input_select.tesla_currency (HUF).
+        # If you change your currency, update this string too (and the
+        # other 9 "Ft" unit_of_measurement values in this file).
+        unit_of_measurement: "Ft"
         icon: mdi:cash
         state: >
           {% set energy = states('sensor.tesla_daily_charging_energy') | float(0) %}
@@ -1065,8 +1071,7 @@ template:
       # === Monthly + Projections ===
       - name: "Tesla Monthly Electric Cost"
         unique_id: tesla_monthly_electric_cost_v5
-        unit_of_measurement: >
-          {{ states('sensor.tesla_currency_symbol') }}
+        unit_of_measurement: "Ft"
         icon: mdi:cash-multiple
         state: >
           {% set monthly_energy = states('sensor.tesla_monthly_charging_energy') | float(0) %}
@@ -1075,8 +1080,7 @@ template:
 
       - name: "Tesla Weekly Electric Cost"
         unique_id: tesla_weekly_electric_cost_v2
-        unit_of_measurement: >
-          {{ states('sensor.tesla_currency_symbol') }}
+        unit_of_measurement: "Ft"
         icon: mdi:cash-multiple
         state: >
           {% set weekly_energy = states('sensor.tesla_weekly_charging_energy') | float(0) %}
@@ -1085,8 +1089,7 @@ template:
 
       - name: "Tesla Annual Electric Cost"
         unique_id: tesla_annual_electric_cost_v5
-        unit_of_measurement: >
-          {{ states('sensor.tesla_currency_symbol') }}
+        unit_of_measurement: "Ft"
         icon: mdi:cash-multiple
         state: >
           {% set monthly = states('sensor.tesla_monthly_electric_cost') | float(0) %}
@@ -1094,8 +1097,7 @@ template:
 
       - name: "Tesla 5 Year Electric Cost"
         unique_id: tesla_5year_electric_cost_v5
-        unit_of_measurement: >
-          {{ states('sensor.tesla_currency_symbol') }}
+        unit_of_measurement: "Ft"
         icon: mdi:cash-multiple
         state: >
           {% set annual = states('sensor.tesla_annual_electric_cost') | float(0) %}
@@ -1104,8 +1106,7 @@ template:
       # === Equivalent Fuel Cost ===
       - name: "Tesla Fuel Cost per km"
         unique_id: tesla_fuel_cost_per_km_v5
-        unit_of_measurement: >
-          {{ states('sensor.tesla_currency_symbol') }}/km
+        unit_of_measurement: "Ft/km"
         icon: mdi:gas-station
         state: >
           {% set eff = states('input_number.comparison_ice_efficiency') | float(6.5) %}
@@ -1114,8 +1115,7 @@ template:
 
       - name: "Tesla Daily Fuel Cost Equivalent"
         unique_id: tesla_daily_fuel_cost_equivalent_v5
-        unit_of_measurement: >
-          {{ states('sensor.tesla_currency_symbol') }}
+        unit_of_measurement: "Ft"
         icon: mdi:gas-station
         state: >
           {% set dist = states('sensor.tesla_daily_distance') | float(0) %}
@@ -1124,8 +1124,7 @@ template:
 
       - name: "Tesla Monthly Fuel Cost"
         unique_id: tesla_monthly_fuel_cost_v6
-        unit_of_measurement: >
-          {{ states('sensor.tesla_currency_symbol') }}
+        unit_of_measurement: "Ft"
         icon: mdi:gas-station
         state: >
           {% set dist = states('sensor.tesla_monthly_distance') | float(0) %}
@@ -1134,8 +1133,7 @@ template:
 
       - name: "Tesla Weekly Fuel Cost Equivalent"
         unique_id: tesla_weekly_fuel_cost_v2
-        unit_of_measurement: >
-          {{ states('sensor.tesla_currency_symbol') }}
+        unit_of_measurement: "Ft"
         icon: mdi:gas-station
         state: >
           {% set dist = states('sensor.tesla_weekly_distance') | float(0) %}
@@ -1160,8 +1158,7 @@ template:
 
       - name: "Tesla Electric Cost Per KM"
         unique_id: tesla_electric_cost_per_km_v5
-        unit_of_measurement: >
-          {{ states('sensor.tesla_currency_symbol') }}/km
+        unit_of_measurement: "Ft/km"
         icon: mdi:cash
         state: >
           {% set eff = states('sensor.tesla_efficiency_kwh_km') | float(0) %}

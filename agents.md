@@ -930,6 +930,53 @@ actually multiplying the stored value, not just relabeling it. Conversion
 constants used everywhere below: `km → mi` = `×0.621371` (same factor for
 km/h → mph), `bar → psi` = `×14.5038`, `°C → °F` = `×9/5 + 32`.
 
+**Correction (confirmed the hard way) — `unit_of_measurement:` can NEVER
+actually be a live template, even for the currency symbol.** The paragraph
+above was written assuming `sensor.tesla_currency_symbol`'s value could be
+templated straight into other sensors' `unit_of_measurement:` (e.g.
+`tesla_daily_electric_cost`), and for a while 10 cost/fuel sensors in this
+file did exactly that:
+```yaml
+unit_of_measurement: >
+  {{ states('sensor.tesla_currency_symbol') }}
+```
+This is **silently broken** — confirmed directly against HA core source
+(`homeassistant/components/template/sensor.py`): `unit_of_measurement` is
+declared as `vol.Optional(CONF_UNIT_OF_MEASUREMENT): cv.string` (plain
+string validator), never `cv.template`, unlike `state`/`icon`/`name`/
+`availability` which all use `cv.template`. HA reads the raw YAML text
+as-is and never renders it — no error, no warning, it just becomes the
+literal string `"{{ states('sensor.tesla_currency_symbol') }}"` as the
+entity's unit, which is exactly what a user saw appended after every
+number on the Analytics dashboard's cost cards. This is a hard platform
+limitation, not a mistake in the template syntax — it applies identically
+whether the sensor is state-based or trigger-based (same schema either
+way), so there is no template-sensor-level workaround.
+
+**Fix applied:** all 10 affected sensors (`tesla_daily_electric_cost`,
+`tesla_monthly_electric_cost`, `tesla_weekly_electric_cost`,
+`tesla_annual_electric_cost`, `tesla_5year_electric_cost`,
+`tesla_fuel_cost_per_km`, `tesla_daily_fuel_cost_equivalent`,
+`tesla_monthly_fuel_cost`, `tesla_weekly_fuel_cost_equivalent`,
+`tesla_electric_cost_per_km`) now hardcode `unit_of_measurement: "Ft"` (or
+`"Ft/km"` for the two per-km ones) matching the currently-selected HUF
+currency — the user explicitly chose this over removing the unit label
+entirely. **If you change `input_select.tesla_currency` away from HUF,
+these 10 static strings must be manually updated to match** (there is no
+way to make this automatic without a custom component that rewrites the
+entity registry's unit on every currency change — out of scope for this
+project). The underlying cost *values* are unaffected by this limitation:
+they already correctly use `input_number.tesla_default_electricity_cost`
+etc., which the user enters directly in their chosen currency — only the
+unit *label text* next to the number is static.
+
+**General rule going forward:** never write `unit_of_measurement: >` with
+a Jinja template in this file again — grep for
+`unit_of_measurement:\s*>` followed by a line containing `{{` before
+committing any new template sensor, since HA gives no error/warning when
+this mistake is made; it just silently produces the exact literal-text bug
+described above.
+
 **Where the conversion math actually lives:** inline in each individual
 dashboard card, reading `input_select.tesla_unit_system` directly — via JS
 (`states['input_select.tesla_unit_system']?.state` in `custom:button-card`
