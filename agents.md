@@ -664,12 +664,49 @@ doesn't exist anywhere.
 
 **Diagnosis:** Settings → Devices & Services → Entities → search the bare
 name without a domain prefix (e.g. "daily_electric_cost") — if two rows
-show up (one with a `_2` suffix), this is the cause. **Fix:** delete the
-`_2`-suffixed entity from the registry (Settings → Entities → click it →
-gear/Settings tab → Delete), then do a full restart — the currently-loaded
-YAML will now recreate it cleanly with the plain entity_id, since nothing
-is squatting on it anymore. For a bulk/"start clean" version of this fix
-across many entities at once, `scripts/cleanup_legacy_entities.py` now
+show up (one with a `_2` suffix), this is the cause.
+
+**Preferred fix (surgical, no restart, no side effects):**
+`scripts/fix_duplicate_entities.py` scans the entity registry + live states
+via the WebSocket API, finds every `_2`/`_3`/... duplicate whose plain base
+entity_id also exists, checks which one is actually live (has a real state)
+vs. orphaned (state `unavailable`/`unknown`/missing), deletes the orphan,
+and renames the live `_2` entity back to the clean plain slug — all in one
+run, no HA restart required, and it never touches anything that isn't part
+of an actual detected collision (utility_meter cycle totals, input_number
+lifetime accumulators, and every other entity are left completely alone).
+Ambiguous groups (e.g. both entities look live, or both look dead) are
+skipped and printed for manual review rather than guessed at.
+```bash
+python3 scripts/fix_duplicate_entities.py --url https://your-homeassistant-url --token YOUR_TOKEN --prefix tesla_ --dry-run
+# review the output, then:
+python3 scripts/fix_duplicate_entities.py --url https://your-homeassistant-url --token YOUR_TOKEN --prefix tesla_
+```
+This is the recommended approach when many sensors are affected at once
+(e.g. after several `unique_id` version bumps accumulate) — it avoids doing
+each one by hand in the UI, and avoids the wider blast radius of the bulk
+wipe below. **First real-world use:** confirmed 17 template sensors with
+version-bumped `unique_id`s (`_v2` through `_v6`) had accumulated stale
+`_2` orphans this way across several rounds of edits to
+`tesla_daily_electric_cost`, `tesla_monthly_fuel_cost`,
+`tesla_efficiency_kwh_per_km`, and others — this script was written
+specifically to fix that batch in one pass instead of ~17 manual
+delete+rename operations in the UI.
+
+**Manual fix (single entity, no script needed):** delete the **orphaned
+plain-named entity** (the one with state `unavailable`/no live data — NOT
+the `_2` one, which is the live entity with real values) from the registry
+(Settings → Entities → click it → gear/Settings tab → Delete), then either
+restart HA (it will recreate the plain entity_id fresh, since nothing is
+squatting on it anymore) or just rename the `_2` entity directly to the
+plain slug (Settings → Entities → click the `_2` entity → pencil icon next
+to its entity ID → remove the `_2` → Update) for an instant fix with no
+restart. (Deleting the `_2` entity instead, by mistake, does **not** fix
+anything — the orphan would still occupy the plain slug, and the next
+reload would just recreate a fresh `_2` duplicate again.)
+
+**Bulk/"start clean" alternative (more destructive, rarely needed now that
+`fix_duplicate_entities.py` exists):** `scripts/cleanup_legacy_entities.py`
 accepts `--prefix` and `--domains` overrides so it isn't limited to the
 hardcoded `LEGACY_PREFIX` constant or the sensor/binary_sensor default:
 ```bash
