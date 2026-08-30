@@ -1,14 +1,19 @@
 - id: tesla_reserved_car_name_guard
-  alias: "Tesla - Warn if car name collides with reserved alias prefix"
+  alias: "Tesla - Warn if car name is invalid or reserved"
   description: >
     The dashboard's "Fleet Sensor Aliases" (sensor.vehicle_*, binary_sensor.vehicle_*)
-    read from sensor.<car>_* / binary_sensor.<car>_* using input_text.tesla_car_name.
-    This only works if the car name is never literally "vehicle" — otherwise the
-    aliases would try to read their own state and get stuck on "unknown" (the
-    same bug that happened when the car was named "tesla" against a tesla_*
-    alias prefix). This automation fires a persistent notification if that
-    reserved word is ever used, so you get an immediate warning instead of a
-    silent breakage.
+    and every "universal" script/automation read from sensor.<car>_* /
+    binary_sensor.<car>_* by dynamically building the entity_id from
+    input_text.tesla_car_name. This breaks two ways: (1) if the car name is
+    ever literally "vehicle", it collides with this project's reserved
+    "vehicle_" alias prefix and those sensors read their own state, getting
+    stuck on "unknown" (the same bug that happened when the car was named
+    "tesla" against a tesla_* alias prefix); (2) if the helper is ever blank/
+    unknown/unavailable (e.g. right after a fresh install, before it's been
+    set), every dynamically-built entity_id becomes garbage like
+    "climate.unknown_climate" and silently does nothing. This automation
+    fires a persistent notification for either case, so it fails loudly
+    instead of silently.
   trigger:
     - trigger: homeassistant
       event: start
@@ -16,18 +21,28 @@
       entity_id: input_text.tesla_car_name
   condition:
     - condition: template
-      value_template: "{{ states('input_text.tesla_car_name') | lower == 'vehicle' }}"
+      value_template: >
+        {{ states('input_text.tesla_car_name') | lower in ['vehicle', 'unknown', 'unavailable', ''] }}
   action:
     - action: persistent_notification.create
       data:
         title: "⚠️ Tesla Dashboard Configuration Conflict"
         message: >
-          input_text.tesla_car_name is set to "vehicle", which collides with
-          this project's reserved "vehicle_" alias prefix (sensor.vehicle_odometer,
-          etc.). This will cause those sensors to read their own state and get
-          stuck on "unknown". Please rename your vehicle to anything else
-          (e.g. "tesla", "car1", "myev") and update input_text.tesla_car_name
-          to match your Tesla Fleet integration's real entity prefix.
+          {% if states('input_text.tesla_car_name') | lower == 'vehicle' %}
+            input_text.tesla_car_name is set to "vehicle", which collides with
+            this project's reserved "vehicle_" alias prefix (sensor.vehicle_odometer,
+            etc.). This will cause those sensors to read their own state and get
+            stuck on "unknown". Please rename your vehicle to anything else
+            (e.g. "tesla", "car1", "myev") and update input_text.tesla_car_name
+            to match your Tesla Fleet integration's real entity prefix.
+          {% else %}
+            input_text.tesla_car_name is blank/unknown/unavailable. Every
+            script, automation, and dashboard card in this project needs this
+            set to your Tesla Fleet integration's real entity prefix (e.g. if
+            your entities look like sensor.tesla_battery_level, set this to
+            "tesla") or nothing will work. Go to Settings → Devices & Services
+            → Helpers → "Tesla Car Name (entity prefix)" and set it now.
+          {% endif %}
 
 - id: tesla_drive_energy_session_start
   alias: "Tesla - Capture drive session start (battery/odometer)"
@@ -83,19 +98,6 @@
           {% set session_kwh = (dropped_pct / 100 * capacity) if dropped_pct > 0 else 0 %}
           {{ (states('input_number.tesla_drive_energy_consumed_total_kwh') | float(0) + session_kwh) | round(3) }}
 
-- id: tesla_odometer_daily_baseline_midnight
-  alias: Tesla - Reset daily odometer baseline
-  description: Snapshot odometer at midnight so daily distance resets
-  trigger:
-    - trigger: time
-      at: "00:00:05"
-  action:
-    - action: input_number.set_value
-      target:
-        entity_id: input_number.tesla_odometer_daily_baseline
-      data:
-        value: "{{ states('sensor.vehicle_odometer') | float(0) }}"
-
 - id: tesla_odometer_monthly_baseline
   alias: Tesla - Reset monthly odometer baseline
   description: Snapshot odometer on the 1st of each month
@@ -105,6 +107,8 @@
   condition:
     - condition: template
       value_template: "{{ now().day == 1 }}"
+    - condition: template
+      value_template: "{{ states('sensor.vehicle_odometer') not in ['unknown', 'unavailable', 'none', none] }}"
   action:
     - action: input_number.set_value
       target:
@@ -113,32 +117,22 @@
         value: "{{ states('sensor.vehicle_odometer') | float(0) }}"
 
 - id: tesla_odometer_baseline_startup
-  alias: Tesla - Init odometer baselines on startup
-  description: Initialize distance baselines after HA restart
+  alias: Tesla - Init odometer baseline on startup
+  description: Initialize the monthly distance baseline after a HA restart, if it was never set
   trigger:
     - trigger: homeassistant
       event: start
+  condition:
+    - condition: template
+      value_template: "{{ states('input_number.tesla_odometer_monthly_baseline') | float(0) == 0 }}"
+    - condition: template
+      value_template: "{{ states('sensor.vehicle_odometer') not in ['unknown', 'unavailable', 'none', none] }}"
   action:
-    - choose:
-        - conditions:
-            - condition: template
-              value_template: "{{ states('input_number.tesla_odometer_daily_baseline') | float(0) == 0 }}"
-          sequence:
-            - action: input_number.set_value
-              target:
-                entity_id: input_number.tesla_odometer_daily_baseline
-              data:
-                value: "{{ states('sensor.vehicle_odometer') | float(0) }}"
-    - choose:
-        - conditions:
-            - condition: template
-              value_template: "{{ states('input_number.tesla_odometer_monthly_baseline') | float(0) == 0 }}"
-          sequence:
-            - action: input_number.set_value
-              target:
-                entity_id: input_number.tesla_odometer_monthly_baseline
-              data:
-                value: "{{ states('sensor.vehicle_odometer') | float(0) }}"
+    - action: input_number.set_value
+      target:
+        entity_id: input_number.tesla_odometer_monthly_baseline
+      data:
+        value: "{{ states('sensor.vehicle_odometer') | float(0) }}"
 
 
 - id: tesla_precondition_before_departure
@@ -157,7 +151,7 @@
         {% else %}
           {% set dep_time = as_local(strptime(departure, '%Y-%m-%d %H:%M:%S')) %}
           {% set precondition_time = dep_time - timedelta(minutes=40) %}
-          {{ now() >= precondition_time and now() < dep_time }}
+          {{ now() >= precondition_time and (now() - precondition_time).total_seconds() < 300 }}
         {% endif %}
   action:
     - action: script.tesla_precondition
@@ -166,26 +160,19 @@
         title: "Tesla"
         message: "Preconditioning started (40 min before departure)"
 
-- id: tesla___close_windows_before_rain
+- id: tesla_close_windows_before_rain
   alias: Tesla - Close windows before rain
   description: Automatically close windows if rain is predicted in the next 2 hours.
   trigger:
     - platform: state
-      entity_id:
-        - binary_sensor.tesla_front_driver_window
-        - binary_sensor.tesla_rear_driver_window
-        - binary_sensor.tesla_front_passenger_window
-        - binary_sensor.tesla_rear_passenger_window
+      entity_id: binary_sensor.vehicle_any_window_open
       to: "on"
     - platform: time_pattern
       minutes: "/15"
   condition:
-    - condition: template
-      value_template: >-
-        {{ is_state('binary_sensor.tesla_front_driver_window', 'on') or
-           is_state('binary_sensor.tesla_rear_driver_window', 'on') or
-           is_state('binary_sensor.tesla_front_passenger_window', 'on') or
-           is_state('binary_sensor.tesla_rear_passenger_window', 'on') }}
+    - condition: state
+      entity_id: binary_sensor.vehicle_any_window_open
+      state: "on"
     - condition: template
       value_template: >-
         {{ this.attributes.last_triggered is none or
@@ -212,10 +199,99 @@
       data:
         title: Tesla windows open before rain
         message: Rain is forecast within the next 2 hours. Waking the Tesla and closing windows.
-    - service: script.tesla_wake_vehicle
+    - service: script.tesla_wake
     - delay: "00:00:20"
-    - service: cover.close_cover
-      target:
-        entity_id: cover.tesla_windows
+    - service: script.tesla_windows_close
   mode: single
   initial_state: true
+
+- id: tesla_smart_charge_start
+  alias: "Tesla - Smart Charging: Start (off-peak window)"
+  description: >
+    Starts charging once per day, only during the configured off-peak window
+    (input_datetime.tesla_smart_charge_window_start/_end), and only when
+    plugged in and below the target charge % (input_number.tesla_target_charge_limit).
+    Deliberately fires at most once per day via a fixed `time` trigger (plus
+    one extra trigger for "just plugged in during the window") rather than
+    polling — frequent on/off toggling is harder on the charging contactor/
+    relay hardware and provides no real benefit over one continuous session.
+    Also syncs the vehicle's own charge limit to the target first, so the
+    car's onboard charge controller — not this automation — is what actually
+    stops charging once the target is reached (defense in depth: charging
+    stays capped even if HA is restarted mid-window).
+  trigger:
+    - trigger: time
+      at: input_datetime.tesla_smart_charge_window_start
+    - trigger: state
+      entity_id: binary_sensor.vehicle_charge_cable
+      to: "on"
+  condition:
+    - condition: state
+      entity_id: input_boolean.tesla_enable_smart_charging
+      state: "on"
+    - condition: state
+      entity_id: binary_sensor.vehicle_charge_cable
+      state: "on"
+    - condition: state
+      entity_id: binary_sensor.tesla_charging_active
+      state: "off"
+    - condition: template
+      value_template: >
+        {{ states('sensor.vehicle_battery_level') | float(100) <
+           states('input_number.tesla_target_charge_limit') | float(80) }}
+    - condition: template
+      value_template: >
+        {% set now_t = now().time() %}
+        {% set start_t = strptime(states('input_datetime.tesla_smart_charge_window_start'), '%H:%M:%S').time() %}
+        {% set end_t = strptime(states('input_datetime.tesla_smart_charge_window_end'), '%H:%M:%S').time() %}
+        {% if start_t <= end_t %}
+          {{ start_t <= now_t < end_t }}
+        {% else %}
+          {{ now_t >= start_t or now_t < end_t }}
+        {% endif %}
+  action:
+    - action: number.set_value
+      target:
+        entity_id: "{{ 'number.' + states('input_text.tesla_car_name') + '_charge_limit' }}"
+      data:
+        value: "{{ states('input_number.tesla_target_charge_limit') | int(80) }}"
+    - action: script.tesla_charge_start
+    - action: persistent_notification.create
+      data:
+        title: "Tesla Smart Charging"
+        message: >
+          Started charging during your off-peak window (target
+          {{ states('input_number.tesla_target_charge_limit') }}%). It will
+          stop automatically once the target is reached, or when the window
+          ends.
+  mode: single
+
+- id: tesla_smart_charge_stop
+  alias: "Tesla - Smart Charging: Stop (window ended)"
+  description: >
+    Companion to tesla_smart_charge_start. If the off-peak window ends and
+    the car is still charging (i.e. it didn't reach the target in time),
+    stop charging so the remainder isn't paid for at a peak rate. Fires at
+    most once per day, at a fixed time — no polling, no repeated toggling.
+    If charging already stopped on its own (target reached), this is a
+    harmless no-op (gated on binary_sensor.tesla_charging_active being on).
+  trigger:
+    - trigger: time
+      at: input_datetime.tesla_smart_charge_window_end
+  condition:
+    - condition: state
+      entity_id: input_boolean.tesla_enable_smart_charging
+      state: "on"
+    - condition: state
+      entity_id: binary_sensor.tesla_charging_active
+      state: "on"
+  action:
+    - action: script.tesla_charge_stop
+    - action: persistent_notification.create
+      data:
+        title: "Tesla Smart Charging"
+        message: >
+          Off-peak window ended; charging paused before reaching your
+          {{ states('input_number.tesla_target_charge_limit') }}% target.
+          It'll resume automatically tomorrow if still plugged in.
+  mode: single

@@ -33,9 +33,12 @@ binary_sensor.vehicle_charge_cable                 | binary_sensor | charging   
 sensor.tesla_charge_cable                        | sensor        | charging          | Charge cable                         | (detailed charge cable state)
 lock.tesla_charge_cable_lock                     | lock          | charging          | Charge cable lock                    | Lock/unlock the charge port cable
 number.tesla_charge_current                      | number        | charging          | Charge current                       | Charging current (Amps)
+number.vehicle_charge_current                       | number        | charging          | Vehicle Charge Current (writable alias)  | Template number: forwards state + number.set_value to number.<car>_charge_current dynamically. Used by Battery/Charging Status Row-2 metrics and anywhere a rename-safe writable charge-current control is needed.
 sensor.vehicle_charge_energy_added                 | sensor        | charging          | Charge energy added                  | kWh added in current charging session
 number.tesla_charge_limit                        | number        | charging          | Charge limit                         | Target State of Charge % (user adjustable)
+number.vehicle_charge_limit                         | number        | charging          | Vehicle Charge Limit (writable alias) | Template number: forwards state + number.set_value to number.<car>_charge_limit dynamically. Used by the Battery tab's Charge Limit slider (mushroom-number-card can't template its `entity:` field, so this proxy makes the slider rename-safe).
 cover.tesla_charge_port_door                     | cover         | charging          | Charge port door                     | Open/close charge port
+switch.tesla_charger                             | switch        | charging          | Charger switch                       | Start/stop charging (used by script.tesla_charge_start/stop)
 sensor.vehicle_charge_rate                         | sensor        | charging          | Charge rate                          | Charging speed (km/h or mi/h)
 sensor.vehicle_charger_current                     | sensor        | charging          | Charger current                      | Current from wall connector
 sensor.vehicle_charger_power                       | sensor        | charging          | Charger power                        | Power draw from charger (kW)
@@ -62,10 +65,12 @@ select.tesla_seat_heater_rear_right              | select        | climate      
 select.tesla_seat_heater_third_row_left          | select        | climate           | Seat heater third row left           | Off / Low / Medium / High
 select.tesla_seat_heater_third_row_right         | select        | climate           | Seat heater third row right          | Off / Low / Medium / High
 select.tesla_steering_wheel_heater               | select        | climate           | Steering wheel heater                | Steering wheel heater level
+select.vehicle_steering_wheel_heater                | select        | climate           | Vehicle Steering Wheel Heater (writable alias) | Template select: forwards state + select_option to select.<car>_steering_wheel_heater dynamically. Used by the Climate tab's steering wheel button so it stays rename-safe.
 
 # --- ACCESS & BODY ---
 cover.tesla_charge_port_door                     | cover         | access            | Charge port door                     | (see Charging section)
 cover.tesla_froot                                | cover         | access            | Frunk                                | Open/close front trunk (note: entity name "froot")
+cover.tesla_trunk                                | cover         | access            | Trunk                                | Open/close rear trunk/tailgate (used by script.tesla_trunk_open)
 cover.tesla_windows                              | cover         | access            | Windows                              | Control all windows (vent/close)
 binary_sensor.tesla_front_driver_door            | binary_sensor | access            | Front driver door                    | Door open/closed
 binary_sensor.tesla_front_driver_window          | binary_sensor | access            | Front driver window                  | Window open/closed
@@ -75,6 +80,7 @@ binary_sensor.tesla_rear_driver_door             | binary_sensor | access       
 binary_sensor.tesla_rear_driver_window           | binary_sensor | access            | Rear driver window                   | Window open/closed
 binary_sensor.tesla_rear_passenger_door          | binary_sensor | access            | Rear passenger door                  | Door open/closed
 binary_sensor.tesla_rear_passenger_window        | binary_sensor | access            | Rear passenger window                | Window open/closed
+binary_sensor.vehicle_any_window_open              | binary_sensor | access            | Any window open                      | Alias: OR of all 4 window sensors above, for rename-safe rain-close automation
 
 # --- SAFETY, SECURITY & SENTRY ---
 lock.tesla_lock                                  | lock          | safety            | Lock                                 | Vehicle doors lock/unlock
@@ -105,6 +111,7 @@ media_player.tesla_media_player                  | media_player  | media        
 # --- MAINTENANCE, DIAGNOSTICS & GENERAL ---
 sensor.tesla_estimate_battery_range              | sensor        | vehicle_stats     | Estimate battery range               | Estimated range (ideal?)
 sensor.tesla_ideal_battery_range                 | sensor        | vehicle_stats     | Ideal battery range                  | Ideal / rated battery range
+sensor.vehicle_ideal_battery_range                  | sensor        | vehicle_stats     | Vehicle Ideal Battery Range           | Alias: reads sensor.<car>_ideal_battery_range dynamically. Used by the Battery tab RANGE card (real ideal range instead of a *0.9 estimate heuristic).
 sensor.vehicle_odometer                            | sensor        | vehicle_stats     | Odometer                             | Total distance driven
 sensor.vehicle_shift_state                         | sensor        | vehicle_stats     | Shift state                          | Park / Drive / Reverse / Neutral
 sensor.vehicle_speed                               | sensor        | vehicle_stats     | Speed                                | Current vehicle speed
@@ -126,14 +133,16 @@ button.tesla_keyless_driving                     | button        | action       
 # ============================================================
 
 # --- HELPERS ---
+input_text.tesla_car_name                       | input_text    | helper            | Tesla Car Name (entity prefix)  | ⚠️ CRITICAL: must match your Tesla Fleet integration's real entity prefix (e.g. "tesla", "x", "0", "42" — anything except "vehicle"). Every vehicle_* alias, script, and automation in this project reads it dynamically. Default: "tesla"
 input_text.tesla_model                          | input_text    | helper            | Tesla Model                     | Editable vehicle model name (default: Tesla Model X); shown in footer
 input_text.tesla_vin                            | input_text    | helper            | Tesla VIN                       | Editable VIN number (default: 5YJ12345678901234); shown in footer
 input_text.tesla_plate                          | input_text    | helper            | Tesla Plate                     | Editable license plate (default: XXYY-123); shown in footer
-input_number.tesla_odometer_daily_baseline      | input_number  | helper            | Tesla Odometer Daily Baseline   | Odometer snapshot at midnight/startup for daily distance template
 input_number.tesla_odometer_monthly_baseline    | input_number  | helper            | Tesla Odometer Monthly Baseline | Odometer snapshot on 1st of month for monthly distance template
 input_number.tesla_target_charge_limit          | input_number  | helper            | Tesla Target Charge Limit       | Helper slider for planned charge target in automations
-input_boolean.tesla_enable_smart_charging       | input_boolean | helper            | Tesla Enable Smart Charging     | Helper toggle to enable or disable smart charging logic
+input_boolean.tesla_enable_smart_charging       | input_boolean | helper            | Tesla Enable Smart Charging     | Master on/off for the smart-charging automations (tesla_smart_charge_start/stop). When on, charging auto-starts once/day at the configured off-peak window if plugged in and below target %, and auto-stops if the window ends first. At most 1 start + 1 stop per day (no flapping).
 input_datetime.tesla_next_departure             | input_datetime| helper            | Tesla Next Departure            | Helper datetime for departure-based automation planning
+input_datetime.tesla_smart_charge_window_start  | input_datetime| helper            | Smart Charging Window Start     | Time-only (no date). Start of the daily off-peak charging window used by tesla_smart_charge_start. Default 23:00.
+input_datetime.tesla_smart_charge_window_end    | input_datetime| helper            | Smart Charging Window End       | Time-only (no date). End of the daily off-peak charging window used by tesla_smart_charge_stop. Default 06:00. Supports overnight wrap (start > end).
 
 # --- VEHICLE STATS (use Tesla Fleet natively in dashboards) ---
 # sensor.vehicle_battery_level              | sensor        | vehicle_stats     | Usable battery level                 | Tesla Fleet — use directly (replaces battery_level template)
@@ -175,7 +184,7 @@ sensor.tesla_monthly_fuel_cost                   | sensor        | cost_tracking
 sensor.tesla_daily_distance_raw                  | sensor        | distance          | Tesla Daily Distance Raw        | Utility meter: daily delta from odometer
 sensor.tesla_daily_distance                      | sensor        | distance          | Tesla Daily Distance            | Template: rounded daily distance from daily_distance_raw
 sensor.tesla_weekly_distance_raw                 | sensor        | distance          | Tesla Weekly Distance Raw       | Utility meter: weekly delta from odometer
-sensor.tesla_weekly_distance_2                   | sensor        | distance          | Tesla Weekly Distance           | Template: rounded weekly distance from weekly_distance_raw (HA registered as _2 instead of _rounded; dashboard and fuel cost templates use this entity)
+sensor.tesla_weekly_distance                     | sensor        | distance          | Tesla Weekly Distance           | Template: rounded weekly distance from weekly_distance_raw. NOTE: this row previously (incorrectly) documented the entity_id as `sensor.tesla_weekly_distance_2` — confirmed via Developer Tools → States (2026-xx-xx) that it registers correctly as `sensor.tesla_weekly_distance` with no suffix collision. All templates/dashboards use this plain name.
 sensor.tesla_monthly_distance                    | sensor        | distance          | Tesla Monthly Distance          | Template: odometer minus monthly baseline helper
 
 # --- ACTIVITY / SESSION ANALYTICS ---
@@ -215,10 +224,13 @@ binary_sensor.tesla_anomaly_high_daily_cost      | binary_sensor | anomaly      
 #    - Use sensor.vehicle_battery_level directly (no template wrapper needed)
 #    - sensor.tesla_remaining_range (template combining usable_battery_level + ideal_battery_range)
 #    - input_number.tesla_target_charge_limit (user-friendly slider for charge limit)
-#    - input_boolean.tesla_enable_smart_charging
 #    - binary_sensor.tesla_is_home (based on device_tracker + zone)
 #    - script.tesla_precondition_departure
-#    - automation for smart charging / notifications
+#    - [DONE] Smart charging: input_boolean.tesla_enable_smart_charging +
+#      input_datetime.tesla_smart_charge_window_start/_end, consumed by
+#      automations tesla_smart_charge_start / tesla_smart_charge_stop in
+#      packages/tesla/automations.yaml (at most 1 start + 1 stop per day,
+#      no flapping; syncs the vehicle's own charge limit as a safety net).
 # 7. "froot" entity = Frunk (front trunk). Keep the original entity_id.
 
 # ============================================================
@@ -301,18 +313,23 @@ input_text.tesla_rate_work_season                      | input_text    | setting
 # Vehicle appears to support 3rd row seating (third_row seat heaters present).
 #
 # Added local automations in automations.yaml:
-#   - automation.tesla_odometer_daily_baseline_midnight
-#   - automation.tesla_odometer_monthly_baseline
-#   - automation.tesla_odometer_baseline_startup
+#   - automation.tesla_reserved_car_name_guard (warns if input_text.tesla_car_name is blank/unknown/"vehicle")
+#   - automation.tesla_drive_energy_session_start / _end (real energy-per-drive tracking)
+#   - automation.tesla_odometer_monthly_baseline / _baseline_startup (monthly distance tracking)
+#   - automation.tesla_precondition_before_departure
+#   - automation.tesla_close_windows_before_rain
 #
-# Added local scripts in scripts.yaml:
-#   - script.tesla_precondition
-#   - script.tesla_charge_to_80
-#   - script.tesla_wake_vehicle
-#   - script.tesla_flash_lights_script
-#   - script.tesla_climate_off
-#   - script.tesla_dog_mode
-#   - script.tesla_camp_mode
+# Added local scripts in scripts.yaml (all vehicle-name-agnostic via
+# input_text.tesla_car_name unless noted):
+#   - script.tesla_precondition / tesla_charge_to_80 / tesla_climate_off / tesla_smart_charge_to_target
+#   - script.tesla_set_departure_now_plus_2h
+#   - script.tesla_lock_toggle / tesla_climate_toggle / tesla_frunk_open / tesla_trunk_open
+#   - script.tesla_flash_lights / tesla_sentry_toggle / tesla_wake
+#   - script.tesla_windows_vent / tesla_windows_close (GPS-workaround, needs secrets.yaml)
+#   - script.tesla_defrost_toggle / tesla_charge_start / tesla_charge_stop / tesla_unlock_port
+#   - script.tesla_climate_temp_up / tesla_climate_temp_down
+#   - script.tesla_seat_heater_next_fl/fr/rl/rr/3l/3r / tesla_steering_heater_next
+#   - script.tesla_dog_mode / tesla_camp_mode
 # ============================================================
 sensor.tesla_driving_time_30d_raw                | sensor        | activity          | Tesla Driving Time 30d Raw      | History stats: hours driven in last 30 days (rolling)
 sensor.tesla_drive_sessions_30d                  | sensor        | activity          | Tesla Drive Sessions 30d        | History stats: drive session count in last 30 days (rolling)

@@ -10,7 +10,11 @@ views:
       - type: horizontal-stack
         cards:
           - type: custom:button-card
-            name: Tesla
+            name: |
+              [[[
+                const car = states['input_text.tesla_car_name']?.state || 'tesla';
+                return car.charAt(0).toUpperCase() + car.slice(1);
+              ]]]
             icon: mdi:car-electric
             label: "🔔"
             tap_action:
@@ -24,7 +28,7 @@ views:
           - type: custom:button-card
             entity: sensor.vehicle_battery_range
             icon: mdi:battery
-            name: "km"
+            show_name: false
             show_label: true
             label: |
               [[[
@@ -50,31 +54,46 @@ views:
       # 1.2 Charging Status Card (Conditional)
       - type: conditional
         conditions:
-          - entity: binary_sensor.vehicle_charge_cable
+          - entity: binary_sensor.tesla_charging_active
             state: "on"
         card:
           type: custom:button-card
-          entity: binary_sensor.vehicle_charge_cable
+          entity: binary_sensor.tesla_charging_active
           name: "CHARGING >"
           show_label: true
           label: |
             [[[
               const raw = String(states['sensor.vehicle_time_to_full_charge']?.state || '');
-              if (!raw || raw === 'unknown' || raw === 'unavailable') return 'Calculating...';
-              const endTime = new Date(raw);
-              const now = new Date();
-              const diffMs = endTime - now;
-              if (diffMs <= 0) return 'Fully charged';
-              const diffMins = Math.round(diffMs / 60000);
-              const h = Math.floor(diffMins / 60);
-              const m = diffMins % 60;
-              const hStr = String(endTime.getHours()).padStart(2, '0');
-              const mStr = String(endTime.getMinutes()).padStart(2, '0');
-              const dur = h > 0 ? `${h}h ${m}m` : `${m}m`;
-              return `${dur} remaining > ${hStr}:${mStr}`;
+              const amp = String(states['sensor.vehicle_charger_current']?.state || '–');
+              const maxAmp = String(states['number.vehicle_charge_current']?.state || '–');
+              const volt = String(states['sensor.vehicle_charger_voltage']?.state || '–');
+              const power = String(states['sensor.vehicle_charger_power']?.state || '–');
+              const rate = String(states['sensor.vehicle_charge_rate']?.state || '–');
+              let row1;
+              if (!raw || raw === 'unknown' || raw === 'unavailable') {
+                row1 = 'Calculating...';
+              } else {
+                const endTime = new Date(raw);
+                const now = new Date();
+                const diffMs = endTime - now;
+                if (diffMs <= 0) {
+                  row1 = 'Fully charged';
+                } else {
+                  const diffMins = Math.round(diffMs / 60000);
+                  const h = Math.floor(diffMins / 60);
+                  const m = diffMins % 60;
+                  const hStr = String(endTime.getHours()).padStart(2, '0');
+                  const mStr = String(endTime.getMinutes()).padStart(2, '0');
+                  const dur = h > 0 ? `${h}h ${m}m` : `${m}m`;
+                  row1 = `${dur} remaining > ${hStr}:${mStr}`;
+                }
+              }
+              return `${row1}\n${amp}/${maxAmp} A • ${volt} V • ${power} kW • ${rate} km/hr`;
             ]]]
           show_state: false
           styles:
+            label:
+              - white-space: pre-line
             card:
               - background-color: rgba(33, 150, 243, 0.2)
               - border-left: 4px solid rgb(33, 150, 243)
@@ -121,6 +140,8 @@ views:
             tap_action:
               action: call-service
               service: script.tesla_frunk_open
+              confirmation:
+                text: Open the front trunk (frunk)?
             styles:
               card:
                 - background-color: rgba(76, 175, 80, 0.2)
@@ -133,6 +154,8 @@ views:
             tap_action:
               action: call-service
               service: script.tesla_trunk_open
+              confirmation:
+                text: Open the rear trunk?
             styles:
               card:
                 - background-color: rgba(76, 175, 80, 0.2)
@@ -166,6 +189,11 @@ views:
                     ]]]
 
       # 1.4 Location Strip Card
+      # NOTE: the Tesla Fleet integration's device_tracker doesn't do reverse
+      # geocoding — its .state is either a configured HA zone name (e.g.
+      # "home"/"work") or "not_home". There's no real street address exposed
+      # by the API, so this shows the zone name rather than pretending to be
+      # a geocoded address like Tessie's own app can.
       - type: custom:button-card
         entity: input_text.tesla_car_name
         name: "📍 Current Location"
@@ -173,8 +201,10 @@ views:
         label: |
           [[[
             const car = states['input_text.tesla_car_name']?.state || 'tesla';
-            const addr = String(states['device_tracker.' + car + '_location']?.state || 'No location');
-            return addr.startsWith('unknown') ? 'No location' : addr;
+            const zone = String(states['device_tracker.' + car + '_location']?.state || '');
+            if (!zone || zone === 'unknown' || zone === 'unavailable') return 'Location unavailable';
+            if (zone === 'not_home') return 'Away from saved zones';
+            return `At ${zone.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}`;
           ]]]
         tap_action:
           action: url
@@ -190,7 +220,11 @@ views:
             - background-color: rgba(33, 150, 243, 0.15)
             - padding: 12px
 
-      # 1.5 Information Overview Grid (10 cards, 2 columns)
+      # 1.5 Information Overview Grid (9 cards, 2 columns)
+      # NOTE: the original Tessie-parity spec called for a 10th "Profiler"
+      # (speedometer/performance-tracking) tile, but no backing entity exists
+      # for that yet in this project — omitted rather than faking it. Ask if
+      # you'd like a real Profiler feature added.
       - type: grid
         columns: 2
         cards:
@@ -312,7 +346,7 @@ views:
               [[[
                 const shift = String(states['sensor.vehicle_shift_state']?.state || '').toUpperCase();
                 const charging = String(states['sensor.vehicle_charging']?.state || '').toLowerCase();
-                const driving = states['binary_sensor.tesla_driving_active']?.state === 'true';
+                const driving = states['binary_sensor.tesla_driving_active']?.state === 'on';
                 if (driving) return 'Driving';
                 if (['charging','preconditioning'].includes(charging)) return 'Charging';
                 if (['p','park','unknown','unavailable',''].includes(shift.toLowerCase())) return 'Parked';
@@ -385,8 +419,8 @@ views:
             [[[
               const car = states['input_text.tesla_car_name']?.state || 'tesla';
               const online = states['binary_sensor.vehicle_status']?.state === 'on';
-              const driving = states['binary_sensor.tesla_driving_active']?.state === 'true';
-              const charging = states['binary_sensor.tesla_charging_active']?.state === 'true';
+              const driving = states['binary_sensor.tesla_driving_active']?.state === 'on';
+              const charging = states['binary_sensor.tesla_charging_active']?.state === 'on';
               const soc = parseFloat(states['sensor.vehicle_battery_level']?.state || '0');
               const range = states['sensor.vehicle_battery_range']?.state;
               const rangeStr = (!range || range === 'unknown') ? `~${Math.round(soc * 4.1)} km` : `${Math.round(parseFloat(range))} km`;
@@ -581,6 +615,11 @@ views:
             - color: rgba(255, 255, 255, 0.6)
 
       # Media Player
+      # NOTE: the stock `media-control` card can't template its `entity:`
+      # field (no Jinja/JS support here, unlike custom:button-card labels
+      # elsewhere in this dashboard), so this must stay a literal entity_id.
+      # If your vehicle isn't named "tesla", change this line to match your
+      # real entity_id (see input_text.tesla_car_name / entities-list.txt).
       - type: media-control
         entity: media_player.tesla_media_player  # ⚠️ update if car is renamed
 
@@ -620,7 +659,7 @@ views:
             label: |
               [[[
                 const temp = parseFloat(String(states['sensor.vehicle_outside_temperature']?.state || '0'));
-                return `${temp.toFixed(1)}°`;
+                return isNaN(temp) ? 'N/A' : `${temp.toFixed(1)}°`;
               ]]]
             styles:
               card:
@@ -634,7 +673,7 @@ views:
         label: |
           [[[
             const temp = parseFloat(String(states['sensor.vehicle_inside_temperature']?.state || '0'));
-            return `${temp.toFixed(1)}°`;
+            return isNaN(temp) ? 'N/A' : `${temp.toFixed(1)}°`;
           ]]]
         styles:
           card:
@@ -657,7 +696,7 @@ views:
                 - box-shadow: none
 
           - type: custom:button-card
-            entity: select.tesla_steering_wheel_heater  # ⚠️ update if car is renamed
+            entity: select.vehicle_steering_wheel_heater
             icon: mdi:steering
             name: "Wheel"
             tap_action:
@@ -868,6 +907,8 @@ views:
           - type: custom:button-card
             icon: mdi:biohazard
             name: "Bio Defense"
+            show_label: true
+            label: "Not available in Tesla Fleet API"
             tap_action:
               action: none
             styles:
@@ -911,6 +952,8 @@ views:
           - type: custom:button-card
             icon: mdi:shield-thermometer
             name: "Cabin Protect"
+            show_label: true
+            label: "Not available in Tesla Fleet API"
             tap_action:
               action: none
             styles:
@@ -963,7 +1006,7 @@ views:
             label: |
               [[[
                 const level = parseFloat(String(states['sensor.vehicle_battery_level']?.state || '0'));
-                return `${level.toFixed(0)}%`;
+                return isNaN(level) ? '– %' : `${level.toFixed(0)}%`;
               ]]]
             tap_action:
               action: none
@@ -984,8 +1027,11 @@ views:
                 const estVal = (!rawEst || rawEst === 'unknown' || rawEst === 'unavailable')
                   ? Math.round(soc * 4.1)
                   : Math.round(parseFloat(rawEst));
-                const realLife = Math.round(estVal * 0.9);
-                return `${estVal} km (${realLife} km)`;
+                const rawIdeal = String(states['sensor.vehicle_ideal_battery_range']?.state || '');
+                const idealVal = (!rawIdeal || rawIdeal === 'unknown' || rawIdeal === 'unavailable')
+                  ? Math.round(estVal * 0.9)
+                  : Math.round(parseFloat(rawIdeal));
+                return isNaN(estVal) ? '– km' : `${estVal} km (${idealVal} km)`;
               ]]]
             tap_action:
               action: none
@@ -1003,7 +1049,7 @@ views:
             label: |
               [[[
                 const charging = String(states['sensor.vehicle_charging']?.state || '').toLowerCase();
-                const driving = states['binary_sensor.tesla_driving_active']?.state === 'true';
+                const driving = states['binary_sensor.tesla_driving_active']?.state === 'on';
                 if (charging === 'charging') return '+charging';
                 if (driving) return 'Driving';
                 return '–';
@@ -1023,8 +1069,10 @@ views:
             label: |
               [[[
                 const soc = parseFloat(String(states['sensor.vehicle_battery_level']?.state || '0'));
-                const currentKwh = (soc).toFixed(2);
-                return `${currentKwh} / 100.00 kWh`;
+                const capacity = parseFloat(String(states['input_number.tesla_battery_capacity_kwh']?.state || '100'));
+                if (isNaN(soc) || isNaN(capacity)) return '– kWh';
+                const currentKwh = (soc / 100 * capacity).toFixed(2);
+                return `${currentKwh} / ${capacity.toFixed(2)} kWh`;
               ]]]
             tap_action:
               action: none
@@ -1069,17 +1117,19 @@ views:
               card:
                 - background-color: rgba(0, 0, 0, 0.2)
 
-          # ENERGY USED (Lifetime estimated)
+          # ENERGY USED (Lifetime, real accumulated driving consumption)
           - type: custom:button-card
-            entity: sensor.vehicle_odometer
+            entity: sensor.tesla_drive_energy_consumed_total
             icon: mdi:meter-gas
             name: "ENERGY USED"
             show_label: true
             label: |
               [[[
-                const odom = parseFloat(states['sensor.vehicle_odometer']?.state || '0');
-                const kwh = (odom * 0.228).toFixed(0);
-                return isNaN(odom) || odom === 0 ? '– kWh' : `~${parseFloat(kwh).toLocaleString('hu-HU')} kWh`;
+                const raw = String(states['sensor.tesla_drive_energy_consumed_total']?.state || '');
+                const kwh = parseFloat(raw);
+                return (!raw || raw === 'unknown' || raw === 'unavailable' || isNaN(kwh))
+                  ? '– kWh'
+                  : `${kwh.toLocaleString('hu-HU', {maximumFractionDigits: 2})} kWh`;
               ]]]
             tap_action:
               action: none
@@ -1090,7 +1140,7 @@ views:
 
       # 4.3 Charge Limit Slider
       - type: custom:mushroom-number-card
-        entity: number.tesla_charge_limit  # ⚠️ update if car is renamed
+        entity: number.vehicle_charge_limit
         name: "Charge Limit"
         icon: mdi:battery-charging-100
         display_mode: slider
@@ -1104,22 +1154,19 @@ views:
             icon: mdi:lightning-bolt
             name: |
               [[[
-                const car = states['input_text.tesla_car_name']?.state || 'tesla';
-                return states['binary_sensor.' + car + '_charge_cable']?.state === 'on' ? 'Stop Charging' : 'Start Charging';
+                return states['binary_sensor.tesla_charging_active']?.state === 'on' ? 'Stop Charging' : 'Start Charging';
               ]]]
             tap_action:
               action: call-service
               service: |
                 [[[
-                  const car = states['input_text.tesla_car_name']?.state || 'tesla';
-                  return states['binary_sensor.' + car + '_charge_cable']?.state === 'on' ? 'script.tesla_charge_stop' : 'script.tesla_charge_start';
+                  return states['binary_sensor.tesla_charging_active']?.state === 'on' ? 'script.tesla_charge_stop' : 'script.tesla_charge_start';
                 ]]]
             styles:
               card:
                 - background-color: |
                     [[[
-                      const car = states['input_text.tesla_car_name']?.state || 'tesla';
-                      return states['binary_sensor.' + car + '_charge_cable']?.state === 'on' ? 'rgba(244, 67, 54, 0.2)' : 'rgba(76, 175, 80, 0.2)';
+                      return states['binary_sensor.tesla_charging_active']?.state === 'on' ? 'rgba(244, 67, 54, 0.2)' : 'rgba(76, 175, 80, 0.2)';
                     ]]]
 
           - type: custom:button-card
@@ -1129,6 +1176,8 @@ views:
             tap_action:
               action: call-service
               service: script.tesla_unlock_port
+              confirmation:
+                text: Unlock the charge port?
             styles:
               card:
                 - background-color: rgba(76, 175, 80, 0.2)
@@ -1263,8 +1312,14 @@ views:
   # ========== VIEW 6: COST PROJECTIONS ==========
   - title: Cost Projections
     path: cost
-    icon: mdi:currency-eur
+    icon: mdi:cash-multiple
     cards:
+      # NOTE: Supercharger / Other Networks columns are shown as 0 — this
+      # project only tracks Home electricity cost (via the Saved Location
+      # Rates config). Tessie itself syncs real Supercharging costs from your
+      # Tesla account; there's no equivalent automation here yet, so these
+      # placeholders exist for layout parity but always read 0 until (if
+      # ever) Supercharger cost tracking is implemented.
       - type: vertical-stack
         cards:
           # MONTHLY
@@ -1291,6 +1346,8 @@ views:
                   return `<div style="width:100%;text-align:left">
                     <div style="color:#888;font-size:11px;font-weight:600;letter-spacing:1.5px;padding-bottom:4px">📅 MONTHLY</div>
                     ${row('🏠', 'HOME', Math.round(monthly).toLocaleString(currencyLocale) + ' ' + currencySymbol)}
+                    ${row('⚡', 'SUPERCHARGER', '0 ' + currencySymbol)}
+                    ${row('🔌', 'OTHER NETWORKS', '0 ' + currencySymbol)}
                   </div>`;
                 ]]]
             styles:
@@ -1330,6 +1387,8 @@ views:
                   return `<div style="width:100%;text-align:left">
                     <div style="color:#888;font-size:11px;font-weight:600;letter-spacing:1.5px;padding-bottom:4px">📅 ANNUAL</div>
                     ${row('🏠', 'HOME', Math.round(annual).toLocaleString(currencyLocale) + ' ' + currencySymbol)}
+                    ${row('⚡', 'SUPERCHARGER', '0 ' + currencySymbol)}
+                    ${row('🔌', 'OTHER NETWORKS', '0 ' + currencySymbol)}
                   </div>`;
                 ]]]
             styles:
@@ -1369,6 +1428,8 @@ views:
                   return `<div style="width:100%;text-align:left">
                     <div style="color:#888;font-size:11px;font-weight:600;letter-spacing:1.5px;padding-bottom:4px">📅 5 YEARS</div>
                     ${row('🏠', 'HOME', Math.round(five).toLocaleString(currencyLocale) + ' ' + currencySymbol)}
+                    ${row('⚡', 'SUPERCHARGER', '0 ' + currencySymbol)}
+                    ${row('🔌', 'OTHER NETWORKS', '0 ' + currencySymbol)}
                   </div>`;
                 ]]]
             styles:

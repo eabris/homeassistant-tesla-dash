@@ -62,6 +62,7 @@ This keeps future agents (and humans) productive.
 │   └── tesla-analytics.yaml     # Analytics Tesla Lovelace dashboard
 ├── /automations/                # (if using split automations)
 ├── /entities-list.txt           # ← Master inventory (keep it updated)
+├── /secrets.yaml.example        # Template for secrets.yaml (git-ignored); copy + fill in real values
 ├── /README.md                   # Human-facing setup & usage guide
 └── /agents.md                   # This file (AI agent / contributor instructions)
 ```
@@ -632,7 +633,7 @@ if continuity matters more than a fresh start.
 
 ### 5. Fleet Sensor Alias Layer (`vehicle_*` prefix) — vehicle-name-agnostic design
 
-**What it is:** `configuration.yaml` defines ~24 template entities named
+**What it is:** `configuration.yaml` defines ~29 template entities named
 `sensor.vehicle_*` / `binary_sensor.vehicle_*` (e.g. `sensor.vehicle_odometer`,
 `sensor.vehicle_battery_level`, `binary_sensor.vehicle_status`). These are
 pure pass-through aliases — each one reads `input_text.tesla_car_name` and
@@ -682,3 +683,101 @@ entity_id can never collide with the entity_id it dynamically builds from
   `README.md`, `entities-list.txt`) consistent whenever this layer changes —
   update all of them together, in the same commit, per the standard workflow
   in Section 1 of this file.
+
+### 6. Writable Fleet Control Aliases (`vehicle_*` select/number domains)
+
+**What it is:** the read-only `sensor.vehicle_*` / `binary_sensor.vehicle_*`
+pattern above (Section 5) doesn't work for dashboard *controls* that need to
+both display AND set a value — e.g. the Battery tab's Charge Limit slider
+(`custom:mushroom-number-card`) or the Climate tab's steering wheel heater
+button (`custom:button-card`). Those stock/HACS Lovelace cards can't
+template their `entity:` key with Jinja/JS (unlike a button-card's `label:`,
+which can), so a hardcoded `number.tesla_charge_limit` breaks the moment the
+vehicle isn't literally named "tesla" — defeating the whole point of the
+alias layer.
+
+**The fix:** `configuration.yaml` also defines a small number of **writable**
+template entities under `template: - select:` / `template: - number:` (not
+just `- sensor:` / `- binary_sensor:`), currently:
+* `number.vehicle_charge_limit` → forwards to `number.<car>_charge_limit`
+* `number.vehicle_charge_current` → forwards to `number.<car>_charge_current`
+* `select.vehicle_steering_wheel_heater` → forwards to `select.<car>_steering_wheel_heater`
+
+Each one templates `state:` (and `min`/`max`/`step`/`options` where relevant)
+for reads exactly like the sensor aliases, but additionally defines a
+`set_value:` (for `number:`) or `select_option:` (for `select:`) action block
+that re-dispatches the write to the real dynamic entity, e.g.:
+```yaml
+set_value:
+  - action: number.set_value
+    target:
+      entity_id: >
+        {% set car = states('input_text.tesla_car_name') %}
+        number.{{ car }}_charge_limit
+    data:
+      value: "{{ value }}"
+```
+Dashboards then point `entity:` at the alias (`number.vehicle_charge_limit`),
+which is safe to hardcode since it's a fixed, rename-proof name — same as the
+read-only aliases.
+
+**When to use this vs. the Section 5 pattern:** only add a writable
+select/number alias when a *stock or HACS card* needs a static `entity:` for
+a control (not just a label/state readout). If a `custom:button-card`'s
+`label:`/`tap_action:` can already read the dynamic entity via
+`states['domain.' + car + '_suffix']` (as most action buttons in this project
+do, calling a `script.tesla_*` which itself resolves the car name), you don't
+need a new alias — only the card's own `entity:` binding (used for the
+default more-info popup / built-in color state) might still point at a
+placeholder, which is a much lower-severity, cosmetic-only gap.
+
+**Known remaining gap:** `media-control` (the Media Player card) and similar
+stock cards with many templated attributes (play state, volume, track) don't
+have a writable alias yet — building a full `template: media_player:` proxy
+is significantly more complex (many attributes/services to forward) and was
+deemed out of scope during the last audit pass. Its `entity:` still hardcodes
+`media_player.tesla_media_player` with a `⚠️ update if car is renamed`
+comment. Ask the user before investing in a full media_player template proxy.
+
+### 7. Smart Charging Automation (anti-flapping off-peak window)
+
+**What it is:** `input_boolean.tesla_enable_smart_charging` used to be a dead
+toggle (no automation consumed it). It now drives two real automations in
+`packages/tesla/automations.yaml`:
+* `tesla_smart_charge_start` — starts charging once per day, either exactly
+  at `input_datetime.tesla_smart_charge_window_start`, or immediately if the
+  cable gets plugged in while already inside the window. Conditions: smart
+  charging enabled, cable plugged in, not already charging, battery below
+  `input_number.tesla_target_charge_limit`, and current time inside the
+  configured window (overnight wrap, e.g. 23:00→06:00, handled via explicit
+  `strptime`/time comparison — not just string comparison).
+* `tesla_smart_charge_stop` — fires once per day at
+  `input_datetime.tesla_smart_charge_window_end`; if still charging (target
+  not reached in time), stops it so the rest isn't paid at peak rate.
+
+**Anti-flapping design (explicit user requirement):** both automations use a
+fixed daily `time` trigger — no polling loop, no `state`-trigger on battery
+level, no repeated re-evaluation. That means **at most one start action and
+one stop action per day**, satisfying the requirement that charging must not
+switch on/off frequently (bad for the contactor/relay hardware). The vehicle
+plugging in mid-window is the only second trigger on the start side, and it's
+still gated by "not already charging" so it can't fire twice.
+
+**Defense in depth:** before calling `script.tesla_charge_start`, the start
+automation also pushes `input_number.tesla_target_charge_limit` into the
+vehicle's real `number.<car>_charge_limit` via `number.set_value`. This means
+the car's own onboard BMS — not this automation — is what actually caps
+charging at the target %; the automation doesn't need to poll and manually
+stop charging when the target is reached. `tesla_smart_charge_stop` only
+exists to handle the case where the window closes *before* the target is hit.
+
+**New helpers:** `input_datetime.tesla_smart_charge_window_start` (default
+23:00:00) and `input_datetime.tesla_smart_charge_window_end` (default
+06:00:00), both time-only (no date component). Exposed on the Analytics
+dashboard's Settings tab (🌙 Smart Charging section) alongside the enable
+toggle and target charge limit slider, so users configure this entirely via
+UI — no Developer Tools needed. Deliberately new dedicated helpers rather
+than parsing the existing free-text Saved Location Rate schedule strings
+(e.g. `input_text.tesla_rate_home_hours`), which use human-typed en-dash
+ranges too fragile to parse reliably for automation triggers.
+

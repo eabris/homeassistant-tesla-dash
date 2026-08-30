@@ -5,10 +5,10 @@ tesla_precondition:
   sequence:
     - action: climate.turn_on
       target:
-        entity_id: climate.tesla_climate
+        entity_id: "{{ 'climate.' + states('input_text.tesla_car_name') + '_climate' }}"
     - action: climate.set_temperature
       target:
-        entity_id: climate.tesla_climate
+        entity_id: "{{ 'climate.' + states('input_text.tesla_car_name') + '_climate' }}"
       data:
         temperature: 22
     - action: persistent_notification.create
@@ -23,31 +23,13 @@ tesla_charge_to_80:
   sequence:
     - action: number.set_value
       target:
-        entity_id: number.tesla_charge_limit
+        entity_id: "{{ 'number.' + states('input_text.tesla_car_name') + '_charge_limit' }}"
       data:
         value: 80
     - action: persistent_notification.create
       data:
         title: "Tesla"
         message: "Charge limit set to 80 percent."
-
-tesla_wake_vehicle:
-  alias: "Wake Tesla"
-  description: "Wake the Tesla from sleep"
-  icon: mdi:power
-  sequence:
-    - action: button.press
-      target:
-        entity_id: button.tesla_wake
-
-tesla_flash_lights_script:
-  alias: "Flash Tesla Lights"
-  description: "Flash the lights to locate the Tesla"
-  icon: mdi:flash
-  sequence:
-    - action: button.press
-      target:
-        entity_id: button.tesla_flash_lights
 
 tesla_climate_off:
   alias: "Tesla Climate Off"
@@ -56,7 +38,7 @@ tesla_climate_off:
   sequence:
     - action: climate.turn_off
       target:
-        entity_id: climate.tesla_climate
+        entity_id: "{{ 'climate.' + states('input_text.tesla_car_name') + '_climate' }}"
 
 tesla_smart_charge_to_target:
   alias: "Tesla - Smart Charge to Target"
@@ -65,7 +47,7 @@ tesla_smart_charge_to_target:
   sequence:
     - action: number.set_value
       target:
-        entity_id: number.tesla_charge_limit
+        entity_id: "{{ 'number.' + states('input_text.tesla_car_name') + '_charge_limit' }}"
       data:
         value: "{{ states('input_number.tesla_target_charge_limit') | int(80) }}"
     - action: persistent_notification.create

@@ -198,15 +198,6 @@ input_select:
     initial: "HUF"
 
 input_number:
-  tesla_odometer_daily_baseline:
-    name: "Tesla Odometer Daily Baseline"
-    min: 0
-    max: 9999999
-    step: 0.01
-    mode: box
-    unit_of_measurement: "km"
-    icon: mdi:counter
-
   tesla_odometer_monthly_baseline:
     name: "Tesla Odometer Monthly Baseline"
     min: 0
@@ -226,11 +217,16 @@ input_number:
 
   tesla_default_electricity_cost:
     name: "Default Electricity Cost"
-    unit_of_measurement: "Ft/kWh"
+    # Unit intentionally has no hardcoded currency prefix (e.g. "Ft/kWh") —
+    # input_number's unit_of_measurement is static YAML and can't follow
+    # input_select.tesla_currency dynamically. Enter this value already in
+    # whatever currency you picked there; the currency symbol itself is
+    # shown dynamically elsewhere (Cost Projections, History, Analytics KPIs).
+    unit_of_measurement: "/kWh"
     min: 0
     max: 200
     step: 0.5
-    icon: mdi:currency-eur
+    icon: mdi:cash
     mode: slider
     initial: 60.0
 
@@ -246,11 +242,12 @@ input_number:
 
   comparison_fuel_price_per_liter:
     name: "Fuel Price per Litre"
-    unit_of_measurement: "Ft/L"
+    # See note on tesla_default_electricity_cost above re: no hardcoded currency.
+    unit_of_measurement: "/L"
     min: 0
     max: 2000
     step: 1
-    icon: mdi:currency-eur
+    icon: mdi:cash
     mode: slider
     initial: 595.0
 
@@ -328,6 +325,25 @@ input_number:
     initial: 75.0
 
 input_text:
+  # ⚠️ MOST IMPORTANT SETTING IN THIS FILE ⚠️
+  # This must match the entity prefix your Tesla Fleet integration actually
+  # uses for THIS vehicle (Developer Tools → States → filter "battery_level"
+  # to find it, e.g. if you see sensor.tesla_battery_level set this to
+  # "tesla"; if you see sensor.x_battery_level set this to "x"). Every
+  # dashboard/automation/script in this project reads your car's real
+  # entities dynamically through this one value via the "vehicle_*" Fleet
+  # Sensor Alias layer below, so you can rename your vehicle at any time by
+  # only changing this field — no YAML edits needed. Any value works
+  # ("tesla", "x", "0", "42", ...) EXCEPT the literal word "vehicle" (that
+  # collides with the alias layer itself — see automation
+  # tesla_reserved_car_name_guard in packages/tesla/automations.yaml, which
+  # warns you if this ever happens).
+  tesla_car_name:
+    name: "Tesla Car Name (entity prefix)"
+    initial: "tesla"
+    min: 1
+    icon: mdi:car-electric
+
   tesla_model:
     name: "Tesla Model"
     initial: "Tesla Model X"
@@ -405,6 +421,28 @@ input_datetime:
     has_time: true
     icon: mdi:calendar-clock
 
+  # --- Smart Charging window (used by tesla_smart_charge_start/stop) ---
+  # Charging is switched on/off AT MOST ONCE per day, at these two fixed
+  # clock times — never polled/re-evaluated on a tight loop — specifically
+  # to avoid frequent on/off cycling, which is harder on the charging
+  # contactor/relay hardware and provides no real efficiency benefit over
+  # a single continuous overnight session. Supports overnight wrap (e.g.
+  # start 23:00, end 06:00). Defaults to a typical off-peak overnight window;
+  # change these to match your actual cheap-rate hours (see Saved Location
+  # Rates in the Analytics > Settings tab).
+  tesla_smart_charge_window_start:
+    name: "Smart Charging Window Start"
+    has_date: false
+    has_time: true
+    initial: "23:00:00"
+    icon: mdi:clock-start
+  tesla_smart_charge_window_end:
+    name: "Smart Charging Window End"
+    has_date: false
+    has_time: true
+    initial: "06:00:00"
+    icon: mdi:clock-end
+
 template:
   # ===== FLEET SENSOR ALIASES ("vehicle_" namespace) =====
   # These read dynamically from input_text.tesla_car_name, so the rest of the
@@ -459,6 +497,14 @@ template:
         state: >
           {% set car = states('input_text.tesla_car_name') %}
           {{ states('sensor.' + car + '_estimate_battery_range') }}
+        unit_of_measurement: "km"
+        icon: mdi:map-marker-distance
+
+      - name: "Vehicle Ideal Battery Range"
+        unique_id: vehicle_ideal_battery_range_alias_v1
+        state: >
+          {% set car = states('input_text.tesla_car_name') %}
+          {{ states('sensor.' + car + '_ideal_battery_range') }}
         unit_of_measurement: "km"
         icon: mdi:map-marker-distance
 
@@ -634,6 +680,102 @@ template:
           {{ is_state('binary_sensor.' + car + '_charge_cable', 'on') }}
         device_class: plug
         icon: mdi:power-plug
+
+      - name: "Vehicle Any Window Open"
+        unique_id: vehicle_any_window_open_alias_v1
+        # Aggregates all 4 window binary_sensors into one alias, so automations
+        # (e.g. "close windows before rain") can trigger on a single vehicle-
+        # name-agnostic entity instead of hardcoding 4 real Fleet entity_ids.
+        state: >
+          {% set car = states('input_text.tesla_car_name') %}
+          {{ is_state('binary_sensor.' + car + '_front_driver_window', 'on') or
+             is_state('binary_sensor.' + car + '_rear_driver_window', 'on') or
+             is_state('binary_sensor.' + car + '_front_passenger_window', 'on') or
+             is_state('binary_sensor.' + car + '_rear_passenger_window', 'on') }}
+        device_class: opening
+        icon: mdi:window-open-variant
+
+  # ===== FLEET CONTROL ALIASES (writable) =====
+  # Like the sensor/binary_sensor aliases above, but for controls the
+  # dashboard needs to both READ and WRITE (select an option / set a value).
+  # Standard Lovelace cards (mushroom-number-card, custom:button-card's
+  # `entity:` key) can't template their `entity:` field with Jinja/JS, so
+  # without these proxies the Charge Limit slider and Steering Wheel Heater
+  # button would have to hardcode a real entity_id like number.tesla_charge_limit
+  # — breaking as soon as the vehicle isn't literally named "tesla". These
+  # template controls forward reads AND writes to the real dynamic entity.
+  - select:
+      - name: "Vehicle Steering Wheel Heater"
+        unique_id: vehicle_steering_wheel_heater_alias_v1
+        state: >
+          {% set car = states('input_text.tesla_car_name') %}
+          {{ states('select.' + car + '_steering_wheel_heater') }}
+        options: >
+          {% set car = states('input_text.tesla_car_name') %}
+          {{ state_attr('select.' + car + '_steering_wheel_heater', 'options') or [] }}
+        select_option:
+          - action: select.select_option
+            target:
+              entity_id: >
+                {% set car = states('input_text.tesla_car_name') %}
+                select.{{ car }}_steering_wheel_heater
+            data:
+              option: "{{ option }}"
+        icon: mdi:steering
+
+  - number:
+      - name: "Vehicle Charge Limit"
+        unique_id: vehicle_charge_limit_alias_v1
+        state: >
+          {% set car = states('input_text.tesla_car_name') %}
+          {{ states('number.' + car + '_charge_limit') }}
+        min: >
+          {% set car = states('input_text.tesla_car_name') %}
+          {{ state_attr('number.' + car + '_charge_limit', 'min') | default(50, true) }}
+        max: >
+          {% set car = states('input_text.tesla_car_name') %}
+          {{ state_attr('number.' + car + '_charge_limit', 'max') | default(100, true) }}
+        step: >
+          {% set car = states('input_text.tesla_car_name') %}
+          {{ state_attr('number.' + car + '_charge_limit', 'step') | default(1, true) }}
+        unit_of_measurement: "%"
+        set_value:
+          - action: number.set_value
+            target:
+              entity_id: >
+                {% set car = states('input_text.tesla_car_name') %}
+                number.{{ car }}_charge_limit
+            data:
+              value: "{{ value }}"
+        icon: mdi:battery-charging-100
+
+      - name: "Vehicle Charge Current"
+        unique_id: vehicle_charge_current_alias_v1
+        # Max amperage the vehicle is allowed to draw (the "16" in "5/16 A").
+        # Read here so the Charging Status card's Row 2 metrics line can show
+        # it without hardcoding a real entity_id.
+        state: >
+          {% set car = states('input_text.tesla_car_name') %}
+          {{ states('number.' + car + '_charge_current') }}
+        min: >
+          {% set car = states('input_text.tesla_car_name') %}
+          {{ state_attr('number.' + car + '_charge_current', 'min') | default(0, true) }}
+        max: >
+          {% set car = states('input_text.tesla_car_name') %}
+          {{ state_attr('number.' + car + '_charge_current', 'max') | default(32, true) }}
+        step: >
+          {% set car = states('input_text.tesla_car_name') %}
+          {{ state_attr('number.' + car + '_charge_current', 'step') | default(1, true) }}
+        unit_of_measurement: "A"
+        set_value:
+          - action: number.set_value
+            target:
+              entity_id: >
+                {% set car = states('input_text.tesla_car_name') %}
+                number.{{ car }}_charge_current
+            data:
+              value: "{{ value }}"
+        icon: mdi:sine-wave
 
   # ===== CUSTOM SENSORS =====
   # These build on the sensor.vehicle_* / binary_sensor.vehicle_* aliases above

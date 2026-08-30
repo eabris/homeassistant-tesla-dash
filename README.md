@@ -30,6 +30,7 @@ Four tabs for historical insight and configuration:
 - **Settings** — pick your **currency** (HUF/EUR/USD/GBP — all cost figures across both dashboards update instantly), set your electricity rate, fuel-comparison baseline, and edit your **Saved Location Rates** (Home / Solar-Off-Peak / Work — name, rate, hours, active days, season) directly from the dashboard, no YAML editing required.
 
 ### ⚙️ Plus
+- **Smart Charging** — an optional off-peak charging automation. Turn it on (Overview → Dashboard tab → "Automation" tile) and set your target charge % and off-peak window (Analytics → Settings tab → 🌙 Smart Charging); charging then starts automatically once/day at the window start (if plugged in and below target) and stops if the window ends first. Deliberately fires **at most once per day** — no rapid on/off toggling, which is easier on the car's charging hardware.
 - A currency selector and per-location rate cards (editable straight from the Settings tab) so all cost/savings figures are shown and calculated in your own currency and tariffs — no more hardcoded Forints.
 - Optional integration with **TeslaMate** for long-term trip/charge history and Grafana-powered stats.
 - Everything displayed in **metric units** (km, km/h, bar, °C, kWh, kW/A/V) with your choice of **currency** — defaults to Hungarian Forint (HUF) but switchable in Settings.
@@ -105,6 +106,7 @@ cp -r tesla-dash-src/dashboards ./
 cp -r tesla-dash-src/themes ./
 cp -r tesla-dash-src/scripts ./
 cp tesla-dash-src/entities-list.txt ./
+cp tesla-dash-src/secrets.yaml.example ./
 ```
 
 > ⚠️ **Don't blindly overwrite your existing `configuration.yaml`!** Instead, open both files side by side (in File editor) and merge in the relevant sections shown in Step 4 below — you likely already have settings of your own you don't want to lose.
@@ -139,6 +141,24 @@ lovelace:
 ```
 
 Then **restart Home Assistant** (Settings → System → Restart). If there are YAML errors, the File editor add-on (or **Settings → System → Logs**) will tell you exactly what line is wrong.
+
+---
+
+### 🔐 `secrets.yaml` (required for the window-close workaround)
+
+The rain/window-close automation calls a `rest_command` (`tesla_window_close_gps`) directly against the Tesla Fleet API, working around a known bug where the stock `cover.close_cover` service is rejected for being "too far from the vehicle". This needs two secret values that must **never** be committed to git:
+
+1. In your HA `/config` folder, copy the template: `cp secrets.yaml.example secrets.yaml` (skip this if you already have a `secrets.yaml` — just add the two keys below to it).
+2. Fill in the two placeholders:
+   ```yaml
+   tesla_fleet_token: "your real OAuth2 access token"
+   tesla_fleet_vehicle_id: "your real numeric vehicle id"
+   ```
+   - `tesla_fleet_token`: the OAuth2 token used by your Tesla Fleet integration (find it via the integration's diagnostics download, or check `config/.storage/` for `tesla_fleet`-related entries).
+   - `tesla_fleet_vehicle_id`: the numeric vehicle ID (not the VIN). Get it by calling `GET https://fleet-api.prd.<region>.vn.cloud.tesla.com/api/1/vehicles` with your bearer token and reading the `id` field from the response.
+3. `secrets.yaml` is already listed in `.gitignore`, so it won't be committed — but always double-check with `git status` before pushing if you're unsure.
+
+If you skip this step, everything else in the dashboard still works — only the rain/window-close automation's `script.tesla_windows_close` call will fail (it'll show an error in **Settings → System → Logs** when triggered).
 
 ---
 

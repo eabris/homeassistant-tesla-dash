@@ -336,7 +336,7 @@ views:
               in_chart: false
               legend_value: true
           - entity: sensor.tesla_daily_energy_consumed
-            name: AVERAGE
+            name: DAILY
             type: column
             show:
               legend_value: false
@@ -448,11 +448,17 @@ views:
               in_chart: false
               legend_value: true
           - entity: sensor.tesla_daily_fuel_cost_equivalent
-            name: AVERAGE
+            name: DAILY
             type: column
             show:
               legend_value: false
-            transform: "return x > 25000 ? null : x;"
+            # Outlier guard: was a hardcoded `x > 25000` which silently assumed
+            # HUF pricing. Derived instead from the user's actual configured
+            # fuel price (input_number.comparison_fuel_price_per_liter), so it
+            # scales correctly for any currency: caps at a 100-litre-equivalent
+            # single day, which is already an implausible amount of driving.
+            transform: >
+              return x > (hass.states['input_number.comparison_fuel_price_per_liter']?.state * 100 || 25000) ? null : x;
             group_by:
               func: max
               duration: 1d
@@ -696,7 +702,7 @@ views:
           show_states: false
         apex_config:
           subtitle:
-            text: "Energy usage by vehicle speed. Includes drives over 24 kilometers."
+            text: "Daily energy usage (Wh/km) and average driving speed."
             offsetY: 0
             style:
               fontSize: "12px"
@@ -773,7 +779,7 @@ views:
           show_states: false
         apex_config:
           subtitle:
-            text: "Energy usage by outside temperature. Includes drives over 24 kilometers."
+            text: "Daily energy usage (Wh/km) and average outside temperature."
             offsetY: 0
             style:
               fontSize: "12px"
@@ -877,6 +883,9 @@ views:
           - entity: sensor.vehicle_charger_power
             name: "kW"
             type: column
+            group_by:
+              func: max
+              duration: 1d
 
       # ── Energy Added ──
       - type: custom:apexcharts-card
@@ -917,6 +926,9 @@ views:
           - entity: sensor.vehicle_charge_energy_added
             name: "kWh"
             type: column
+            group_by:
+              func: max
+              duration: 1d
 
       # ── Charge Rate ──
       - type: custom:apexcharts-card
@@ -950,6 +962,9 @@ views:
           - entity: sensor.vehicle_charge_rate
             name: "km/h"
             type: column
+            group_by:
+              func: max
+              duration: 1d
 
       # ── Charger Current ──
       - type: custom:apexcharts-card
@@ -983,6 +998,9 @@ views:
           - entity: sensor.vehicle_charger_current
             name: "A"
             type: column
+            group_by:
+              func: max
+              duration: 1d
 
   # ========== VIEW 4: SETTINGS ==========
   - title: Settings
@@ -1006,7 +1024,7 @@ views:
       - type: custom:mushroom-select-card
         entity: input_select.tesla_currency
         name: "Currency"
-        icon: mdi:currency-usd
+        icon: mdi:cash-multiple
 
       # Electricity Cost Configuration
       - type: markdown
@@ -1016,17 +1034,64 @@ views:
       - type: custom:mushroom-number-card
         entity: input_number.tesla_default_electricity_cost
         name: "Default Electricity Rate"
-        icon: mdi:currency-usd
+        icon: mdi:cash
         min: 0
         max: 200
         step: 0.5
+
+      # Smart Charging (off-peak window automation)
+      - type: markdown
+        content: |
+          ## 🌙 Smart Charging
+
+          When enabled, charging automatically starts once per day at the
+          window start time below (if plugged in and below your target %),
+          and stops if the window ends before the target is reached — so you
+          don't accidentally pay peak rates. This fires **at most once per
+          day** (one start, one stop) by design; it will not repeatedly
+          toggle charging on/off.
+
+      - type: custom:mushroom-entity-card
+        entity: input_boolean.tesla_enable_smart_charging
+        name: "Enable Smart Charging"
+        icon: mdi:wand-magic-sparkles
+        tap_action:
+          action: toggle
+
+      - type: custom:mushroom-number-card
+        entity: input_number.tesla_target_charge_limit
+        name: "Target Charge Limit"
+        icon: mdi:battery-80
+        min: 50
+        max: 100
+        step: 1
+
+      - type: horizontal-stack
+        cards:
+          - type: custom:mushroom-entity-card
+            entity: input_datetime.tesla_smart_charge_window_start
+            name: "Window Start"
+            icon: mdi:clock-start
+            tap_action:
+              action: more-info
+          - type: custom:mushroom-entity-card
+            entity: input_datetime.tesla_smart_charge_window_end
+            name: "Window End"
+            icon: mdi:clock-end
+            tap_action:
+              action: more-info
 
       # Supercharger Configuration (Placeholder)
       - type: markdown
         content: |
           ## 🔌 Supercharging
 
-          Supercharging costs are synced automatically from your Tesla account. Current status: **Not configured yet**
+          Unlike the Tessie app, this project's Tesla Fleet integration does
+          **not** sync Supercharging session costs from your Tesla account —
+          that data isn't exposed by the Fleet API. Supercharger costs shown
+          in Cost Projections and Analytics are placeholders (0) until this
+          is implemented (e.g. by manually logging sessions, or once a
+          community sensor for Supercharger billing exists).
 
       # Fuel Comparison Profiler
       - type: markdown
@@ -1045,7 +1110,7 @@ views:
       - type: custom:mushroom-number-card
         entity: input_number.comparison_fuel_price_per_liter
         name: "Fuel Price per Litre"
-        icon: mdi:currency-usd
+        icon: mdi:cash
         min: 0
         max: 2000
         step: 1
@@ -1059,6 +1124,12 @@ views:
           Rates below are shown in whatever currency you set above (currently
           **{{ states('input_select.tesla_currency') }} ({{ states('sensor.tesla_currency_symbol') }})**).
           Edit any value using the entity rows underneath each location.
+
+          **Note:** These are informational/manual rate profiles — the actual
+          cost calculations on the Overview/Analytics dashboards currently use
+          `input_number.tesla_default_electricity_cost` as a single flat rate.
+          Automatic time-of-use / location-aware rate switching is not wired
+          up yet; use these cards to document your tariffs for now.
 
       - type: markdown
         content: >
@@ -1137,12 +1208,3 @@ views:
             name: Active days
           - entity: input_text.tesla_rate_work_season
             name: Season
-
-      - type: markdown
-        content: |
-          ---
-          **Note:** These are informational/manual rate profiles — the actual
-          cost calculations on the Overview/Analytics dashboards currently use
-          `input_number.tesla_default_electricity_cost` as a single flat rate.
-          Automatic time-of-use / location-aware rate switching is not wired
-          up yet; use these cards to document your tariffs for now.
