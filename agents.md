@@ -17,6 +17,16 @@ This document provides a comprehensive, highly technical visual and structural b
   * **Energy/Capacity:** `kWh`
   * **Electrical Power:** `kW`, `A`, `V`
   * **Currency:** Hungarian Forint (`Ft`)
+  * **Superseded:** this metric-only mandate was the *original* spec. The
+    project now also supports a live **Unit System** selector
+    (`input_select.tesla_unit_system` — Metric / US Imperial / UK) and a
+    **Currency** selector (`input_select.tesla_currency` — HUF/EUR/USD/GBP),
+    both editable from the Analytics dashboard's Settings tab. See Section
+    8 ("Unit System Selector") further down for the full implementation,
+    conversion constants, and a documented remaining limitation (the
+    Driving/Charging analytics charts). Energy/Power (`kWh`, `kW`, `A`, `V`)
+    are unaffected by the unit selector — those stay fixed regardless of
+    region, matching real-world EV convention.
 
 ---
 
@@ -780,4 +790,67 @@ UI — no Developer Tools needed. Deliberately new dedicated helpers rather
 than parsing the existing free-text Saved Location Rate schedule strings
 (e.g. `input_text.tesla_rate_home_hours`), which use human-typed en-dash
 ranges too fragile to parse reliably for automation triggers.
+
+### 8. Unit System Selector (`input_select.tesla_unit_system`)
+
+**What it is:** a Settings-tab dropdown (Analytics → Settings → 📏 Unit
+System) with three presets, not a plain Metric/Imperial toggle — because
+real-world "Imperial" usage is inconsistent (US drivers use mi + °F + psi
+together; UK/Ireland drivers commonly use mi + mph but *keep* °C and bar).
+This mirrors the options on a real Tesla's own touchscreen, which lets you
+set distance/speed, temperature, and pressure independently:
+* `"Metric (km, °C, bar)"` (default)
+* `"US Imperial (mi, °F, psi)"`
+* `"UK (mi, °C, bar)"`
+
+Four label-only sensors derive from it (`sensor.tesla_unit_distance`,
+`_speed`, `_pressure`, `_temperature`) — these only hold the unit *string*;
+they don't do any math. Energy/power/current (kWh/kW/A/V) are **not**
+affected by this selector at all — that's universal across all EVs
+regardless of region, so there was nothing to convert.
+
+**Why this couldn't reuse the currency-selector pattern:** the currency
+selector (`input_select.tesla_currency` + `sensor.tesla_currency_symbol`)
+does **no math** — it only swaps a displayed symbol, because the user is
+expected to type their electricity/fuel rates directly in their chosen
+currency. Units are fundamentally different: the Tesla Fleet integration's
+native sensors always report km/bar/°C, so switching to mi/psi/°F requires
+actually multiplying the stored value, not just relabeling it. Conversion
+constants used everywhere below: `km → mi` = `×0.621371` (same factor for
+km/h → mph), `bar → psi` = `×14.5038`, `°C → °F` = `×9/5 + 32`.
+
+**Where the conversion math actually lives:** inline in each individual
+dashboard card, reading `input_select.tesla_unit_system` directly — via JS
+(`states['input_select.tesla_unit_system']?.state` in `custom:button-card`
+labels), Jinja (`states('input_select.tesla_unit_system')` in `markdown`
+cards), or `transform:` (which has `hass` access, in `apexcharts-card`
+series) — **not** through a shared conversion sensor. This is deliberately
+duplicated rather than centralized, because a single generic "converted
+value" sensor can't exist per quantity (there's no way to template a
+generic input parameter into a HA template sensor); every displayed number
+needed its own small inline conversion, matching whatever card type reads
+it. Converted so far: the Overview dashboard's header battery/range readout,
+Charging Status row 2, Info Grid Climate/Battery cards, footer odometer,
+Battery tab RANGE row, Climate tab interior/outdoor temp + target-temp
+stepper (display only — the actual `climate.set_temperature` step logic in
+`script.tesla_climate_temp_up/down` stays hardcoded to 0.5°C internally,
+since that's what the vehicle's API expects; only the *readout* converts),
+and the Tires tab (banner + 4 wheel cards + historical pressure chart).
+Also converted: the Analytics dashboard's History tab Today/This
+Week/This Month distance figures.
+
+**Known, documented limitation (flagged to the user, not silently
+skipped):** the Analytics dashboard's **Driving** and **Charging** tabs
+(14 `apexcharts-card` blocks pulling long-term statistics) still always
+plot in km / km/h / Wh-per-km regardless of this selector. Converting those
+properly would need per-series `transform:` conversion **and** duplicating
+each chart's static `yaxis` min/max + axis title (which apexcharts-card
+can't template), the same way the Tires-tab historical pressure chart was
+handled below — i.e. wrapping each chart in a `type: conditional` pair. That
+was judged too large/risky to do untested across 14 charts in one pass;
+tackle it as a following, focused task if the user wants it, using the
+Tires-tab chart (`dashboards/tesla-overview.yaml`, "Historical Pressure
+Chart") as the reference pattern for how to pair `conditional` cards with a
+`transform:`-adjusted series and matching axis bounds.
+
 

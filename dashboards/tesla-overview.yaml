@@ -34,10 +34,14 @@ views:
               [[[
                 const soc = parseFloat(String(states['sensor.vehicle_battery_level']?.state || '0'));
                 const rawRange = String(states['sensor.vehicle_battery_range']?.state || '');
-                const range = (!rawRange || rawRange === 'unknown' || rawRange === 'unavailable')
-                  ? `~${Math.round(soc * 4.1)}`
-                  : rawRange;
-                return `${soc.toFixed(0)}% • ${range} km`;
+                const rangeKm = (!rawRange || rawRange === 'unknown' || rawRange === 'unavailable')
+                  ? soc * 4.1
+                  : parseFloat(rawRange);
+                const unitSys = states['input_select.tesla_unit_system']?.state || 'Metric (km, °C, bar)';
+                const isMi = unitSys !== 'Metric (km, °C, bar)';
+                const range = Math.round(isMi ? rangeKm * 0.621371 : rangeKm);
+                const unit = isMi ? 'mi' : 'km';
+                return `${soc.toFixed(0)}% • ${range} ${unit}`;
               ]]]
             styles:
               card:
@@ -69,6 +73,11 @@ views:
               const volt = String(states['sensor.vehicle_charger_voltage']?.state || '–');
               const power = String(states['sensor.vehicle_charger_power']?.state || '–');
               const rate = String(states['sensor.vehicle_charge_rate']?.state || '–');
+              const unitSys = states['input_select.tesla_unit_system']?.state || 'Metric (km, °C, bar)';
+              const isMi = unitSys !== 'Metric (km, °C, bar)';
+              const rateVal = parseFloat(rate);
+              const rateDisp = isNaN(rateVal) ? rate : Math.round(isMi ? rateVal * 0.621371 : rateVal);
+              const rateUnit = isMi ? 'mi/hr' : 'km/hr';
               let row1;
               if (!raw || raw === 'unknown' || raw === 'unavailable') {
                 row1 = 'Calculating...';
@@ -88,7 +97,7 @@ views:
                   row1 = `${dur} remaining > ${hStr}:${mStr}`;
                 }
               }
-              return `${row1}\n${amp}/${maxAmp} A • ${volt} V • ${power} kW • ${rate} km/hr`;
+              return `${row1}\n${amp}/${maxAmp} A • ${volt} V • ${power} kW • ${rateDisp} ${rateUnit}`;
             ]]]
           show_state: false
           styles:
@@ -238,7 +247,10 @@ views:
               [[[
                 const tempStr = String(states['sensor.vehicle_inside_temperature']?.state || '0');
                 const temp = parseFloat(tempStr);
-                return isNaN(temp) ? 'N/A' : `${temp.toFixed(1)}°`;
+                const isF = states['input_select.tesla_unit_system']?.state === 'US Imperial (mi, °F, psi)';
+                if (isNaN(temp)) return 'N/A';
+                const disp = isF ? (temp * 9 / 5 + 32) : temp;
+                return `${disp.toFixed(1)}°${isF ? 'F' : 'C'}`;
               ]]]
             styles:
               card:
@@ -252,12 +264,18 @@ views:
             show_label: true
             label: |
               [[[
+                const unitSys = states['input_select.tesla_unit_system']?.state || 'Metric (km, °C, bar)';
+                const isMi = unitSys !== 'Metric (km, °C, bar)';
+                const unit = isMi ? 'mi' : 'km';
                 const range = String(states['sensor.vehicle_battery_range']?.state || '');
                 if (!range || range === 'unknown' || range === 'unavailable') {
                   const soc = parseFloat(String(states['sensor.vehicle_battery_level']?.state || '0'));
-                  return isNaN(soc) ? '– km' : `~${Math.round(soc * 4.1)} km`;
+                  if (isNaN(soc)) return `– ${unit}`;
+                  const km = soc * 4.1;
+                  return `~${Math.round(isMi ? km * 0.621371 : km)} ${unit}`;
                 }
-                return `${range} km`;
+                const km = parseFloat(range);
+                return `${Math.round(isMi ? km * 0.621371 : km)} ${unit}`;
               ]]]
             styles:
               card:
@@ -400,7 +418,11 @@ views:
           **{{ states('input_text.tesla_model') | default('Tesla Model X') }}** • VIN: {{ states('input_text.tesla_vin') | default('Unknown') }} • Plate: {{ states('input_text.tesla_plate') | default('Unknown') }}
           
           {% set car = states('input_text.tesla_car_name') %}
-          Firmware: {{ state_attr('update.' + car + '_update', 'installed_version') | default('Unknown') }}{{ ' ⬆️' if states('update.' + car + '_update') == 'on' else '' }} • Odometer: {{ states('sensor.vehicle_odometer') | float(0) | round(0) }} km • Status: {{ 'Online' if is_state('binary_sensor.vehicle_status', 'on') else 'Offline' }}
+          {% set unit_sys = states('input_select.tesla_unit_system') %}
+          {% set is_mi = unit_sys != 'Metric (km, °C, bar)' %}
+          {% set odo_km = states('sensor.vehicle_odometer') | float(0) %}
+          {% set odo = (odo_km * 0.621371) if is_mi else odo_km %}
+          Firmware: {{ state_attr('update.' + car + '_update', 'installed_version') | default('Unknown') }}{{ ' ⬆️' if states('update.' + car + '_update') == 'on' else '' }} • Odometer: {{ odo | round(0) }} {{ 'mi' if is_mi else 'km' }} • Status: {{ 'Online' if is_state('binary_sensor.vehicle_status', 'on') else 'Offline' }}
 
   # ========== VIEW 2: CONTROLS ==========
   - title: Controls
@@ -423,7 +445,11 @@ views:
               const charging = states['binary_sensor.tesla_charging_active']?.state === 'on';
               const soc = parseFloat(states['sensor.vehicle_battery_level']?.state || '0');
               const range = states['sensor.vehicle_battery_range']?.state;
-              const rangeStr = (!range || range === 'unknown') ? `~${Math.round(soc * 4.1)} km` : `${Math.round(parseFloat(range))} km`;
+              const unitSys = states['input_select.tesla_unit_system']?.state || 'Metric (km, °C, bar)';
+              const isMi = unitSys !== 'Metric (km, °C, bar)';
+              const rangeUnit = isMi ? 'mi' : 'km';
+              const rangeKm = (!range || range === 'unknown') ? (soc * 4.1) : parseFloat(range);
+              const rangeStr = `${Math.round(isMi ? rangeKm * 0.621371 : rangeKm)} ${rangeUnit}`;
 
               let statePill, stateColor;
               if (!online) {
@@ -659,7 +685,10 @@ views:
             label: |
               [[[
                 const temp = parseFloat(String(states['sensor.vehicle_outside_temperature']?.state || '0'));
-                return isNaN(temp) ? 'N/A' : `${temp.toFixed(1)}°`;
+                const isF = states['input_select.tesla_unit_system']?.state === 'US Imperial (mi, °F, psi)';
+                if (isNaN(temp)) return 'N/A';
+                const disp = isF ? (temp * 9 / 5 + 32) : temp;
+                return `${disp.toFixed(1)}°${isF ? 'F' : 'C'}`;
               ]]]
             styles:
               card:
@@ -673,7 +702,10 @@ views:
         label: |
           [[[
             const temp = parseFloat(String(states['sensor.vehicle_inside_temperature']?.state || '0'));
-            return isNaN(temp) ? 'N/A' : `${temp.toFixed(1)}°`;
+            const isF = states['input_select.tesla_unit_system']?.state === 'US Imperial (mi, °F, psi)';
+            if (isNaN(temp)) return 'N/A';
+            const disp = isF ? (temp * 9 / 5 + 32) : temp;
+            return `${disp.toFixed(1)}°${isF ? 'F' : 'C'}`;
           ]]]
         styles:
           card:
@@ -858,7 +890,13 @@ views:
               [[[
                 const car = states['input_text.tesla_car_name']?.state || 'tesla';
                 const target = states['climate.' + car + '_climate']?.attributes?.temperature;
-                return target ? `${parseFloat(target).toFixed(1)}°` : '22.0°';
+                const isF = states['input_select.tesla_unit_system']?.state === 'US Imperial (mi, °F, psi)';
+                // The vehicle's actual set point always stays in °C internally
+                // (tesla_climate_temp_up/down step it by a fixed 0.5°C) — only
+                // this readout is converted for display.
+                const c = target ? parseFloat(target) : 22.0;
+                const disp = isF ? (c * 9 / 5 + 32) : c;
+                return `${disp.toFixed(1)}°${isF ? 'F' : 'C'}`;
               ]]]
             tap_action:
               action: none
@@ -1022,16 +1060,22 @@ views:
             show_label: true
             label: |
               [[[
+                const unitSys = states['input_select.tesla_unit_system']?.state || 'Metric (km, °C, bar)';
+                const isMi = unitSys !== 'Metric (km, °C, bar)';
+                const unit = isMi ? 'mi' : 'km';
+                const conv = (km) => isMi ? km * 0.621371 : km;
                 const soc = parseFloat(String(states['sensor.vehicle_battery_level']?.state || '0'));
                 const rawEst = String(states['sensor.vehicle_battery_range']?.state || '');
-                const estVal = (!rawEst || rawEst === 'unknown' || rawEst === 'unavailable')
-                  ? Math.round(soc * 4.1)
-                  : Math.round(parseFloat(rawEst));
+                const estKm = (!rawEst || rawEst === 'unknown' || rawEst === 'unavailable')
+                  ? soc * 4.1
+                  : parseFloat(rawEst);
                 const rawIdeal = String(states['sensor.vehicle_ideal_battery_range']?.state || '');
-                const idealVal = (!rawIdeal || rawIdeal === 'unknown' || rawIdeal === 'unavailable')
-                  ? Math.round(estVal * 0.9)
-                  : Math.round(parseFloat(rawIdeal));
-                return isNaN(estVal) ? '– km' : `${estVal} km (${idealVal} km)`;
+                const idealKm = (!rawIdeal || rawIdeal === 'unknown' || rawIdeal === 'unavailable')
+                  ? estKm * 0.9
+                  : parseFloat(rawIdeal);
+                const estVal = Math.round(conv(estKm));
+                const idealVal = Math.round(conv(idealKm));
+                return isNaN(estVal) ? `– ${unit}` : `${estVal} ${unit} (${idealVal} ${unit})`;
               ]]]
             tap_action:
               action: none
@@ -1189,8 +1233,9 @@ views:
     cards:
       # 5.1 Target Pressure Notice
       - type: markdown
-        content: |
-          💡 **Recommended cold pressure: 2.9 bar**
+        content: >
+          💡 **Recommended cold pressure:
+          {{ '42 psi' if states('input_select.tesla_unit_system') == 'US Imperial (mi, °F, psi)' else '2.9 bar' }}**
 
       # 5.2 Wheel Pressure Matrix (2×2)
       - type: grid
@@ -1206,7 +1251,9 @@ views:
               [[[
                 const pressStr = String(states['sensor.vehicle_tyre_pressure_front_left']?.state || '0');
                 const pressure = parseFloat(pressStr);
-                return isNaN(pressure) ? '0.00 bar' : `${pressure.toFixed(2)} bar`;
+                const isPsi = states['input_select.tesla_unit_system']?.state === 'US Imperial (mi, °F, psi)';
+                if (isNaN(pressure)) return isPsi ? '0.0 psi' : '0.00 bar';
+                return isPsi ? `${(pressure * 14.5038).toFixed(1)} psi` : `${pressure.toFixed(2)} bar`;
               ]]]
             tap_action:
               action: none
@@ -1224,7 +1271,9 @@ views:
               [[[
                 const pressStr = String(states['sensor.vehicle_tyre_pressure_front_right']?.state || '0');
                 const pressure = parseFloat(pressStr);
-                return isNaN(pressure) ? '0.00 bar' : `${pressure.toFixed(2)} bar`;
+                const isPsi = states['input_select.tesla_unit_system']?.state === 'US Imperial (mi, °F, psi)';
+                if (isNaN(pressure)) return isPsi ? '0.0 psi' : '0.00 bar';
+                return isPsi ? `${(pressure * 14.5038).toFixed(1)} psi` : `${pressure.toFixed(2)} bar`;
               ]]]
             tap_action:
               action: none
@@ -1242,7 +1291,9 @@ views:
               [[[
                 const pressStr = String(states['sensor.vehicle_tyre_pressure_rear_left']?.state || '0');
                 const pressure = parseFloat(pressStr);
-                return isNaN(pressure) ? '0.00 bar' : `${pressure.toFixed(2)} bar`;
+                const isPsi = states['input_select.tesla_unit_system']?.state === 'US Imperial (mi, °F, psi)';
+                if (isNaN(pressure)) return isPsi ? '0.0 psi' : '0.00 bar';
+                return isPsi ? `${(pressure * 14.5038).toFixed(1)} psi` : `${pressure.toFixed(2)} bar`;
               ]]]
             tap_action:
               action: none
@@ -1260,7 +1311,9 @@ views:
               [[[
                 const pressStr = String(states['sensor.vehicle_tyre_pressure_rear_right']?.state || '0');
                 const pressure = parseFloat(pressStr);
-                return isNaN(pressure) ? '0.00 bar' : `${pressure.toFixed(2)} bar`;
+                const isPsi = states['input_select.tesla_unit_system']?.state === 'US Imperial (mi, °F, psi)';
+                if (isNaN(pressure)) return isPsi ? '0.0 psi' : '0.00 bar';
+                return isPsi ? `${(pressure * 14.5038).toFixed(1)} psi` : `${pressure.toFixed(2)} bar`;
               ]]]
             tap_action:
               action: none
@@ -1269,45 +1322,103 @@ views:
                 - background-color: rgba(76, 175, 80, 0.2)
 
       # 5.3 Historical Pressure Chart
-      - type: custom:apexcharts-card
-        graph_span: 30d
-        cache: true
-        header:
-          show: true
-          title: "Tire Pressure History (30 days)"
-        apex_config:
-          chart:
-            height: 300
-          yaxis:
-            - min: 1.5
-              max: 3.8
-              title:
-                text: "bar"
-          colors:
-            - '#FF6B6B'
-            - '#4ECDC4'
-            - '#45B7D1'
-            - '#FFA07A'
-          plotOptions:
-            area:
-              fillTo: zero
-        series:
-          - entity: sensor.vehicle_tyre_pressure_front_left
-            name: "Front Left"
-            type: line
-            stroke_width: 2
-          - entity: sensor.vehicle_tyre_pressure_front_right
-            name: "Front Right"
-            type: line
-            stroke_width: 2
-          - entity: sensor.vehicle_tyre_pressure_rear_left
-            name: "Rear Left"
-            type: line
-            stroke_width: 2
-          - entity: sensor.vehicle_tyre_pressure_rear_right
-            name: "Rear Right"
-            type: line
-            stroke_width: 2
+      # Two variants (bar vs psi) because apexcharts-card's yaxis min/max and
+      # axis title are static YAML — they can't follow input_select.tesla_unit_system
+      # live like a JS button-card label can. Only US Imperial switches to psi;
+      # UK stays on bar (matches the rest of the pressure readouts on this tab).
+      - type: conditional
+        conditions:
+          - entity: input_select.tesla_unit_system
+            state_not: "US Imperial (mi, °F, psi)"
+        card:
+          type: custom:apexcharts-card
+          graph_span: 30d
+          cache: true
+          header:
+            show: true
+            title: "Tire Pressure History (30 days)"
+          apex_config:
+            chart:
+              height: 300
+            yaxis:
+              - min: 1.5
+                max: 3.8
+                title:
+                  text: "bar"
+            colors:
+              - '#FF6B6B'
+              - '#4ECDC4'
+              - '#45B7D1'
+              - '#FFA07A'
+            plotOptions:
+              area:
+                fillTo: zero
+          series:
+            - entity: sensor.vehicle_tyre_pressure_front_left
+              name: "Front Left"
+              type: line
+              stroke_width: 2
+            - entity: sensor.vehicle_tyre_pressure_front_right
+              name: "Front Right"
+              type: line
+              stroke_width: 2
+            - entity: sensor.vehicle_tyre_pressure_rear_left
+              name: "Rear Left"
+              type: line
+              stroke_width: 2
+            - entity: sensor.vehicle_tyre_pressure_rear_right
+              name: "Rear Right"
+              type: line
+              stroke_width: 2
+
+      - type: conditional
+        conditions:
+          - entity: input_select.tesla_unit_system
+            state: "US Imperial (mi, °F, psi)"
+        card:
+          type: custom:apexcharts-card
+          graph_span: 30d
+          cache: true
+          header:
+            show: true
+            title: "Tire Pressure History (30 days)"
+          apex_config:
+            chart:
+              height: 300
+            yaxis:
+              - min: 21.8
+                max: 55.1
+                title:
+                  text: "psi"
+            colors:
+              - '#FF6B6B'
+              - '#4ECDC4'
+              - '#45B7D1'
+              - '#FFA07A'
+            plotOptions:
+              area:
+                fillTo: zero
+          series:
+            - entity: sensor.vehicle_tyre_pressure_front_left
+              name: "Front Left"
+              type: line
+              stroke_width: 2
+              transform: "return x * 14.5038;"
+            - entity: sensor.vehicle_tyre_pressure_front_right
+              name: "Front Right"
+              type: line
+              stroke_width: 2
+              transform: "return x * 14.5038;"
+            - entity: sensor.vehicle_tyre_pressure_rear_left
+              name: "Rear Left"
+              type: line
+              stroke_width: 2
+              transform: "return x * 14.5038;"
+            - entity: sensor.vehicle_tyre_pressure_rear_right
+              name: "Rear Right"
+              type: line
+              stroke_width: 2
+              transform: "return x * 14.5038;"
 
   # ========== VIEW 6: COST PROJECTIONS ==========
   - title: Cost Projections

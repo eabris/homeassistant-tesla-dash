@@ -197,6 +197,21 @@ input_select:
       - "GBP"
     initial: "HUF"
 
+  tesla_unit_system:
+    name: "Tesla Unit System"
+    icon: mdi:ruler-square-compass
+    # Three presets instead of a plain Metric/Imperial toggle, because
+    # real-world "Imperial" usage isn't consistent: US drivers use
+    # miles + °F + psi together, while UK/Ireland drivers commonly use
+    # miles + mph but *still* keep °C and bar (this mirrors the actual
+    # options on a Tesla vehicle's own touchscreen, which lets you set
+    # distance/speed, temperature, and pressure independently).
+    options:
+      - "Metric (km, °C, bar)"
+      - "US Imperial (mi, °F, psi)"
+      - "UK (mi, °C, bar)"
+    initial: "Metric (km, °C, bar)"
+
 input_number:
   tesla_odometer_monthly_baseline:
     name: "Tesla Odometer Monthly Baseline"
@@ -830,6 +845,38 @@ template:
           {% set c = states('input_select.tesla_currency') %}
           {% set locales = {'HUF': 'hu-HU', 'EUR': 'de-DE', 'USD': 'en-US', 'GBP': 'en-GB'} %}
           {{ locales.get(c, 'hu-HU') }}
+
+      # === Unit System ===
+      # Label-only sensors (no math) so dashboard cards/scripts have one
+      # place to read the current unit strings from. The actual km->mi /
+      # bar->psi / °C->°F math is done inline in each dashboard card (JS in
+      # button-card, Jinja in markdown, transform: in apexcharts-card),
+      # reading input_select.tesla_unit_system directly — see agents.md
+      # Section 8 for the exact conversion constants and the full list of
+      # cards this has been wired into (and the known chart-tab limitation).
+      - name: "Tesla Unit Distance"
+        unique_id: tesla_unit_distance_v1
+        icon: mdi:map-marker-distance
+        state: >
+          {{ 'mi' if states('input_select.tesla_unit_system') != 'Metric (km, °C, bar)' else 'km' }}
+
+      - name: "Tesla Unit Speed"
+        unique_id: tesla_unit_speed_v1
+        icon: mdi:speedometer
+        state: >
+          {{ 'mph' if states('input_select.tesla_unit_system') != 'Metric (km, °C, bar)' else 'km/h' }}
+
+      - name: "Tesla Unit Pressure"
+        unique_id: tesla_unit_pressure_v1
+        icon: mdi:gauge
+        state: >
+          {{ 'psi' if states('input_select.tesla_unit_system') == 'US Imperial (mi, °F, psi)' else 'bar' }}
+
+      - name: "Tesla Unit Temperature"
+        unique_id: tesla_unit_temperature_v1
+        icon: mdi:thermometer
+        state: >
+          {{ '°F' if states('input_select.tesla_unit_system') == 'US Imperial (mi, °F, psi)' else '°C' }}
 
       # === Real Drive Energy Consumption (from actual battery drop while driving) ===
       # Populated by automations tesla_drive_energy_session_start / _end in automations.yaml.

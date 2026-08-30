@@ -43,7 +43,11 @@ views:
                         <div style="color:#fff;font-size:15px;font-weight:700">${val}${sub ? `<span style="color:#aaa;font-size:11px;font-weight:400">  ${sub}</span>` : ''}</div>
                       </div>
                     </div>`;
-                  const dist = fmt(states['sensor.tesla_daily_distance']?.state, 'km', 1);
+                  const unitSys = states['input_select.tesla_unit_system']?.state || 'Metric (km, °C, bar)';
+                  const isMi = unitSys !== 'Metric (km, °C, bar)';
+                  const distUnit = isMi ? 'mi' : 'km';
+                  const distKm = parseFloat(states['sensor.tesla_daily_distance']?.state || '0') || 0;
+                  const dist = fmt(isMi ? distKm * 0.621371 : distKm, distUnit, 1);
                   const driveT = fmtMin(states['sensor.tesla_driving_time_today']?.state);
                   const energy = fmt(states['sensor.tesla_daily_charging_energy']?.state, 'kWh', 2);
                   const chargeT = fmtMin(states['sensor.tesla_charging_time_today']?.state);
@@ -101,7 +105,11 @@ views:
                         <div style="color:#fff;font-size:15px;font-weight:700">${val}${sub ? `<span style="color:#aaa;font-size:11px;font-weight:400">  ${sub}</span>` : ''}</div>
                       </div>
                     </div>`;
-                  const dist = fmt(states['sensor.tesla_weekly_distance']?.state, 'km', 0);
+                  const unitSys = states['input_select.tesla_unit_system']?.state || 'Metric (km, °C, bar)';
+                  const isMi = unitSys !== 'Metric (km, °C, bar)';
+                  const distUnit = isMi ? 'mi' : 'km';
+                  const distKm = parseFloat(states['sensor.tesla_weekly_distance']?.state || '0') || 0;
+                  const dist = fmt(isMi ? distKm * 0.621371 : distKm, distUnit, 0);
                   const energy = fmt(states['sensor.tesla_weekly_charging_energy']?.state, 'kWh', 2);
                   const elecCost = ftm(states['sensor.tesla_weekly_electric_cost']?.state);
                   const fuelEq = ftm(states['sensor.tesla_weekly_fuel_cost']?.state);
@@ -202,7 +210,11 @@ views:
                         <div style="color:#fff;font-size:15px;font-weight:700">${val}${sub ? `<span style="color:#aaa;font-size:11px;font-weight:400">  ${sub}</span>` : ''}</div>
                       </div>
                     </div>`;
-                  const dist = fmt(states['sensor.tesla_monthly_distance']?.state, 'km', 0);
+                  const unitSys = states['input_select.tesla_unit_system']?.state || 'Metric (km, °C, bar)';
+                  const isMi = unitSys !== 'Metric (km, °C, bar)';
+                  const distUnit = isMi ? 'mi' : 'km';
+                  const distKm = parseFloat(states['sensor.tesla_monthly_distance']?.state || '0') || 0;
+                  const dist = fmt(isMi ? distKm * 0.621371 : distKm, distUnit, 0);
                   const energy = fmt(states['sensor.tesla_monthly_charging_energy']?.state, 'kWh', 2);
                   const elecCost = ftm(states['sensor.tesla_monthly_electric_cost']?.state);
                   const fuelEq = ftm(states['sensor.tesla_monthly_fuel_cost']?.state);
@@ -1025,6 +1037,29 @@ views:
         entity: input_select.tesla_currency
         name: "Currency"
         icon: mdi:cash-multiple
+
+      # Unit System Selector
+      - type: markdown
+        content: |
+          ## 📏 Unit System
+
+          Choose how distance, speed, tire pressure, and temperature are
+          displayed across both dashboards. Charging/battery energy always
+          stays in kWh/kW/A/V regardless of this setting (that's universal
+          for EVs, even in the US). **UK** uses miles/mph like US Imperial,
+          but keeps °C and bar like Metric — matching how most UK/Ireland
+          drivers actually configure their car.
+
+          **Known limitation:** the long-term history charts on the
+          *Driving* and *Charging* analytics tabs currently always plot in
+          km / km/h / Wh per km regardless of this setting — only this
+          Settings tab, the Overview dashboard, and the History tab's
+          Today/Week/Month summary cards fully respect it for now.
+
+      - type: custom:mushroom-select-card
+        entity: input_select.tesla_unit_system
+        name: "Unit System"
+        icon: mdi:ruler-square-compass
 
       # Electricity Cost Configuration
       - type: markdown
