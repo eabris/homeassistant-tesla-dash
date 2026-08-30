@@ -152,6 +152,14 @@ This repo assumes your Tesla entities exist under names like `sensor.tesla_batte
    - Rename the entities in Home Assistant (**Settings → Devices & Services → Entities**, click each one → Settings → change Entity ID), **or**
    - Adjust the templates in `packages/tesla/` and the dashboard YAML files to match your actual entity IDs.
 
+### Your vehicle's name/prefix can be anything — `tesla`, `x`, `0`, `42`, whatever
+
+You don't have to keep your car named `tesla`. Set **`input_text.tesla_car_name`** (Developer Tools → States, or add it to a dashboard as an entity) to whatever prefix your actual Tesla Fleet integration entities use — `x`, `0`, `42`, `my_model_y`, anything works.
+
+Under the hood, the dashboards/automations never read your car's raw entities directly. They go through a small "Fleet Sensor Alias" layer in `configuration.yaml` — a fixed set of entities named `sensor.vehicle_*` / `binary_sensor.vehicle_*` (e.g. `sensor.vehicle_odometer`, `sensor.vehicle_battery_level`) that dynamically look up `sensor.<input_text.tesla_car_name>_odometer`, etc. This means you can rename your vehicle at any time without touching a single dashboard file — just update `input_text.tesla_car_name` and everything keeps working.
+
+> ⚠️ **The one name you must never use is literally `vehicle`.** The alias prefix itself is the reserved word `vehicle_` — if you also name your car `vehicle`, the aliases would try to read their own state and get permanently stuck on "unknown" (this is exactly what happened in earlier revisions of this project when the alias prefix and the car's name were both `tesla`). Any other name is safe. If you do accidentally set it to `vehicle`, a built-in automation (`tesla_reserved_car_name_guard` in `packages/tesla/automations.yaml`) will pop up a persistent notification warning you.
+
 ---
 
 ## 🧩 Step 6 (Optional) — Set up TeslaMate for deep history & analytics
@@ -216,8 +224,16 @@ Go to **Tesla Analytics → Settings** to:
 
 ### Renaming the `tesla_` entity prefix
 
+> ℹ️ **Not to be confused with `input_text.tesla_car_name`** (see Step 5
+> above) — that helper points at your *actual vehicle's* Tesla Fleet entity
+> prefix and can be changed anytime with no side effects. The rename below is
+> a bigger, one-time operation that changes this *project's own* helpers,
+> scripts, and automation IDs (e.g. `input_number.tesla_drive_start_odometer`)
+> to a different prefix — useful mainly if you want to run two separate
+> instances of this dashboard for two cars.
+
 All entities/helpers in this project use a consistent lowercase `tesla_...`
-prefix (e.g. `sensor.tesla_odometer`, `unique_id: tesla_driving_time_today_raw_v1`).
+prefix (e.g. `sensor.tesla_daily_distance`, `unique_id: tesla_driving_time_today_raw_v1`).
 If you get a second car, or just want a different naming scheme, use:
 
 ```bash
