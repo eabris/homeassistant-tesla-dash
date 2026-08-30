@@ -138,6 +138,7 @@ Use whatever the integration creates. Typical patterns (exact IDs in `/entities-
 4. Expose useful ones to **Energy Dashboard** if they represent home energy impact.
 5. Add nice **gauge / statistic / history-graph** cards.
 6. Update `/entities-list.txt`.
+7. Update `/README.md` if necessary.
 
 #### B. Adding Controls
 - **Never call Tesla services directly from dashboard** if possible — go through helpers + scripts for safety + logging.
