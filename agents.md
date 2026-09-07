@@ -1444,3 +1444,47 @@ assigned entity_id after first creation, or avoid ambiguous
 digit+space+word names in `name:` altogether (e.g. prefer "Tesla 5yr
 Electric Cost" or "Tesla Five Year Electric Cost" if a predictable
 entity_id matters more than the display label).
+
+### 14. Cost Projections Tab — Page Title & "Savings vs Gas Car" Row
+
+**What was added:** the Cost Projections tab previously had no on-page
+header (only the nav-tab label "Cost Projections" itself) — a simple
+`custom:button-card` header row (name + `mdi:cash-multiple` icon, matching
+the style already used on other tabs) was added as the first card in the
+tab's `cards:` list in `dashboards/tesla-overview.yaml`.
+
+Each of the three existing period blocks (Monthly, Annual, 5 Years) also
+gained a new "💰 SAVINGS VS GAS CAR" row, computed as
+`fuel_cost_equivalent − electric_cost` for that same period — i.e. how much
+cheaper charging at home was than running an equivalent ICE car over the
+same distance, using the existing `input_number.comparison_ice_efficiency`
+/ `comparison_fuel_price_per_liter` settings that already drive
+`sensor.tesla_fuel_cost_per_km`. Per explicit user request, this new row
+renders in a visibly smaller font (13px value / 9px label) than the
+existing HOME/SUPERCHARGER/OTHER NETWORKS rows (20px value / 10px label),
+using its own `savingsRow()` helper (kept separate from the existing
+`row()` helper rather than parameterizing it, since the two need
+meaningfully different markup/sizing) and a green (`#4CAF50`) accent color
+to visually read as a positive/good number.
+
+**New sensors added** (`configuration.yaml`, alongside the existing
+`tesla_daily/weekly/monthly_fuel_cost` chain) — chosen over computing
+purely in dashboard JS, to stay consistent with how the electric-cost side
+already has real Annual/5yr sensors (`tesla_annual_electric_cost`,
+`tesla_5_year_electric_cost`) rather than deriving those in JS too, and so
+these values are available to any other future consumer, not just this one
+card:
+* `sensor.tesla_annual_fuel_cost_equivalent` — `monthly fuel cost * 12`
+  (mirrors `tesla_annual_electric_cost`'s own `monthly * 12` projection).
+* `sensor.tesla_5_year_fuel_cost_equivalent` — `annual fuel cost * 5`
+  (mirrors `tesla_5_year_electric_cost`). **Same entity_id slugification
+  gotcha as Section 13** applies here too — the `name:` is
+  "Tesla 5 Year Fuel Cost Equivalent" (space between "5" and "Year"), so
+  the real entity_id is `sensor.tesla_5_year_fuel_cost_equivalent`
+  (underscore), not `tesla_5year_fuel_cost_equivalent`. Verified directly
+  against the dashboard reference before committing, learning from the
+  Section 13 incident rather than repeating it.
+
+Both new sensors were documented in `entities-list.txt` immediately after
+`sensor.tesla_monthly_fuel_cost`, matching the existing ordering convention
+for this sensor family.

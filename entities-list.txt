@@ -185,6 +185,8 @@ sensor.tesla_5_year_electric_cost                | sensor        | cost_tracking
 sensor.tesla_daily_fuel_cost_equivalent          | sensor        | cost_tracking     | Tesla Daily Fuel Cost Equivalent | Template: daily_distance * fuel_cost_per_km
 sensor.tesla_weekly_fuel_cost                    | sensor        | cost_tracking     | Tesla Weekly Fuel Cost Equivalent | Template: weekly_distance * fuel_cost_per_km
 sensor.tesla_monthly_fuel_cost                   | sensor        | cost_tracking     | Tesla Monthly Fuel Cost Equivalent | Template: monthly_distance * fuel_cost_per_km; default_entity_id set for dashboard match
+sensor.tesla_annual_fuel_cost_equivalent         | sensor        | cost_tracking     | Tesla Annual Fuel Cost Equivalent | Template: monthly fuel cost equivalent * 12 (projected); used by the Cost Projections tab's Savings row
+sensor.tesla_5_year_fuel_cost_equivalent         | sensor        | cost_tracking     | Tesla 5 Year Fuel Cost Equivalent | Template: annual fuel cost equivalent * 5 (projected); NOTE: real entity_id has an underscore between "5" and "year" (same slugification gotcha as tesla_5_year_electric_cost) -- do not reference it as tesla_5year_fuel_cost_equivalent
 
 # --- DISTANCE TRACKING (Templates + baseline helpers) ---
 sensor.tesla_daily_distance_raw                  | sensor        | distance          | Tesla Daily Distance Raw        | Utility meter: daily delta from odometer

@@ -1445,6 +1445,14 @@ views:
     path: cost
     icon: mdi:cash-multiple
     cards:
+      # 6.0 Page Header (matches the header style used on Climate/other tabs)
+      - type: custom:button-card
+        name: "Cost Projections"
+        icon: mdi:cash-multiple
+        styles:
+          card:
+            - background-color: rgba(0, 0, 0, 0.3)
+
       # NOTE: Supercharger / Other Networks columns are shown as 0 — this
       # project only tracks Home electricity cost (via the Saved Location
       # Rates config). Tessie itself syncs real Supercharging costs from your
@@ -1464,6 +1472,8 @@ views:
               block: |
                 [[[
                   const monthly = parseFloat(states['sensor.tesla_monthly_electric_cost']?.state || '0') || 0;
+                  const monthlyFuel = parseFloat(states['sensor.tesla_monthly_fuel_cost']?.state || '0') || 0;
+                  const savings = monthlyFuel - monthly;
                   const currencySymbol = states['sensor.tesla_currency_symbol']?.state || 'Ft';
                   const currencyLocale = states['sensor.tesla_currency_locale']?.state || 'hu-HU';
                   const row = (icon, label, value) =>
@@ -1474,11 +1484,20 @@ views:
                         <div style="color:#fff;font-size:20px;font-weight:700">${value}</div>
                       </div>
                     </div>`;
+                  const savingsRow = (value) =>
+                    `<div style="display:flex;align-items:center;gap:14px;padding:8px 0;border-top:1px solid rgba(255,255,255,0.07)">
+                      <span style="font-size:16px;width:26px;text-align:center;flex-shrink:0">💰</span>
+                      <div>
+                        <div style="color:#888;font-size:9px;font-weight:600;letter-spacing:1.2px">SAVINGS VS GAS CAR</div>
+                        <div style="color:#4CAF50;font-size:13px;font-weight:600">${value}</div>
+                      </div>
+                    </div>`;
                   return `<div style="width:100%;text-align:left">
                     <div style="color:#888;font-size:11px;font-weight:600;letter-spacing:1.5px;padding-bottom:4px">📅 MONTHLY</div>
                     ${row('🏠', 'HOME', Math.round(monthly).toLocaleString(currencyLocale) + ' ' + currencySymbol)}
                     ${row('⚡', 'SUPERCHARGER', '0 ' + currencySymbol)}
                     ${row('🔌', 'OTHER NETWORKS', '0 ' + currencySymbol)}
+                    ${savingsRow(Math.round(savings).toLocaleString(currencyLocale) + ' ' + currencySymbol + ' vs a petrol/diesel car')}
                   </div>`;
                 ]]]
             styles:
@@ -1505,6 +1524,8 @@ views:
               block: |
                 [[[
                   const annual = parseFloat(states['sensor.tesla_annual_electric_cost']?.state || '0') || 0;
+                  const annualFuel = parseFloat(states['sensor.tesla_annual_fuel_cost_equivalent']?.state || '0') || 0;
+                  const savings = annualFuel - annual;
                   const currencySymbol = states['sensor.tesla_currency_symbol']?.state || 'Ft';
                   const currencyLocale = states['sensor.tesla_currency_locale']?.state || 'hu-HU';
                   const row = (icon, label, value) =>
@@ -1515,11 +1536,20 @@ views:
                         <div style="color:#fff;font-size:20px;font-weight:700">${value}</div>
                       </div>
                     </div>`;
+                  const savingsRow = (value) =>
+                    `<div style="display:flex;align-items:center;gap:14px;padding:8px 0;border-top:1px solid rgba(255,255,255,0.07)">
+                      <span style="font-size:16px;width:26px;text-align:center;flex-shrink:0">💰</span>
+                      <div>
+                        <div style="color:#888;font-size:9px;font-weight:600;letter-spacing:1.2px">SAVINGS VS GAS CAR</div>
+                        <div style="color:#4CAF50;font-size:13px;font-weight:600">${value}</div>
+                      </div>
+                    </div>`;
                   return `<div style="width:100%;text-align:left">
                     <div style="color:#888;font-size:11px;font-weight:600;letter-spacing:1.5px;padding-bottom:4px">📅 ANNUAL</div>
                     ${row('🏠', 'HOME', Math.round(annual).toLocaleString(currencyLocale) + ' ' + currencySymbol)}
                     ${row('⚡', 'SUPERCHARGER', '0 ' + currencySymbol)}
                     ${row('🔌', 'OTHER NETWORKS', '0 ' + currencySymbol)}
+                    ${savingsRow(Math.round(savings).toLocaleString(currencyLocale) + ' ' + currencySymbol + ' vs a petrol/diesel car')}
                   </div>`;
                 ]]]
             styles:
@@ -1546,6 +1576,8 @@ views:
               block: |
                 [[[
                   const five = parseFloat(states['sensor.tesla_5_year_electric_cost']?.state || '0') || 0;
+                  const fiveFuel = parseFloat(states['sensor.tesla_5_year_fuel_cost_equivalent']?.state || '0') || 0;
+                  const savings = fiveFuel - five;
                   const currencySymbol = states['sensor.tesla_currency_symbol']?.state || 'Ft';
                   const currencyLocale = states['sensor.tesla_currency_locale']?.state || 'hu-HU';
                   const row = (icon, label, value) =>
@@ -1556,11 +1588,20 @@ views:
                         <div style="color:#fff;font-size:20px;font-weight:700">${value}</div>
                       </div>
                     </div>`;
+                  const savingsRow = (value) =>
+                    `<div style="display:flex;align-items:center;gap:14px;padding:8px 0;border-top:1px solid rgba(255,255,255,0.07)">
+                      <span style="font-size:16px;width:26px;text-align:center;flex-shrink:0">💰</span>
+                      <div>
+                        <div style="color:#888;font-size:9px;font-weight:600;letter-spacing:1.2px">SAVINGS VS GAS CAR</div>
+                        <div style="color:#4CAF50;font-size:13px;font-weight:600">${value}</div>
+                      </div>
+                    </div>`;
                   return `<div style="width:100%;text-align:left">
                     <div style="color:#888;font-size:11px;font-weight:600;letter-spacing:1.5px;padding-bottom:4px">📅 5 YEARS</div>
                     ${row('🏠', 'HOME', Math.round(five).toLocaleString(currencyLocale) + ' ' + currencySymbol)}
                     ${row('⚡', 'SUPERCHARGER', '0 ' + currencySymbol)}
                     ${row('🔌', 'OTHER NETWORKS', '0 ' + currencySymbol)}
+                    ${savingsRow(Math.round(savings).toLocaleString(currencyLocale) + ' ' + currencySymbol + ' vs a petrol/diesel car')}
                   </div>`;
                 ]]]
             styles:

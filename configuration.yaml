@@ -1143,6 +1143,29 @@ template:
           {% set fuel_per_km = states('sensor.tesla_fuel_cost_per_km') | float(0) %}
           {{ (dist * fuel_per_km) | round(0) }}
 
+      - name: "Tesla Annual Fuel Cost Equivalent"
+        unique_id: tesla_annual_fuel_cost_equivalent_v1
+        # Same projection approach as Tesla Annual Electric Cost above
+        # (monthly * 12) -- used for the Cost Projections tab's Savings row.
+        unit_of_measurement: "Ft"
+        icon: mdi:gas-station
+        state: >
+          {% set monthly = states('sensor.tesla_monthly_fuel_cost') | float(0) %}
+          {{ (monthly * 12) | round(0) }}
+
+      - name: "Tesla 5 Year Fuel Cost Equivalent"
+        unique_id: tesla_5year_fuel_cost_equivalent_v1
+        # ⚠️ Same entity_id slugification gotcha as Tesla 5 Year Electric
+        # Cost (Section 13 in agents.md): the real entity_id will be
+        # sensor.tesla_5_year_fuel_cost_equivalent (underscore between "5"
+        # and "year", from the space in the name above) -- reference it
+        # with that exact entity_id, not "tesla_5year_...".
+        unit_of_measurement: "Ft"
+        icon: mdi:gas-station
+        state: >
+          {% set annual = states('sensor.tesla_annual_fuel_cost_equivalent') | float(0) %}
+          {{ (annual * 5) | round(0) }}
+
       - name: "Tesla Monthly Energy Consumed"
         unique_id: tesla_monthly_energy_consumed_v5
         unit_of_measurement: "kWh"
