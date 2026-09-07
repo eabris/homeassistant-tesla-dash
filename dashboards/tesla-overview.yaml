@@ -175,7 +175,7 @@ views:
           # Flash Lights
           - type: custom:button-card
             entity: script.tesla_flash_lights
-            icon: mdi:lightbulb-flash
+            icon: mdi:flashlight
             name: "Flash"
             tap_action:
               action: call-service
