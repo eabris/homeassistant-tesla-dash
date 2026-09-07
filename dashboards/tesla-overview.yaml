@@ -1545,7 +1545,7 @@ views:
             custom_fields:
               block: |
                 [[[
-                  const five = parseFloat(states['sensor.tesla_5year_electric_cost']?.state || '0') || 0;
+                  const five = parseFloat(states['sensor.tesla_5_year_electric_cost']?.state || '0') || 0;
                   const currencySymbol = states['sensor.tesla_currency_symbol']?.state || 'Ft';
                   const currencyLocale = states['sensor.tesla_currency_locale']?.state || 'hu-HU';
                   const row = (icon, label, value) =>

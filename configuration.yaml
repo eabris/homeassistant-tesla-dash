@@ -1094,6 +1094,12 @@ template:
 
       - name: "Tesla 5 Year Electric Cost"
         unique_id: tesla_5year_electric_cost_v5
+        # ⚠️ Real entity_id is sensor.tesla_5_year_electric_cost (with an
+        # underscore between "5" and "year") -- HA auto-slugifies the
+        # entity_id from the space in "5 Year" above, NOT from unique_id.
+        # Any dashboard/template that reads this sensor must use that exact
+        # entity_id, not "tesla_5year_electric_cost" (no underscore) -- see
+        # agents.md Section 13 for the full story of this bug.
         unit_of_measurement: "Ft"
         icon: mdi:cash-multiple
         state: >

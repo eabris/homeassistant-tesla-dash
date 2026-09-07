@@ -1392,3 +1392,55 @@ sensor added to this project (i.e. anything with `unit_of_measurement` set)
 must use the `{{ val if val not in ['unknown', 'unavailable', ''] else none }}`
 guard pattern shown above — never a bare `{{ states(...) }}` pass-through —
 to avoid reintroducing this exact log error.
+
+
+
+### 13. `unique_id` Doesn't Control `entity_id` — the "5 Year" Cost Card Bug
+
+**Symptom:** the Cost Projections tab's "5 YEARS" row always showed 0 Ft,
+even though "MONTHLY" and "ANNUAL" (calculated the exact same way) worked
+correctly, and the underlying sensor itself — checked directly via
+Developer Tools / More Info — was calculating a real, correct, growing
+value (e.g. 1,114,740 Ft).
+
+**Root cause:** Home Assistant auto-generates a template entity's
+`entity_id` by slugifying its **`name:`** field, not its `unique_id:`.
+This sensor's `name: "Tesla 5 Year Electric Cost"` contains a space
+between "5" and "Year", so HA slugified it to
+`sensor.tesla_5_year_electric_cost` (with an underscore there). But the
+dashboard card's JS (`dashboards/tesla-overview.yaml`, Cost Projections
+tab) and `entities-list.txt` both referenced
+`sensor.tesla_5year_electric_cost` (no underscore) — a plausible-looking
+but entirely different, nonexistent entity_id that was silently read as
+`undefined`/`0` by the dashboard's `states[...]?.state || '0'` fallback,
+with **no error anywhere** (unlike the earlier `_2`-duplicate-entity bug,
+this wasn't a registry collision — the "wrong" entity_id simply never
+existed at all).
+
+**Why this is easy to miss:** `unique_id: tesla_5year_electric_cost_v5`
+(no underscore) looks like it should determine the entity_id, and a
+human skimming the YAML naturally assumes entity_id mirrors unique_id —
+but `unique_id` only guarantees registry identity/config-entry ownership
+across reloads; it has no bearing on the actual `entity_id` string, which
+is derived purely from `name:` at first creation (and can differ from
+both `unique_id` and `name` if manually renamed later via the UI).
+
+**Fix applied:** corrected the dashboard's JS reference and
+`entities-list.txt` to read `sensor.tesla_5_year_electric_cost` (matching
+the entity's real, registered entity_id). Left `unique_id:
+tesla_5year_electric_cost_v5` as-is in `configuration.yaml` — changing it
+would not rename the already-registered entity_id anyway, and touching it
+risks triggering a fresh duplicate-registration edge case for no benefit.
+Added an inline comment directly above the sensor's `unique_id:` warning
+future editors not to assume entity_id matches unique_id here.
+
+**General rule going forward:** never assume a template entity's
+`entity_id` equals its `unique_id`, especially for any `name:` containing
+digits adjacent to a word with a space (e.g. "5 Year", "3 Day", "30 Day")
+— HA's slugifier will insert an underscore at that word boundary. When
+adding a new sensor referenced elsewhere (dashboards, other templates),
+either check **Settings → Devices & Services → Entities** for the actual
+assigned entity_id after first creation, or avoid ambiguous
+digit+space+word names in `name:` altogether (e.g. prefer "Tesla 5yr
+Electric Cost" or "Tesla Five Year Electric Cost" if a predictable
+entity_id matters more than the display label).
