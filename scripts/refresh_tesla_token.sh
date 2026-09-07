@@ -135,6 +135,20 @@ if [[ ! -f "$SECRETS_FILE" ]]; then
   exit 1
 fi
 
+# Idempotency check: skip the write entirely (no backup, no "Updated" message)
+# if the token in secrets.yaml already matches what we just fetched. This
+# matters for scheduled/unattended runs (see the tesla_refresh_fleet_token
+# automation in packages/tesla/automations.yaml) — that automation greps
+# this script's stdout for the literal string "Updated tesla_fleet_token" to
+# decide whether to notify you that a restart would help; without this
+# check it would fire that notification every single run, even when nothing
+# actually changed.
+CURRENT_TOKEN="$(grep '^tesla_fleet_token:' "$SECRETS_FILE" 2>/dev/null | sed -E 's/^tesla_fleet_token:[[:space:]]*"?([^"]*)"?[[:space:]]*$/\1/')"
+if [[ "$CURRENT_TOKEN" == "$TOKEN" ]]; then
+  echo "Token unchanged — secrets.yaml already up to date. Nothing written."
+  exit 0
+fi
+
 BACKUP="$SECRETS_FILE.bak-$(date +%Y%m%d%H%M%S)"
 cp "$SECRETS_FILE" "$BACKUP"
 echo "Backed up secrets.yaml to $BACKUP"

@@ -1263,3 +1263,14 @@ rest_command:
       Authorization: "Bearer {{ token }}"
       Content-Type: "application/json"
     payload: '{"command": "close", "lat": {{ lat | float }}, "lon": {{ lon | float }}}'
+
+# Periodic Tesla Fleet token refresh (see scripts/refresh_tesla_token.sh and
+# the "tesla_refresh_fleet_token" automation in packages/tesla/automations.yaml).
+# shell_command runs inside the HA Core container, which shares the same
+# /config filesystem the SSH add-on sees — so this needs no separate host
+# access. --apply writes the current token into secrets.yaml; HA still needs
+# a manual restart afterwards to actually reload secrets.yaml (the automation
+# notifies you when that's needed rather than auto-restarting, since a
+# surprise restart mid-use would be disruptive).
+shell_command:
+  refresh_tesla_token: "bash /config/scripts/refresh_tesla_token.sh --apply"

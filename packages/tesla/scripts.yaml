@@ -168,12 +168,16 @@ tesla_windows_close:
         lat: "{{ lat }}"
         lon: "{{ lon }}"
       response_variable: tesla_window_close_response
-    - action: persistent_notification.create
-      data:
-        title: "Tesla — Close Windows result"
-        message: >-
-          Status: {{ tesla_window_close_response.status | default('unknown') }}.
-          Response: {{ tesla_window_close_response.content | default('No response body captured.') }}
+    - if: >-
+        {{ tesla_window_close_response.status | default(0) | int != 200
+           or not (tesla_window_close_response.content.response.result | default(false)) }}
+      then:
+        - action: persistent_notification.create
+          data:
+            title: "Tesla — Close Windows failed"
+            message: >-
+              Status: {{ tesla_window_close_response.status | default('unknown') }}.
+              Response: {{ tesla_window_close_response.content | default('No response body captured.') }}
 
 tesla_defrost_toggle:
   alias: "Tesla Defrost Toggle"

@@ -1,3 +1,49 @@
+- id: tesla_refresh_fleet_token
+  alias: "Tesla - Refresh Fleet API token (periodic)"
+  description: >
+    Runs scripts/refresh_tesla_token.sh every 6 hours via shell_command
+    (which executes inside the HA Core container, sharing the same /config
+    filesystem — no separate SSH host access needed). This keeps the static
+    tesla_fleet_token in secrets.yaml (used only by the
+    rest_command.tesla_window_close_gps workaround — see
+    packages/tesla/scripts.yaml) from silently expiring (~8h lifetime) and
+    causing 401 errors on "Close Windows". Deliberately does NOT
+    auto-restart Home Assistant — secrets.yaml is only re-read on a full
+    restart, but restarting automatically on a timer would disrupt whatever
+    you're doing at that moment. Instead, notifies you once when the token
+    actually changed, so you know a restart would apply it (not urgent —
+    the old token keeps working until it expires again).
+  trigger:
+    - trigger: time_pattern
+      hours: "/6"
+  action:
+    - action: shell_command.refresh_tesla_token
+      response_variable: tesla_token_refresh_result
+    - if: >-
+        {{ tesla_token_refresh_result.returncode | default(1) != 0 }}
+      then:
+        - action: persistent_notification.create
+          data:
+            title: "Tesla token refresh failed"
+            message: >-
+              scripts/refresh_tesla_token.sh exited with code
+              {{ tesla_token_refresh_result.returncode }}.
+              stderr: {{ tesla_token_refresh_result.stderr | default('none') }}
+      else:
+        - if: >-
+            {{ 'Updated tesla_fleet_token' in (tesla_token_refresh_result.stdout | default('')) }}
+          then:
+            - action: persistent_notification.create
+              data:
+                title: "Tesla token refreshed"
+                message: >-
+                  A new Tesla Fleet token was written to secrets.yaml.
+                  Restart Home Assistant when convenient to apply it
+                  (Settings → System → Restart) — not urgent, the old
+                  token keeps working until it next expires.
+  mode: single
+  initial_state: true
+
 - id: tesla_reserved_car_name_guard
   alias: "Tesla - Warn if car name is invalid or reserved"
   description: >

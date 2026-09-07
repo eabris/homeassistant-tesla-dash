@@ -291,6 +291,20 @@ CLI is available in your shell).
 > occasionally fail to close windows if the "too far from vehicle" bug is
 > triggered depending on your Tesla Fleet integration version.
 
+**Automating this refresh:** this project also ships a
+`tesla_refresh_fleet_token` automation (`packages/tesla/automations.yaml`)
+that runs the same script automatically every 6 hours via a `shell_command:`
+entry (`configuration.yaml`). This works with **no separate SSH step** —
+`shell_command` executes inside the Home Assistant Core container itself,
+which shares the same `/config` filesystem the SSH/Terminal add-on sees. It
+does **not** auto-restart Home Assistant (a surprise restart on a timer could
+interrupt whatever you're doing) — instead, it sends a one-time persistent
+notification only when the token actually changed, telling you a restart
+would apply it whenever convenient. The script is idempotent: re-running it
+with an unchanged token makes no backup and no edit, so this schedule can
+run indefinitely with zero manual upkeep beyond occasionally restarting HA
+when notified.
+
 > ⚠️ **Getting `command not found` or `invalid option name: pipefail` when
 > running the script?** The file picked up Windows-style CRLF line endings
 > during the copy to your HA host (common if you opened/edited it in a

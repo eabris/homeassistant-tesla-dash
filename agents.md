@@ -1114,6 +1114,60 @@ depending on the installed Tesla Fleet integration version. Not done by
 default since the GPS workaround was deliberately built to route around
 that exact bug; only switch back if explicitly requested.
 
+**Diagnosed real-world failure that turned out to be unrelated:** after
+this script/automation existed, the user reported "Close Windows" doing
+nothing with an empty log — initially suspected to still be the token. Root
+cause was actually a **different** failure mode of the same REST workaround:
+`rest_command` only logs when the HTTP status itself is `>=400` (the 401
+token case); Tesla's Fleet API can return a plain HTTP 200/408 while still
+rejecting the command inside the JSON response body (confirmed via a real
+408 response: `{"response": None, "error": "vehicle unavailable: ...", ...}`
+— car was asleep). This produced identical "nothing happens" symptoms with
+zero HA-level errors, easily confused with a stale-token issue. Fixed by
+adding `response_variable: tesla_window_close_response` to the
+`rest_command` action in `tesla_windows_close` and a conditional
+`persistent_notification` that only fires when `status != 200` or
+`content.response.result` isn't truthy — surfacing the real rejection
+reason instead of silent failure, without spamming a notification on every
+successful call.
+
+**Automated periodic refresh (`tesla_refresh_fleet_token` automation):**
+rather than relying on the user to notice a 401 and run the script by hand,
+`packages/tesla/automations.yaml` defines a `time_pattern` trigger
+(`hours: "/6"`, HA's closest equivalent to cron) that calls
+`shell_command.refresh_tesla_token` (`configuration.yaml`), which runs
+`bash /config/scripts/refresh_tesla_token.sh --apply`. Key realization that
+simplified this vs. the original design: `shell_command` executes *inside
+the Home Assistant Core container itself*, not on some separate host — and
+that container mounts the exact same `/config` directory the SSH/Terminal
+add-on's shell sees. This means the earlier assumption that this script
+could only be run manually via SSH was incomplete; it works identically
+from an automation with zero extra setup, since both execution contexts
+share the same filesystem. Deliberately does **not** call `ha core restart`
+automatically on this schedule (unlike the script's own optional
+`--restart` flag for manual runs) — an unattended restart every few hours
+regardless of whether the token even changed would be needlessly disruptive
+to anyone actively using dashboards at that moment. Instead, the automation
+only notifies once when the token actually changed (by checking the shell
+command's `returncode` for failure, and grepping its `stdout` for the
+literal string `"Updated tesla_fleet_token"` for the success/changed case),
+leaving the actual restart timing up to the user.
+
+**Made `refresh_tesla_token.sh` idempotent to support this schedule:**
+originally the script unconditionally rewrote `secrets.yaml` and printed
+"Updated tesla_fleet_token" on every `--apply` run, even when the fetched
+token was byte-identical to what was already stored (which is the common
+case, since it now runs every 6h while the token lasts ~8h — most runs see
+no change). Added an early comparison against the current
+`tesla_fleet_token:` value in `secrets.yaml`; if unchanged, the script exits
+immediately with "Token unchanged" and makes **no backup file and no edit**.
+This was required both to avoid accumulating a `secrets.yaml.bak-<timestamp>`
+file every 6 hours forever, and so the automation's "notify only on real
+change" logic (grepping for the literal "Updated" string) actually means
+something. Verified via a synthetic fixture: first `--apply` run updates and
+backs up; an immediate second run with the same token reports "unchanged"
+and creates zero additional backups.
+
 ### 10. Never Commit Real Personal/Private Information
 
 **Rule:** Never hardcode a real Home Assistant URL, Long-Lived Access
