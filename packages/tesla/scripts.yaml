@@ -144,6 +144,18 @@ tesla_windows_close:
   icon: mdi:window-closed
   # cover.close_cover passes lat=0,lon=0 (HA tesla_fleet bug) → "too far from vehicle".
   # Workaround: call Fleet API directly with the vehicle's real GPS coordinates.
+  #
+  # IMPORTANT: rest_command only logs an error when the HTTP status code
+  # itself is >=400 (e.g. the 401 expired-token case). Tesla's Fleet API can
+  # return a plain HTTP 200 while still REJECTING the actual command inside
+  # the JSON body (e.g. {"response": {"result": false, "reason": "..."}}) —
+  # typically because the vehicle is asleep, or (on 2021+ vehicles) because
+  # this command requires "command signing" (a paired virtual key in the
+  # Tesla app) which this raw REST workaround does not implement, unlike the
+  # official tesla_fleet integration's own services. That produces exactly
+  # the "log is empty, nothing happens" symptom. response_variable below
+  # captures the real response body so the notification shows the actual
+  # reason instead of silently doing nothing.
   sequence:
     - variables:
         car: "{{ states('input_text.tesla_car_name') }}"
@@ -155,6 +167,13 @@ tesla_windows_close:
         token: !secret tesla_fleet_token
         lat: "{{ lat }}"
         lon: "{{ lon }}"
+      response_variable: tesla_window_close_response
+    - action: persistent_notification.create
+      data:
+        title: "Tesla — Close Windows result"
+        message: >-
+          Status: {{ tesla_window_close_response.status | default('unknown') }}.
+          Response: {{ tesla_window_close_response.content | default('No response body captured.') }}
 
 tesla_defrost_toggle:
   alias: "Tesla Defrost Toggle"
