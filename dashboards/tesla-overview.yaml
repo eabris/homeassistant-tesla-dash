@@ -1445,10 +1445,10 @@ views:
     path: cost
     icon: mdi:cash-multiple
     cards:
-      # 6.0 Page Header (matches the header style used on Climate/other tabs)
+      # 6.0 Page Header (title only, no icon)
       - type: custom:button-card
         name: "Cost Projections"
-        icon: mdi:cash-multiple
+        show_icon: false
         styles:
           card:
             - background-color: rgba(0, 0, 0, 0.3)
