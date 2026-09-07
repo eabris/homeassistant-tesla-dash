@@ -291,6 +291,18 @@ CLI is available in your shell).
 > occasionally fail to close windows if the "too far from vehicle" bug is
 > triggered depending on your Tesla Fleet integration version.
 
+> ⚠️ **Getting `command not found` or `invalid option name: pipefail` when
+> running the script?** The file picked up Windows-style CRLF line endings
+> during the copy to your HA host (common if you opened/edited it in a
+> Windows text editor, or dragged it over a Samba share that re-saved it).
+> Fix it once on the HA host, then re-run:
+> ```bash
+> sed -i 's/\r$//' refresh_tesla_token.sh
+> bash refresh_tesla_token.sh --apply --restart
+> ```
+> To avoid this happening again, prefer `scp`/`curl` (raw byte copy) instead
+> of opening the file in a Windows editor before transferring it.
+
 ### Renaming the `tesla_` entity prefix
 
 > ℹ️ **Not to be confused with `input_text.tesla_car_name`** (see Step 5

@@ -41,6 +41,17 @@
 #   your shell's scrollback/history.
 # - Never commit secrets.yaml or any file containing a real token to git —
 #   secrets.yaml is already gitignored in this project; keep it that way.
+#
+# TROUBLESHOOTING — "command not found" / "invalid option name: pipefail":
+# This means the file picked up Windows-style CRLF line endings during the
+# copy to your HA host (common if you opened/saved it with a Windows editor,
+# or dragged it over a Samba share that re-saved it). Bash cannot reliably
+# self-repair this from inside the same corrupted script (its own if/case
+# keywords break the same way), so fix it manually first, then re-run:
+#   sed -i 's/\r$//' refresh_tesla_token.sh
+#   bash refresh_tesla_token.sh --apply --restart
+# To avoid this happening again, prefer `scp`/`curl` (raw byte copy) over
+# opening the file in a Windows text editor before transferring it.
 
 set -euo pipefail
 
