@@ -1352,11 +1352,11 @@ views:
             state_not: "US Imperial (mi, °F, psi)"
         card:
           type: custom:apexcharts-card
-          graph_span: 30d
+          graph_span: 7d
           cache: true
           header:
             show: true
-            title: "Tire Pressure History (30 days)"
+            title: "Tire Pressure History (7 days)"
           apex_config:
             chart:
               height: 300
@@ -1397,11 +1397,11 @@ views:
             state: "US Imperial (mi, °F, psi)"
         card:
           type: custom:apexcharts-card
-          graph_span: 30d
+          graph_span: 7d
           cache: true
           header:
             show: true
-            title: "Tire Pressure History (30 days)"
+            title: "Tire Pressure History (7 days)"
           apex_config:
             chart:
               height: 300
