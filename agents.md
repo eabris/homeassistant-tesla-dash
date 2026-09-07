@@ -1233,3 +1233,79 @@ comment, or doc is a placeholder, not something copy-pasted from a real
 running instance.
 
 
+
+
+
+### 11. The `initial:` Trap — Helpers Silently Resetting on Every Restart
+
+**Symptom:** user reported that after every Home Assistant restart, every
+setting they'd configured via the Settings tab — default electricity rate,
+Home/Work saved-location rate names ("addresses"), currency, unit system,
+wheel size, tire pressure, smart-charge window times, etc. — reverted back
+to whatever value was baked into `configuration.yaml`, as if nothing had
+ever been changed.
+
+**Root cause (confirmed against HA's own docs,
+`https://www.home-assistant.io/integrations/input_number/`):**
+`input_number`/`input_text`/`input_select` helpers normally use
+`RestoreEntity` automatically — the platform restores the entity's
+last-known state from the Recorder's restore-state cache on every restart,
+with **no YAML configuration needed** for this to work. However, `initial:`
+is documented as `(Optional, default: The value at shutdown)` — meaning
+setting `initial:` explicitly **replaces** "restore last value" with
+"always reset to this literal value," on every single restart, forever.
+It is designed as a one-time seed value for brand-new installs, not a
+fallback default that only applies before the entity has ever been set.
+
+This project's `configuration.yaml` had `initial:` set on **all 33**
+`input_number`/`input_text`/`input_select` helper definitions — including
+every user-editable Settings-tab field — so literally every restart wiped
+out anything the user had changed via the UI, silently, with no error or
+warning anywhere (this is invisible in logs; the entity just "restores" to
+its YAML `initial:` exactly as configured, which looks identical to normal
+successful startup).
+
+**Fix applied:** removed `initial:` from 29 of the 33 occurrences —
+every user-editable setting (currency, unit system, wheel size, default
+electricity cost, ICE comparison efficiency/fuel price, battery capacity,
+recommended tire pressure, wheel range adjustment %, the three drive-
+tracking accumulators including the lifetime `tesla_drive_energy_consumed_
+total_kwh` counter, all three saved-location rate name/hours/days/season
+quads for Home/Solar/Work, and the smart-charge window start/end times).
+Kept `initial:` only on the 4 vehicle-identity placeholder fields
+(`tesla_car_name`, `tesla_model`, `tesla_vin`, `tesla_plate`) — these are
+one-time example text meant to be overwritten once during setup (Step 5 in
+README), not settings a user tunes repeatedly, so resetting-to-placeholder-
+if-never-changed was judged acceptably safe/expected for those four only.
+
+**Deliberate inclusion of the three drive-tracking `input_number`s**
+(`tesla_drive_start_battery_pct`, `tesla_drive_start_odometer`,
+`tesla_drive_energy_consumed_total_kwh`) in the fix, despite being
+automation-managed internal state rather than user-facing "settings": the
+first two are transient markers written at the start of a drive and read
+at the end (a restart mid-drive should preserve them so the drive-end
+calculation isn't corrupted), and the third is an explicitly-documented
+**lifetime accumulator** (see Section 5's entity-rename side-effects
+writeup) that must never reset to 0 except intentionally — keeping
+`initial:` on any of these three would have been actively harmful, not
+merely a missed "nice to have."
+
+**One-time side effect users will see after upgrading:** on the very next
+restart following this fix, the 29 affected fields will show as blank/
+`unknown` (no prior restored state exists yet, since they'd never
+persisted correctly before) instead of their old placeholder text — this
+is expected and self-resolving: re-enter each value once via the Settings
+tab (or Developer Tools → States → Set state, for a one-time manual seed),
+and from that point forward every value will correctly survive restarts.
+Documented in `README.md`'s Troubleshooting table and Maintenance section.
+
+**General rule going forward:** never add `initial:` to a YAML-defined
+`input_number`/`input_text`/`input_select`/`input_boolean`/`input_datetime`
+helper in this project unless the field is a true one-time placeholder
+(like the vehicle identity fields) that's acceptable to reset if a user
+somehow never customizes it. For any real user setting, omit `initial:`
+entirely and let `RestoreEntity` do its job — if a genuinely sane
+first-boot default is needed, prefer documenting the expected first-set
+value in a comment (as already done throughout this file) rather than
+forcing it via `initial:`, since the two are not interchangeable despite
+looking similar in the YAML.

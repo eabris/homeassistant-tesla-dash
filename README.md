@@ -380,6 +380,7 @@ left alone by default (pass `--include-labels` to rename those too). Run
 | Entity names don't match dashboard | See Step 5 — either rename your entities or edit the dashboard/template YAML to match. |
 | TeslaMate can't connect to Tesla | Make sure you completed its browser-based Tesla login wizard at `http://<server-ip>:4000`. |
 | Some sensors show `Entity not available` in dashboard charts, and a full restart didn't fix it | An old, orphaned entity is probably still squatting on the exact entity_id the new sensor wants, so Home Assistant had to create it with a `_2` suffix instead (check **Settings → Devices & Services → Entities**, search the name without a domain filter — if you see two rows, one ending in `_2`, this is it). See the "Start clean" recipe below. |
+| Settings reset to their defaults after every restart (electricity rate, home/work rate names, currency, wheel size, tire pressure, smart-charge window, etc.) | This was a real bug in this project's `configuration.yaml`, fixed as of this commit — see "Why my settings used to reset on restart" below. If you're still seeing it, make sure you've pulled the latest version of this repo. |
 
 > 🧹 **"Start clean" — wipe and re-create all Tesla entities from scratch:**
 > If you've renamed things, run a cleanup script, or just want a truly fresh
@@ -404,6 +405,27 @@ left alone by default (pass `--include-labels` to rename those too). Run
 > (electricity rate, tire pressure, smart-charge window, car name, lifetime
 > energy accumulator, etc.) are never reset. Only sensors/scripts/automations
 > get wiped and cleanly re-created from YAML.
+
+> 🔁 **Why my settings used to reset on restart:** Home Assistant's
+> `input_number`/`input_text`/`input_select` helpers normally remember the
+> last value you set, across restarts, automatically — **unless** the YAML
+> definition includes an `initial:` key, in which case HA always resets to
+> that value on every start (per HA's own docs: `initial` is only a one-time
+> seed default, not a persistent default). Earlier versions of this repo's
+> `configuration.yaml` had `initial:` set on every user-editable setting
+> (electricity rate, ICE comparison values, tire pressure, wheel size,
+> currency, unit system, saved-location rate names/hours/days/season, smart
+> charge window times, the lifetime drive-energy accumulator, etc.) — so
+> every restart silently wiped out anything you'd changed in the Settings
+> tab. This has been fixed: `initial:` was removed from all of those, so
+> they now correctly restore your last-set value on restart. It was kept
+> only on the four vehicle-identity placeholders (`tesla_car_name`,
+> `tesla_model`, `tesla_vin`, `tesla_plate`) since those are meant as
+> one-time example text you overwrite once during setup, not settings you
+> change repeatedly. **One-time consequence:** the very first restart after
+> updating will show these fields as blank/`unknown` instead of their old
+> placeholder text — just re-enter your values once via the Settings tab
+> (or Developer Tools → States) and from then on they'll persist normally.
 
 ---
 
