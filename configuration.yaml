@@ -522,9 +522,18 @@ template:
   - sensor:
       - name: "Vehicle Odometer"
         unique_id: vehicle_odometer_alias_v1
+        # `none` here is intentional, not a typo: rendering the literal Jinja
+        # `none` is auto-parsed back into Python None by HA's template engine
+        # (single-expression templates), which correctly puts the entity into
+        # the "unknown" state. Without this guard, whenever the underlying
+        # Fleet sensor is unavailable/unknown (car asleep), the raw string
+        # "unknown" gets validated as this sensor's numeric state and fails
+        # with "Received invalid sensor state: unknown, expected a number" in
+        # the log — see agents.md Section 12 for the full writeup.
         state: >
           {% set car = states('input_text.tesla_car_name') %}
-          {{ states('sensor.' + car + '_odometer') }}
+          {% set val = states('sensor.' + car + '_odometer') %}
+          {{ val if val not in ['unknown', 'unavailable', ''] else none }}
         unit_of_measurement: "km"
         device_class: distance
         state_class: total_increasing
@@ -534,7 +543,8 @@ template:
         unique_id: vehicle_charge_energy_added_alias_v1
         state: >
           {% set car = states('input_text.tesla_car_name') %}
-          {{ states('sensor.' + car + '_charge_energy_added') }}
+          {% set val = states('sensor.' + car + '_charge_energy_added') %}
+          {{ val if val not in ['unknown', 'unavailable', ''] else none }}
         unit_of_measurement: "kWh"
         device_class: energy
         state_class: total_increasing
@@ -544,7 +554,8 @@ template:
         unique_id: vehicle_battery_level_alias_v1
         state: >
           {% set car = states('input_text.tesla_car_name') %}
-          {{ states('sensor.' + car + '_usable_battery_level') }}
+          {% set val = states('sensor.' + car + '_usable_battery_level') %}
+          {{ val if val not in ['unknown', 'unavailable', ''] else none }}
         unit_of_measurement: "%"
         device_class: battery
         state_class: measurement
@@ -554,7 +565,8 @@ template:
         unique_id: vehicle_battery_range_alias_v1
         state: >
           {% set car = states('input_text.tesla_car_name') %}
-          {{ states('sensor.' + car + '_estimate_battery_range') }}
+          {% set val = states('sensor.' + car + '_estimate_battery_range') %}
+          {{ val if val not in ['unknown', 'unavailable', ''] else none }}
         unit_of_measurement: "km"
         icon: mdi:map-marker-distance
 
@@ -562,7 +574,8 @@ template:
         unique_id: vehicle_ideal_battery_range_alias_v1
         state: >
           {% set car = states('input_text.tesla_car_name') %}
-          {{ states('sensor.' + car + '_ideal_battery_range') }}
+          {% set val = states('sensor.' + car + '_ideal_battery_range') %}
+          {{ val if val not in ['unknown', 'unavailable', ''] else none }}
         unit_of_measurement: "km"
         icon: mdi:map-marker-distance
 
@@ -570,7 +583,8 @@ template:
         unique_id: vehicle_charge_rate_alias_v1
         state: >
           {% set car = states('input_text.tesla_car_name') %}
-          {{ states('sensor.' + car + '_charge_rate') }}
+          {% set val = states('sensor.' + car + '_charge_rate') %}
+          {{ val if val not in ['unknown', 'unavailable', ''] else none }}
         unit_of_measurement: "km/h"
         icon: mdi:speedometer
 
@@ -578,7 +592,8 @@ template:
         unique_id: vehicle_charger_current_alias_v1
         state: >
           {% set car = states('input_text.tesla_car_name') %}
-          {{ states('sensor.' + car + '_charger_current') }}
+          {% set val = states('sensor.' + car + '_charger_current') %}
+          {{ val if val not in ['unknown', 'unavailable', ''] else none }}
         unit_of_measurement: "A"
         device_class: current
         icon: mdi:sine-wave
@@ -587,7 +602,8 @@ template:
         unique_id: vehicle_charger_power_alias_v1
         state: >
           {% set car = states('input_text.tesla_car_name') %}
-          {{ states('sensor.' + car + '_charger_power') }}
+          {% set val = states('sensor.' + car + '_charger_power') %}
+          {{ val if val not in ['unknown', 'unavailable', ''] else none }}
         unit_of_measurement: "kW"
         device_class: power
         icon: mdi:flash
@@ -596,7 +612,8 @@ template:
         unique_id: vehicle_charger_voltage_alias_v1
         state: >
           {% set car = states('input_text.tesla_car_name') %}
-          {{ states('sensor.' + car + '_charger_voltage') }}
+          {% set val = states('sensor.' + car + '_charger_voltage') %}
+          {{ val if val not in ['unknown', 'unavailable', ''] else none }}
         unit_of_measurement: "V"
         device_class: voltage
         icon: mdi:flash
@@ -612,7 +629,8 @@ template:
         unique_id: vehicle_inside_temperature_alias_v1
         state: >
           {% set car = states('input_text.tesla_car_name') %}
-          {{ states('sensor.' + car + '_inside_temperature') }}
+          {% set val = states('sensor.' + car + '_inside_temperature') %}
+          {{ val if val not in ['unknown', 'unavailable', ''] else none }}
         unit_of_measurement: "°C"
         device_class: temperature
         state_class: measurement
@@ -622,7 +640,8 @@ template:
         unique_id: vehicle_outside_temperature_alias_v1
         state: >
           {% set car = states('input_text.tesla_car_name') %}
-          {{ states('sensor.' + car + '_outside_temperature') }}
+          {% set val = states('sensor.' + car + '_outside_temperature') %}
+          {{ val if val not in ['unknown', 'unavailable', ''] else none }}
         unit_of_measurement: "°C"
         device_class: temperature
         state_class: measurement
@@ -639,7 +658,8 @@ template:
         unique_id: vehicle_speed_alias_v1
         state: >
           {% set car = states('input_text.tesla_car_name') %}
-          {{ states('sensor.' + car + '_speed') }}
+          {% set val = states('sensor.' + car + '_speed') %}
+          {{ val if val not in ['unknown', 'unavailable', ''] else none }}
         unit_of_measurement: "km/h"
         state_class: measurement
         icon: mdi:speedometer
@@ -655,7 +675,8 @@ template:
         unique_id: vehicle_tyre_pressure_fl_alias_v1
         state: >
           {% set car = states('input_text.tesla_car_name') %}
-          {{ states('sensor.' + car + '_tyre_pressure_front_left') }}
+          {% set val = states('sensor.' + car + '_tyre_pressure_front_left') %}
+          {{ val if val not in ['unknown', 'unavailable', ''] else none }}
         unit_of_measurement: "bar"
         device_class: pressure
         state_class: measurement
@@ -665,7 +686,8 @@ template:
         unique_id: vehicle_tyre_pressure_fr_alias_v1
         state: >
           {% set car = states('input_text.tesla_car_name') %}
-          {{ states('sensor.' + car + '_tyre_pressure_front_right') }}
+          {% set val = states('sensor.' + car + '_tyre_pressure_front_right') %}
+          {{ val if val not in ['unknown', 'unavailable', ''] else none }}
         unit_of_measurement: "bar"
         device_class: pressure
         state_class: measurement
@@ -675,7 +697,8 @@ template:
         unique_id: vehicle_tyre_pressure_rl_alias_v1
         state: >
           {% set car = states('input_text.tesla_car_name') %}
-          {{ states('sensor.' + car + '_tyre_pressure_rear_left') }}
+          {% set val = states('sensor.' + car + '_tyre_pressure_rear_left') %}
+          {{ val if val not in ['unknown', 'unavailable', ''] else none }}
         unit_of_measurement: "bar"
         device_class: pressure
         state_class: measurement
@@ -685,7 +708,8 @@ template:
         unique_id: vehicle_tyre_pressure_rr_alias_v1
         state: >
           {% set car = states('input_text.tesla_car_name') %}
-          {{ states('sensor.' + car + '_tyre_pressure_rear_right') }}
+          {% set val = states('sensor.' + car + '_tyre_pressure_rear_right') %}
+          {{ val if val not in ['unknown', 'unavailable', ''] else none }}
         unit_of_measurement: "bar"
         device_class: pressure
         state_class: measurement
@@ -786,7 +810,8 @@ template:
         unique_id: vehicle_charge_limit_alias_v1
         state: >
           {% set car = states('input_text.tesla_car_name') %}
-          {{ states('number.' + car + '_charge_limit') }}
+          {% set val = states('number.' + car + '_charge_limit') %}
+          {{ val if val not in ['unknown', 'unavailable', ''] else none }}
         min: >
           {% set car = states('input_text.tesla_car_name') %}
           {{ state_attr('number.' + car + '_charge_limit', 'min') | default(50, true) }}
@@ -814,7 +839,8 @@ template:
         # it without hardcoding a real entity_id.
         state: >
           {% set car = states('input_text.tesla_car_name') %}
-          {{ states('number.' + car + '_charge_current') }}
+          {% set val = states('number.' + car + '_charge_current') %}
+          {{ val if val not in ['unknown', 'unavailable', ''] else none }}
         min: >
           {% set car = states('input_text.tesla_car_name') %}
           {{ state_attr('number.' + car + '_charge_current', 'min') | default(0, true) }}

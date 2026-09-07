@@ -381,6 +381,7 @@ left alone by default (pass `--include-labels` to rename those too). Run
 | TeslaMate can't connect to Tesla | Make sure you completed its browser-based Tesla login wizard at `http://<server-ip>:4000`. |
 | Some sensors show `Entity not available` in dashboard charts, and a full restart didn't fix it | An old, orphaned entity is probably still squatting on the exact entity_id the new sensor wants, so Home Assistant had to create it with a `_2` suffix instead (check **Settings → Devices & Services → Entities**, search the name without a domain filter — if you see two rows, one ending in `_2`, this is it). See the "Start clean" recipe below. |
 | Settings reset to their defaults after every restart (electricity rate, home/work rate names, currency, wheel size, tire pressure, smart-charge window, etc.) | This was a real bug in this project's `configuration.yaml`, fixed as of this commit — see "Why my settings used to reset on restart" below. If you're still seeing it, make sure you've pulled the latest version of this repo. |
+| Log shows `Received invalid sensor state: unknown for entity sensor.vehicle_...` | Harmless and already fixed as of this commit — happened whenever the car went to sleep/offline. Pull the latest version of this repo; no action needed on your end otherwise. |
 
 > 🧹 **"Start clean" — wipe and re-create all Tesla entities from scratch:**
 > If you've renamed things, run a cleanup script, or just want a truly fresh

@@ -1309,3 +1309,86 @@ first-boot default is needed, prefer documenting the expected first-set
 value in a comment (as already done throughout this file) rather than
 forcing it via `initial:`, since the two are not interchangeable despite
 looking similar in the YAML.
+
+
+
+### 12. Numeric Alias Sensors Logging "invalid sensor state: unknown, expected a number"
+
+**Symptom:** HA logs (Template integration, `components/template/validators.py`)
+show errors like:
+```
+Received invalid sensor state: unknown for entity sensor.vehicle_battery_range, expected a number
+```
+whenever the underlying real Tesla Fleet entity is temporarily `unknown`/
+`unavailable` (typically the car is asleep or just went offline).
+
+**Root cause (confirmed against HA core source,
+`homeassistant/components/template/sensor.py` + `.../template/validators.py`):**
+Any template sensor with `unit_of_measurement` set is treated as
+`_numeric_state_expected = True` internally — regardless of whether
+`device_class`/`state_class` is also set. When numeric validation is
+expected, HA runs the rendered template result through `tcv.number(...)`,
+which only auto-converts to "unknown" for a *literal Python `None`* result
+(`check_result_for_none()` short-circuits on `result is None`) — it does
+**not** special-case the literal *string* `"unknown"`/`"unavailable"`. Since
+`{{ states('sensor.' + car + '_estimate_battery_range') }}` simply renders
+whatever `states()` returns as text — including the literal string
+`"unknown"` when the source entity is unavailable — that string then fails
+`vol.Coerce(float)` and gets logged as an error, even though this is a
+totally normal, expected condition (car asleep).
+
+**Why rendering Jinja's bare `none` fixes it (not a typo):** Home
+Assistant's template rendering auto-parses a template's output back into
+native Python types when the template consists of a single output
+expression — so `{{ some_condition_thats_true if ... else none }}`
+doesn't literally show up as the sensor's state as the text "None"; HA's
+`Template.async_render()` parses the rendered `"None"` string back into an
+actual Python `None` object. That real `None` then passes
+`check_result_for_none()` cleanly, and the entity's state becomes properly
+`unknown` — with **no error logged** — instead of a raw, invalid string
+value.
+
+**Fix applied:** all `vehicle_*` numeric Fleet Sensor Alias templates
+(Section 5) that have a `unit_of_measurement` were changed from the naive
+one-line pass-through:
+```yaml
+state: >
+  {% set car = states('input_text.tesla_car_name') %}
+  {{ states('sensor.' + car + '_odometer') }}
+```
+to an explicit unknown/unavailable guard:
+```yaml
+state: >
+  {% set car = states('input_text.tesla_car_name') %}
+  {% set val = states('sensor.' + car + '_odometer') %}
+  {{ val if val not in ['unknown', 'unavailable', ''] else none }}
+```
+Applied to all 18 affected templates: `vehicle_odometer`,
+`vehicle_charge_energy_added`, `vehicle_battery_level`,
+`vehicle_battery_range`, `vehicle_ideal_battery_range`,
+`vehicle_charge_rate`, `vehicle_charger_current`, `vehicle_charger_power`,
+`vehicle_charger_voltage`, `vehicle_inside_temperature`,
+`vehicle_outside_temperature`, `vehicle_speed`, all 4
+`vehicle_tyre_pressure_*` sensors, and the two writable `number:` control
+aliases (`vehicle_charge_limit`, `vehicle_charge_current` — same
+`_numeric_state_expected` logic applies to the `number:` template domain).
+Left untouched: `vehicle_charging`, `vehicle_shift_state`,
+`vehicle_time_to_full_charge`, and `select.vehicle_steering_wheel_heater` —
+these have no `unit_of_measurement`, so they're treated as plain strings
+and were never subject to this numeric-validation error in the first
+place.
+
+**No dashboard changes needed:** every dashboard card/label already treats
+`'unknown'`/`'unavailable'` string states defensively in its own JS/Jinja
+(e.g. `!rawRange || rawRange === 'unknown'`), so nothing downstream breaks
+now that these sensors correctly *become* HA's real `unknown` state instead
+of holding the literal string `"unknown"` as a (invalid) numeric value —
+this fix only silences the log spam and makes the entities' state
+correctly machine-readable as unknown (e.g. for `is_state(..., 'unknown')`
+checks, statistics, etc.), it doesn't change what the dashboards display.
+
+**General rule going forward:** any new `vehicle_*`-style numeric alias
+sensor added to this project (i.e. anything with `unit_of_measurement` set)
+must use the `{{ val if val not in ['unknown', 'unavailable', ''] else none }}`
+guard pattern shown above — never a bare `{{ states(...) }}` pass-through —
+to avoid reintroducing this exact log error.
