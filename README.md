@@ -244,6 +244,53 @@ Go to **Tesla Analytics → Settings** to:
 > switching. Use them to document your tariffs for now; smarter rate-aware
 > calculations may come in a future update.
 
+### Refreshing the Tesla Fleet token (window-close workaround)
+
+The `tesla_windows_close` script (Controls tab → "Close Windows") doesn't use
+the built-in `cover.close_cover` service, because of a known Home Assistant
+Tesla Fleet integration bug where that service sends `lat=0, lon=0`, which
+Tesla's API rejects as "too far from vehicle." Instead, it calls the Tesla
+Fleet Cloud API directly with your vehicle's real GPS coordinates, via
+`rest_command.tesla_window_close_gps` (see `packages/tesla/scripts.yaml` and
+`configuration.yaml`).
+
+This workaround needs a Tesla OAuth **access token** in `secrets.yaml`
+(`tesla_fleet_token`). Unlike the official integration (which refreshes its
+own token internally, automatically, forever), this token is a static copy
+and **expires roughly every 8 hours** — after which "Close Windows" starts
+failing with an HTTP 401 error in your logs. When that happens, refresh it:
+
+```bash
+# Copy scripts/refresh_tesla_token.sh onto your HA host first (via the
+# Samba/File Editor add-on, or scp), then run it there — NOT from your dev
+# machine, since it needs to read a file that lives on the HA host itself:
+
+# 1. Preview only (safe, default — nothing is written):
+bash refresh_tesla_token.sh
+
+# 2. Apply it (backs up secrets.yaml first, then updates the token):
+bash refresh_tesla_token.sh --apply
+
+# 3. Apply it and restart Home Assistant Core in the same step:
+bash refresh_tesla_token.sh --apply --restart
+```
+
+It finds your current token inside Home Assistant's own
+`.storage/core.config_entries` file (where the Tesla Fleet integration
+stores its live, already-refreshed token — the file itself isn't exposed via
+any Home Assistant API, so this has to run locally on the HA host), and
+writes it into `secrets.yaml` for you. Requires `python3` or `jq` to be
+available in your SSH/Terminal add-on shell (most images have at least one).
+A full Home Assistant restart is required afterwards for the new token to
+take effect (the script can do this for you with `--restart`, if the `ha`
+CLI is available in your shell).
+
+> 💡 If you find yourself refreshing this token often and would rather not
+> bother, ask for the window-close script to be switched back to using the
+> built-in `cover.close_cover` service — it needs no token, but may
+> occasionally fail to close windows if the "too far from vehicle" bug is
+> triggered depending on your Tesla Fleet integration version.
+
 ### Renaming the `tesla_` entity prefix
 
 > ℹ️ **Not to be confused with `input_text.tesla_car_name`** (see Step 5

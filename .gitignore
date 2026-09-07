@@ -1,6 +1,7 @@
 .backups
 .idea
 .env
+logs
 __pycache__/
 *.pyc
 secrets.yaml

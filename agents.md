@@ -1065,6 +1065,55 @@ range" isn't wheel-size-aware and was a less actionable number for this
 purpose. (`sensor.vehicle_ideal_battery_range` itself is untouched and
 still defined, just no longer read by this specific card.)
 
+### 10a. Tesla Fleet Token Refresh Script (`scripts/refresh_tesla_token.sh`)
+
+**Root cause diagnosed:** the `tesla_windows_close` script (`packages/tesla/scripts.yaml`)
+bypasses the built-in `cover.close_cover` service due to a known Tesla Fleet
+integration bug (sends `lat=0, lon=0`, rejected by Tesla's API as "too far
+from vehicle") and instead calls `rest_command.tesla_window_close_gps`
+directly against the Tesla Fleet Cloud API, using a **static** OAuth token
+stored in `secrets.yaml` (`tesla_fleet_token`). This is fundamentally
+different from the official `tesla_fleet` integration's own token, which
+auto-refreshes internally forever — the copy in `secrets.yaml` does not, and
+expires roughly every ~8 hours (not "restart-triggered" — a user initially
+suspected an HA restart caused it to stop working, but it was simply
+coincidental timing; the token had already gone stale by the time of the
+next window-close attempt after a restart happened to occur).
+
+**Why it can't be fetched remotely:** the refreshed/live token lives only in
+Home Assistant's own on-disk `.storage/core.config_entries` file, under the
+`tesla_fleet` integration's config entry (`data.token.access_token`). This
+file/value is **not** exposed through any Home Assistant REST/WebSocket API
+(by design, for security) — so none of this project's existing Python
+maintenance scripts (which all talk to HA over HTTP from the user's separate
+dev machine) can retrieve it. It can only be read by something running
+directly on the HA host itself, e.g. the "Terminal & SSH" add-on's shell.
+
+**The fix:** `scripts/refresh_tesla_token.sh` — a bash script meant to be
+copied onto the HA host (via Samba/File Editor add-on, or `scp`) and run
+there, not from the dev machine. It parses `.storage/core.config_entries`
+(via `python3` if available, falling back to `jq`) to find the `tesla_fleet`
+domain entry's live `access_token`, then writes it into `secrets.yaml`.
+Follows this project's established script conventions: dry-run by default
+(masked token preview only, nothing written), `--apply` to actually write,
+automatic timestamped backup of `secrets.yaml` before any edit, `--show` to
+print the full unmasked token only when explicitly requested (avoids
+leaving a full OAuth token sitting in shell scrollback/history otherwise),
+and an optional `--restart` to also call `ha core restart` if the Supervisor
+CLI is present in that shell. Documented in `README.md`'s Maintenance
+section with full usage steps. Unit-verified against a synthetic
+`core.config_entries` fixture (dry-run masks correctly, `--apply` backs up
+and rewrites the existing `tesla_fleet_token:` line correctly, `--show`
+prints the full token) before being handed to the user.
+
+**If the user tires of periodic manual token refreshes:** the documented
+fallback is switching `tesla_windows_close` back to the built-in
+`cover.close_cover` service — no token needed at all, at the cost of
+possibly hitting the known lat/lon=0 "too far from vehicle" bug again
+depending on the installed Tesla Fleet integration version. Not done by
+default since the GPS workaround was deliberately built to route around
+that exact bug; only switch back if explicitly requested.
+
 ### 10. Never Commit Real Personal/Private Information
 
 **Rule:** Never hardcode a real Home Assistant URL, Long-Lived Access
