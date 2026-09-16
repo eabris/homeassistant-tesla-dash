@@ -241,6 +241,7 @@ views:
           # you'd like a real Profiler feature added.
           - type: grid
             columns: 2
+            square: false
             cards:
               # Climate
               - type: custom:button-card
@@ -735,6 +736,7 @@ views:
           # Seat Heating Matrix - Car cabin layout: Left | Center | Right
           - type: grid
             columns: 3
+            square: false
             cards:
               # Row 1: empty | Steering Wheel | empty
               - type: custom:button-card
@@ -937,6 +939,7 @@ views:
           # Auxiliary Climate Buttons (2×3 grid)
           - type: grid
             columns: 3
+            square: false
             cards:
               - type: custom:button-card
                 entity: script.tesla_dog_mode
@@ -1054,6 +1057,7 @@ views:
           # 4.2 Telemetry Table (2×4 grid)
           - type: grid
             columns: 2
+            square: false
             cards:
               # LEVEL
               - type: custom:button-card
@@ -1270,6 +1274,7 @@ views:
           # 5.2 Wheel Pressure Matrix (2×2)
           - type: grid
             columns: 2
+            square: false
             cards:
               # FL
               - type: custom:button-card

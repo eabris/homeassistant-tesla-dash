@@ -443,3 +443,16 @@ sensor.tesla_daily_efficiency_wh_per_km          | sensor        | efficiency   
 #    the entity's friendly name for a falsy-but-present `name:` -- showed
 #    truncated "Tesla Climate ..." text. Changed to `show_name: false` on
 #    both buttons, which correctly suppresses the name.
+#
+# Follow-up: huge row spacing + uneven box heights (same layout audit)
+# Root cause: all 5 `type: grid` cards (Dashboard info grid, Climate seat
+# matrix, Climate aux buttons, Battery telemetry table, Tires wheel matrix)
+# had no `square:` key set, so HA's grid card defaulted to `square: true`
+# -- forcing every cell into a 1:1 aspect-ratio box sized off column width,
+# rather than sizing to its actual icon+label content. Once views were
+# narrowed to one masonry column (previous fix), that column-width-based
+# square sizing produced oversized, mostly-empty boxes -- read as "huge
+# spacing between rows" -- and made 3-column grids (Climate) look a
+# different height than nearby non-grid horizontal-stacks (header, temp
+# stepper), read as "uneven box heights". Fix: added `square: false` to
+# all 5 grid cards so cells size to content instead. No entities changed.
