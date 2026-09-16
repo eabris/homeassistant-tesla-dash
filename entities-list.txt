@@ -411,3 +411,35 @@ sensor.tesla_daily_efficiency_wh_per_km          | sensor        | efficiency   
 # (Tessie-inspired "Efficiency vs Speed"/"vs Temperature" and trip-duration
 # tracking), and the fix only required swapping which existing sensors/
 # card features they read from, no new architecture.
+
+# ─────────────────────────────────────────────────────────────
+# Dashboard layout fix: desktop masonry column-splitting
+# ─────────────────────────────────────────────────────────────
+# No new entities. dashboards/tesla-overview.yaml has no `type:` set on any
+# view, so Lovelace defaults to `masonry`, which auto-distributes each
+# view's TOP-LEVEL cards into 2+ fixed-width columns on wide desktop
+# screens (greedy shortest-column-first placement) -- this does NOT
+# preserve YAML declaration order/grouping, only mobile (1 column) looked
+# right. Reported symptoms: Dashboard tab's Quick Action Row appearing to
+# vanish, Climate tab's seat matrix/stepper/aux buttons scattered with huge
+# gaps, inconsistent card sizes/margins across tabs on desktop.
+#
+# Fix: wrapped each view's entire top-level `cards:` list in ONE
+# `type: vertical-stack` (Dashboard, Controls, Climate, Battery, Tires,
+# Cost Projections -- all 6 views in tesla-overview.yaml), matching the
+# pattern tesla-analytics.yaml's History tab already used successfully.
+# Forces masonry to treat the whole view as a single column/card, so
+# desktop now renders in the same order/grouping as mobile. Purely
+# structural (added 2 lines + reindented existing cards +4 spaces per
+# view) -- no card content, entities, or logic changed.
+#
+# Also fixed while auditing the same screenshots:
+#  - Controls tab status-chip row (Online/Locked/Windows/Sentry) was
+#    clipping instead of wrapping on both mobile and desktop -- added
+#    `display:flex;flex-wrap:wrap;gap:6px` to the wrapping <div> in the
+#    Vehicle Status Hero card's `details` custom_field.
+#  - Climate tab's temp-stepper +/- buttons (custom:button-card) used
+#    `name: ""` intending to hide the label, but button-card falls back to
+#    the entity's friendly name for a falsy-but-present `name:` -- showed
+#    truncated "Tesla Climate ..." text. Changed to `show_name: false` on
+#    both buttons, which correctly suppresses the name.
