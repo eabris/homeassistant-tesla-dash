@@ -156,6 +156,18 @@
     - condition: template
       value_template: "{{ states('sensor.vehicle_odometer') not in ['unknown', 'unavailable', 'none', none] }}"
   action:
+    # Capture the just-ended month's total distance BEFORE overwriting the
+    # baseline below -- powers the History tab's "Previous Month" card
+    # (sensor.tesla_previous_month_distance). Order matters: this must run
+    # first, while the baseline still reflects the month that's ending.
+    - action: input_number.set_value
+      target:
+        entity_id: input_number.tesla_previous_month_distance
+      data:
+        value: >
+          {% set odo = states('sensor.vehicle_odometer') | float(0) %}
+          {% set baseline = states('input_number.tesla_odometer_monthly_baseline') | float(0) %}
+          {{ ((odo - baseline) if odo >= baseline else 0) | round(2) }}
     - action: input_number.set_value
       target:
         entity_id: input_number.tesla_odometer_monthly_baseline

@@ -186,6 +186,31 @@ sensor:
     start: "{{ now() - timedelta(days=30) }}"
     end: "{{ now() }}"
 
+  # Rolling (trailing 7x24h) distance/energy for the History tab's "Last 7
+  # Days" card, distinct from THIS WEEK's calendar-week (Mon-reset) figures.
+  # "change" = newest minus oldest sample of the source within max_age -- both
+  # sources are state_class: total_increasing lifetime counters, so this is
+  # exactly "how much did this counter grow in the last 7 days". Recorder
+  # history backfills this immediately on restart (no history_stats-style
+  # cold-start gap), per the statistics integration's own docs.
+  - platform: statistics
+    name: "Tesla Distance 7d Rolling"
+    unique_id: tesla_distance_7d_rolling_v1
+    entity_id: sensor.vehicle_odometer
+    state_characteristic: change
+    max_age:
+      days: 7
+    precision: 2
+
+  - platform: statistics
+    name: "Tesla Charging Energy 7d Rolling"
+    unique_id: tesla_charging_energy_7d_rolling_v1
+    entity_id: sensor.vehicle_charge_energy_added
+    state_characteristic: change
+    max_age:
+      days: 7
+    precision: 2
+
 input_select:
   tesla_currency:
     name: "Tesla Currency"
@@ -240,6 +265,21 @@ input_number:
     mode: box
     unit_of_measurement: "km"
     icon: mdi:counter
+
+  # Snapshot of "distance driven" taken right before the monthly baseline above
+  # resets each 1st of the month (see automation tesla_odometer_monthly_baseline
+  # in packages/tesla/automations.yaml) -- i.e. the just-completed calendar
+  # month's total distance. Powers the History tab's "Previous Month" card.
+  # No `initial:` on purpose (automation-managed state, see agents.md Section 11)
+  # -- will read 0/blank until the first rollover after this was added.
+  tesla_previous_month_distance:
+    name: "Tesla Previous Month Distance"
+    min: 0
+    max: 9999999
+    step: 0.01
+    mode: box
+    unit_of_measurement: "km"
+    icon: mdi:map-marker-distance
 
   tesla_target_charge_limit:
     name: "Tesla Target Charge Limit"
@@ -1084,6 +1124,36 @@ template:
           {% set rate = states('input_number.tesla_default_electricity_cost') | float(60) %}
           {{ (weekly_energy * rate) | round(0) }}
 
+      - name: "Tesla Electric Cost 7d Rolling"
+        unique_id: tesla_electric_cost_7d_rolling_v1
+        unit_of_measurement: "Ft"
+        icon: mdi:cash-multiple
+        state: >
+          {% set energy = states('sensor.tesla_charging_energy_7d_rolling') | float(0) %}
+          {% set rate = states('input_number.tesla_default_electricity_cost') | float(60) %}
+          {{ (energy * rate) | round(0) }}
+
+      # Previous calendar month's charging energy, read straight off the
+      # tesla_monthly_charging_energy utility_meter's own auto-maintained
+      # "last_period" attribute (populated by HA every time the monthly cycle
+      # rolls over) -- no extra automation logic needed, unlike distance below.
+      - name: "Tesla Previous Month Charging Energy"
+        unique_id: tesla_previous_month_charging_energy_v1
+        unit_of_measurement: "kWh"
+        state_class: measurement
+        icon: mdi:ev-station
+        state: >
+          {{ state_attr('sensor.tesla_monthly_charging_energy', 'last_period') | float(0) | round(2) }}
+
+      - name: "Tesla Previous Month Electric Cost"
+        unique_id: tesla_previous_month_electric_cost_v1
+        unit_of_measurement: "Ft"
+        icon: mdi:cash-multiple
+        state: >
+          {% set energy = states('sensor.tesla_previous_month_charging_energy') | float(0) %}
+          {% set rate = states('input_number.tesla_default_electricity_cost') | float(60) %}
+          {{ (energy * rate) | round(0) }}
+
       - name: "Tesla Annual Electric Cost"
         unique_id: tesla_annual_electric_cost_v5
         unit_of_measurement: "Ft"
@@ -1140,6 +1210,36 @@ template:
         icon: mdi:gas-station
         state: >
           {% set dist = states('sensor.tesla_weekly_distance') | float(0) %}
+          {% set fuel_per_km = states('sensor.tesla_fuel_cost_per_km') | float(0) %}
+          {{ (dist * fuel_per_km) | round(0) }}
+
+      - name: "Tesla Fuel Cost 7d Rolling Equivalent"
+        unique_id: tesla_fuel_cost_7d_rolling_v1
+        unit_of_measurement: "Ft"
+        icon: mdi:gas-station
+        state: >
+          {% set dist = states('sensor.tesla_distance_7d_rolling') | float(0) %}
+          {% set fuel_per_km = states('sensor.tesla_fuel_cost_per_km') | float(0) %}
+          {{ (dist * fuel_per_km) | round(0) }}
+
+      # Wraps input_number.tesla_previous_month_distance (populated by the
+      # tesla_odometer_monthly_baseline automation right before it resets the
+      # baseline each month) for naming consistency with its monthly/weekly
+      # siblings above.
+      - name: "Tesla Previous Month Distance"
+        unique_id: tesla_previous_month_distance_v1
+        unit_of_measurement: "km"
+        state_class: measurement
+        icon: mdi:map-marker-distance
+        state: >
+          {{ states('input_number.tesla_previous_month_distance') | float(0) | round(2) }}
+
+      - name: "Tesla Previous Month Fuel Cost"
+        unique_id: tesla_previous_month_fuel_cost_v1
+        unit_of_measurement: "Ft"
+        icon: mdi:gas-station
+        state: >
+          {% set dist = states('sensor.tesla_previous_month_distance') | float(0) %}
           {% set fuel_per_km = states('sensor.tesla_fuel_cost_per_km') | float(0) %}
           {{ (dist * fuel_per_km) | round(0) }}
 
@@ -1206,6 +1306,25 @@ template:
         icon: mdi:car-clock
         state: >
           {% set hours = states('sensor.tesla_driving_time_7d_raw') | float(0) %}
+          {{ (hours * 60) | round(0) }}
+
+      # Deliberately NOT device_class: duration (unlike its _raw source,
+      # sensor.tesla_driving_time_30d_raw) -- the Analytics "Duration" chart
+      # (dashboards/tesla-analytics.yaml) fed directly off the _raw entity for
+      # years and always showed "N/A"/no data, while every other chart in that
+      # dashboard (built on plain unitless/minute-based sensors like this one)
+      # worked fine. history_stats' "type: time" sensors get device_class:
+      # duration + native unit "h" assigned automatically by the platform,
+      # which apexcharts-card's raw-history fetch appears unable to parse
+      # reliably for this integration/HA version combination. Kept as a
+      # plain numeric "min" sensor -- identical shape to Today/7d above --
+      # to sidestep that entirely rather than debug it further blind.
+      - name: "Tesla Driving Time 30d"
+        unique_id: tesla_driving_time_30d_v1
+        unit_of_measurement: "min"
+        icon: mdi:car-clock
+        state: >
+          {% set hours = states('sensor.tesla_driving_time_30d_raw') | float(0) %}
           {{ (hours * 60) | round(0) }}
 
       - name: "Tesla Charging Time Today"

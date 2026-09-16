@@ -137,7 +137,8 @@ views:
                 block:
                   - width: 100%
 
-          # LAST 7 DAYS (rolling window, history_stats)
+          # LAST 7 DAYS (rolling window: statistics "change" for
+          # distance/energy, history_stats for drive/charge time)
           - type: custom:button-card
             show_icon: false
             show_name: false
@@ -153,6 +154,16 @@ views:
                     const h = Math.floor(m / 60); const min = Math.round(m % 60);
                     return h > 0 ? `${h}h ${min}m` : `${min}m`;
                   };
+                  const fmt = (raw, unit, dec=1) => {
+                    const v = parseFloat(String(raw || '0'));
+                    return isNaN(v) || v <= 0 ? '–' : `${v.toFixed(dec)} ${unit}`;
+                  };
+                  const currencySymbol = states['sensor.tesla_currency_symbol']?.state || 'Ft';
+                  const currencyLocale = states['sensor.tesla_currency_locale']?.state || 'hu-HU';
+                  const ftm = (raw) => {
+                    const v = parseFloat(String(raw || '0')) || 0;
+                    return v <= 0 ? currencySymbol + '0' : currencySymbol + Math.round(v).toLocaleString(currencyLocale);
+                  };
                   const row = (icon, label, val, sub) =>
                     `<div style="display:flex;align-items:center;gap:12px;padding:8px 0;border-top:1px solid rgba(255,255,255,0.07)">
                       <span style="font-size:18px;width:22px;text-align:center;flex-shrink:0">${icon}</span>
@@ -161,12 +172,27 @@ views:
                         <div style="color:#fff;font-size:15px;font-weight:700">${val}${sub ? `<span style="color:#aaa;font-size:11px;font-weight:400">  ${sub}</span>` : ''}</div>
                       </div>
                     </div>`;
+                  const unitSys = states['input_select.tesla_unit_system']?.state || 'Metric (km, °C, bar)';
+                  const isMi = unitSys !== 'Metric (km, °C, bar)';
+                  const distUnit = isMi ? 'mi' : 'km';
+                  const distKm = parseFloat(states['sensor.tesla_distance_7d_rolling']?.state || '0') || 0;
+                  const dist = fmt(isMi ? distKm * 0.621371 : distKm, distUnit, 0);
+                  const energy = fmt(states['sensor.tesla_charging_energy_7d_rolling']?.state, 'kWh', 2);
+                  const elecCost = ftm(states['sensor.tesla_electric_cost_7d_rolling']?.state);
+                  const fuelEq = ftm(states['sensor.tesla_fuel_cost_7d_rolling_equivalent']?.state);
+                  const elecV = parseFloat(states['sensor.tesla_electric_cost_7d_rolling']?.state || '0') || 0;
+                  const fuelV = parseFloat(states['sensor.tesla_fuel_cost_7d_rolling_equivalent']?.state || '0') || 0;
+                  const saved = Math.max(0, fuelV - elecV);
                   const driveT = fmtMin(states['sensor.tesla_driving_time_7d']?.state);
                   const chargeT = fmtMin(states['sensor.tesla_charging_time_7d']?.state);
                   return `<div style="width:100%;text-align:left">
                     <div style="color:#ccc;font-size:12px;font-weight:700;letter-spacing:1.5px;padding-bottom:4px">📅 LAST 7 DAYS <span style="color:#666;font-size:10px;font-weight:400">(rolling)</span></div>
-                    ${row('🚗', 'DRIVE TIME', driveT, '')}
-                    ${row('⚡', 'CHARGE TIME', chargeT, '')}
+                    ${row('🚗', 'DISTANCE', dist, '')}
+                    ${row('⚡', 'ENERGY CHARGED', energy, '')}
+                    ${row('💰', 'ELECTRIC COST', elecCost, `vs fuel ${fuelEq}`)}
+                    ${saved > 0 ? row('✅', 'SAVED VS ICE', currencySymbol + Math.round(saved).toLocaleString(currencyLocale), '') : ''}
+                    ${row('⏱️', 'DRIVE TIME', driveT, '')}
+                    ${row('🔌', 'CHARGE TIME', chargeT, '')}
                   </div>`;
                 ]]]
             styles:
@@ -223,6 +249,68 @@ views:
                   const saved = Math.max(0, fuelV - elecV);
                   return `<div style="width:100%;text-align:left">
                     <div style="color:#ccc;font-size:12px;font-weight:700;letter-spacing:1.5px;padding-bottom:4px">📅 THIS MONTH</div>
+                    ${row('🚗', 'DISTANCE', dist, '')}
+                    ${row('⚡', 'ENERGY CHARGED', energy, '')}
+                    ${row('💰', 'ELECTRIC COST', elecCost, `vs fuel ${fuelEq}`)}
+                    ${saved > 0 ? row('✅', 'SAVED VS ICE', currencySymbol + Math.round(saved).toLocaleString(currencyLocale), '') : ''}
+                  </div>`;
+                ]]]
+            styles:
+              card:
+                - background-color: rgba(28, 28, 30, 0.95)
+                - border-radius: 16px
+                - padding: 16px 20px
+              grid:
+                - grid-template-areas: '"block"'
+                - grid-template-columns: 1fr
+                - grid-template-rows: 1fr
+              custom_fields:
+                block:
+                  - width: 100%
+
+          # PREVIOUS MONTH (last complete calendar month; distance snapshot +
+          # utility_meter last_period both populate on the 1st of each month --
+          # will read "–"/Ft0 until the first rollover after this card was added)
+          - type: custom:button-card
+            show_icon: false
+            show_name: false
+            show_state: false
+            tap_action:
+              action: none
+            custom_fields:
+              block: |
+                [[[
+                  const fmt = (raw, unit, dec=1) => {
+                    const v = parseFloat(String(raw || '0'));
+                    return isNaN(v) || v <= 0 ? '–' : `${v.toFixed(dec)} ${unit}`;
+                  };
+                  const currencySymbol = states['sensor.tesla_currency_symbol']?.state || 'Ft';
+                  const currencyLocale = states['sensor.tesla_currency_locale']?.state || 'hu-HU';
+                  const ftm = (raw) => {
+                    const v = parseFloat(String(raw || '0')) || 0;
+                    return v <= 0 ? currencySymbol + '0' : currencySymbol + Math.round(v).toLocaleString(currencyLocale);
+                  };
+                  const row = (icon, label, val, sub) =>
+                    `<div style="display:flex;align-items:center;gap:12px;padding:8px 0;border-top:1px solid rgba(255,255,255,0.07)">
+                      <span style="font-size:18px;width:22px;text-align:center;flex-shrink:0">${icon}</span>
+                      <div style="flex:1;min-width:0">
+                        <div style="color:#888;font-size:10px;font-weight:600;letter-spacing:1.2px">${label}</div>
+                        <div style="color:#fff;font-size:15px;font-weight:700">${val}${sub ? `<span style="color:#aaa;font-size:11px;font-weight:400">  ${sub}</span>` : ''}</div>
+                      </div>
+                    </div>`;
+                  const unitSys = states['input_select.tesla_unit_system']?.state || 'Metric (km, °C, bar)';
+                  const isMi = unitSys !== 'Metric (km, °C, bar)';
+                  const distUnit = isMi ? 'mi' : 'km';
+                  const distKm = parseFloat(states['sensor.tesla_previous_month_distance']?.state || '0') || 0;
+                  const dist = fmt(isMi ? distKm * 0.621371 : distKm, distUnit, 0);
+                  const energy = fmt(states['sensor.tesla_previous_month_charging_energy']?.state, 'kWh', 2);
+                  const elecCost = ftm(states['sensor.tesla_previous_month_electric_cost']?.state);
+                  const fuelEq = ftm(states['sensor.tesla_previous_month_fuel_cost']?.state);
+                  const elecV = parseFloat(states['sensor.tesla_previous_month_electric_cost']?.state || '0') || 0;
+                  const fuelV = parseFloat(states['sensor.tesla_previous_month_fuel_cost']?.state || '0') || 0;
+                  const saved = Math.max(0, fuelV - elecV);
+                  return `<div style="width:100%;text-align:left">
+                    <div style="color:#ccc;font-size:12px;font-weight:700;letter-spacing:1.5px;padding-bottom:4px">📅 PREVIOUS MONTH <span style="color:#666;font-size:10px;font-weight:400">(updates on the 1st)</span></div>
                     ${row('🚗', 'DISTANCE', dist, '')}
                     ${row('⚡', 'ENERGY CHARGED', energy, '')}
                     ${row('💰', 'ELECTRIC COST', elecCost, `vs fuel ${fuelEq}`)}
@@ -509,21 +597,24 @@ views:
               datetimeFormatter:
                 day: "MMM d"
           yaxis:
-            labels:
-              formatter: "function(val) { return val.toFixed(1) + 'h'; }"
+            title:
+              text: "min"
           dataLabels:
             enabled: false
           colors:
             - '#1E88E5'
         series:
-          - entity: sensor.tesla_driving_time_30d_raw
+          # Uses the plain-numeric "minutes" sensors (no device_class), not
+          # the raw history_stats hours/duration sensors -- see comment on
+          # sensor.tesla_driving_time_30d in configuration.yaml for why.
+          - entity: sensor.tesla_driving_time_30d
             name: TOTAL
-            unit: " h"
+            unit: " min"
             show:
               in_chart: false
               legend_value: true
-          - entity: sensor.tesla_driving_time_today_raw
-            name: h
+          - entity: sensor.tesla_driving_time_today
+            name: min
             type: column
             group_by:
               func: max
@@ -777,9 +868,15 @@ views:
             name: "km/h"
             type: line
             yaxis_id: speed
-            statistics:
-              type: mean
-              period: day
+            # Reuses the exact same raw-history + group_by pattern as the
+            # working "Speed" chart above (rather than the apexcharts-card
+            # `statistics:` / HA long-term-statistics feature, which was the
+            # only place in either dashboard using it and never returned
+            # data -- see comment on the Duration chart fix for the same
+            # family of issue).
+            group_by:
+              func: avg
+              duration: 1d
 
       # ── 10. TEMPERATURE EFFICIENCY ──
       - type: custom:apexcharts-card
@@ -853,9 +950,11 @@ views:
             name: "°C"
             type: line
             yaxis_id: temp
-            statistics:
-              type: mean
-              period: day
+            # See Speed efficiency chart above: group_by avg replaces the
+            # long-term `statistics:` feature, which never returned data.
+            group_by:
+              func: avg
+              duration: 1d
 
   # ========== VIEW 3: CHARGING ANALYTICS ==========
   - title: Charging

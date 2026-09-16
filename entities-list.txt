@@ -138,6 +138,7 @@ input_text.tesla_model                          | input_text    | helper        
 input_text.tesla_vin                            | input_text    | helper            | Tesla VIN                       | Editable VIN number (default: 5YJ12345678901234, placeholder — set to your real VIN locally, never commit it); shown in footer
 input_text.tesla_plate                          | input_text    | helper            | Tesla Plate                     | Editable license plate (default: XXYY-123, placeholder — set to your real plate locally, never commit it); shown in footer
 input_number.tesla_odometer_monthly_baseline    | input_number  | helper            | Tesla Odometer Monthly Baseline | Odometer snapshot on 1st of month for monthly distance template
+input_number.tesla_previous_month_distance      | input_number  | helper            | Tesla Previous Month Distance   | Automation-managed (no `initial:`): snapshot of the just-completed month's distance, captured by automation.tesla_odometer_monthly_baseline right before it resets the baseline each 1st. Reads 0 until the first rollover after this was added. Powers sensor.tesla_previous_month_distance and the History tab's "Previous Month" card.
 input_number.tesla_target_charge_limit          | input_number  | helper            | Tesla Target Charge Limit       | Helper slider for planned charge target in automations
 input_boolean.tesla_enable_smart_charging       | input_boolean | helper            | Tesla Enable Smart Charging     | Master on/off for the smart-charging automations (tesla_smart_charge_start/stop). When on, charging auto-starts once/day at the configured off-peak window if plugged in and below target %, and auto-stops if the window ends first. At most 1 start + 1 stop per day (no flapping).
 input_datetime.tesla_next_departure             | input_datetime| helper            | Tesla Next Departure            | Helper datetime for departure-based automation planning
@@ -161,7 +162,9 @@ sensor.tesla_drive_energy_consumed_total         | sensor        | efficiency   
 # --- ENERGY TRACKING (Utility Meters + Templates) ---
 sensor.tesla_daily_charging_energy               | sensor        | energy_tracking   | Tesla Daily Charging Energy     | Utility meter: daily kWh from charge_energy_added
 sensor.tesla_weekly_charging_energy              | sensor        | energy_tracking   | Tesla Weekly Charging Energy    | Utility meter: weekly kWh from charge_energy_added
+sensor.tesla_charging_energy_7d_rolling          | sensor        | energy_tracking   | Tesla Charging Energy 7d Rolling | platform: statistics, state_characteristic: change, max_age: 7 days, source sensor.vehicle_charge_energy_added (total_increasing). True trailing-168h charging energy -- distinct from tesla_weekly_charging_energy's calendar-week figure. Powers the History tab's "Last 7 Days" card.
 sensor.tesla_monthly_charging_energy             | sensor        | energy_tracking   | Tesla Monthly Charging Energy   | Utility meter: monthly kWh from charge_energy_added
+sensor.tesla_previous_month_charging_energy      | sensor        | energy_tracking   | Tesla Previous Month Charging Energy | Template: reads state_attr('sensor.tesla_monthly_charging_energy', 'last_period') -- HA's utility_meter auto-populates this attribute with the prior cycle's total every time the monthly cycle rolls over, no custom automation needed. Powers the "Previous Month" card. Reads 0/unknown until the first rollover.
 sensor.tesla_daily_drive_energy                  | sensor        | energy_tracking   | Tesla Daily Drive Energy        | Utility meter: daily kWh from sensor.tesla_drive_energy_consumed_total (real driving consumption, not charging)
 sensor.tesla_weekly_drive_energy                 | sensor        | energy_tracking   | Tesla Weekly Drive Energy       | Utility meter: weekly kWh from sensor.tesla_drive_energy_consumed_total; feeds the real efficiency calculation
 sensor.tesla_monthly_drive_energy                | sensor        | energy_tracking   | Tesla Monthly Drive Energy      | Utility meter: monthly kWh from sensor.tesla_drive_energy_consumed_total
@@ -179,11 +182,15 @@ sensor.tesla_unit_pressure                       | sensor        | settings     
 sensor.tesla_unit_temperature                    | sensor        | settings          | Tesla Unit Temperature          | Template: "°C" or "°F" based on input_select.tesla_unit_system (°F only for "US Imperial"; "UK" stays °C). Label-only; math is c*9/5+32 for °C->°F.
 sensor.tesla_daily_electric_cost                 | sensor        | cost_tracking     | Tesla Daily Electric Cost       | Template: daily energy * input_number.tesla_default_electricity_cost (now honors the configured rate instead of a hardcoded 60); unit follows selected currency
 sensor.tesla_weekly_electric_cost                | sensor        | cost_tracking     | Tesla Weekly Electric Cost      | Template: weekly charging energy * input_number.tesla_default_electricity_cost; unit follows selected currency
+sensor.tesla_electric_cost_7d_rolling            | sensor        | cost_tracking     | Tesla Electric Cost 7d Rolling  | Template: tesla_charging_energy_7d_rolling * input_number.tesla_default_electricity_cost; powers the History tab's "Last 7 Days" card (rolling, distinct from the calendar-week THIS WEEK card)
+sensor.tesla_previous_month_electric_cost        | sensor        | cost_tracking     | Tesla Previous Month Electric Cost | Template: tesla_previous_month_charging_energy * input_number.tesla_default_electricity_cost; powers the "Previous Month" card. Populates once tesla_monthly_charging_energy's utility_meter cycle first rolls over.
 sensor.tesla_monthly_electric_cost               | sensor        | cost_tracking     | Tesla Monthly Electric Cost     | Template: monthly energy * input_number.tesla_default_electricity_cost; unit follows selected currency
 sensor.tesla_annual_electric_cost                | sensor        | cost_tracking     | Tesla Annual Electric Cost      | Template: monthly electric cost * 12 (projected); unit follows selected currency
 sensor.tesla_5_year_electric_cost                | sensor        | cost_tracking     | Tesla 5 Year Electric Cost      | Template: annual electric cost * 5 (projected); unit follows selected currency; NOTE: real entity_id has an underscore between "5" and "year" (auto-slugified from the friendly name's space) -- do not reference it as tesla_5year_electric_cost anywhere
 sensor.tesla_daily_fuel_cost_equivalent          | sensor        | cost_tracking     | Tesla Daily Fuel Cost Equivalent | Template: daily_distance * fuel_cost_per_km
 sensor.tesla_weekly_fuel_cost                    | sensor        | cost_tracking     | Tesla Weekly Fuel Cost Equivalent | Template: weekly_distance * fuel_cost_per_km
+sensor.tesla_fuel_cost_7d_rolling_equivalent     | sensor        | cost_tracking     | Tesla Fuel Cost 7d Rolling Equivalent | Template: tesla_distance_7d_rolling * fuel_cost_per_km; powers the History tab's "Last 7 Days" card
+sensor.tesla_previous_month_fuel_cost            | sensor        | cost_tracking     | Tesla Previous Month Fuel Cost  | Template: tesla_previous_month_distance * fuel_cost_per_km; powers the "Previous Month" card
 sensor.tesla_monthly_fuel_cost                   | sensor        | cost_tracking     | Tesla Monthly Fuel Cost Equivalent | Template: monthly_distance * fuel_cost_per_km; default_entity_id set for dashboard match
 sensor.tesla_annual_fuel_cost_equivalent         | sensor        | cost_tracking     | Tesla Annual Fuel Cost Equivalent | Template: monthly fuel cost equivalent * 12 (projected); used by the Cost Projections tab's Savings row
 sensor.tesla_5_year_fuel_cost_equivalent         | sensor        | cost_tracking     | Tesla 5 Year Fuel Cost Equivalent | Template: annual fuel cost equivalent * 5 (projected); NOTE: real entity_id has an underscore between "5" and "year" (same slugification gotcha as tesla_5_year_electric_cost) -- do not reference it as tesla_5year_fuel_cost_equivalent
@@ -193,7 +200,9 @@ sensor.tesla_daily_distance_raw                  | sensor        | distance     
 sensor.tesla_daily_distance                      | sensor        | distance          | Tesla Daily Distance            | Template: rounded daily distance from daily_distance_raw
 sensor.tesla_weekly_distance_raw                 | sensor        | distance          | Tesla Weekly Distance Raw       | Utility meter: weekly delta from odometer
 sensor.tesla_weekly_distance                     | sensor        | distance          | Tesla Weekly Distance           | Template: rounded weekly distance from weekly_distance_raw. NOTE: this row previously (incorrectly) documented the entity_id as `sensor.tesla_weekly_distance_2` — confirmed via Developer Tools → States (2026-xx-xx) that it registers correctly as `sensor.tesla_weekly_distance` with no suffix collision. All templates/dashboards use this plain name.
+sensor.tesla_distance_7d_rolling                 | sensor        | distance          | Tesla Distance 7d Rolling       | platform: statistics, state_characteristic: change, max_age: 7 days, source sensor.vehicle_odometer (total_increasing). True trailing-168h distance -- distinct from tesla_weekly_distance's calendar-week (Mon-reset) figure. Backfills immediately from recorder history on restart. Powers the History tab's "Last 7 Days" card.
 sensor.tesla_monthly_distance                    | sensor        | distance          | Tesla Monthly Distance          | Template: odometer minus monthly baseline helper
+sensor.tesla_previous_month_distance             | sensor        | distance          | Tesla Previous Month Distance   | Template: rounded pass-through of input_number.tesla_previous_month_distance (see Helpers section for how it's populated). Reads 0 until the automation's first monthly rollover after this feature was added. Powers the "Previous Month" card.
 
 # --- ACTIVITY / SESSION ANALYTICS ---
 binary_sensor.tesla_driving_active               | binary_sensor | activity          | Tesla Driving Active            | Template binary sensor: shift state (D/R/N) with speed fallback when shift is unknown
@@ -327,7 +336,10 @@ input_text.tesla_rate_work_season                      | input_text    | setting
 # Added local automations in automations.yaml:
 #   - automation.tesla_reserved_car_name_guard (warns if input_text.tesla_car_name is blank/unknown/"vehicle")
 #   - automation.tesla_drive_energy_session_start / _end (real energy-per-drive tracking)
-#   - automation.tesla_odometer_monthly_baseline / _baseline_startup (monthly distance tracking)
+#   - automation.tesla_odometer_monthly_baseline / _baseline_startup (monthly distance
+#     tracking; also now snapshots the just-ended month's distance into
+#     input_number.tesla_previous_month_distance right before resetting the
+#     baseline each 1st -- powers the History tab's "Previous Month" card)
 #   - automation.tesla_precondition_before_departure
 #   - automation.tesla_close_windows_before_rain
 #   - automation.tesla_smart_charge_start / _stop (off-peak window smart charging)
@@ -350,3 +362,52 @@ sensor.tesla_driving_time_30d_raw                | sensor        | activity     
 sensor.tesla_drive_sessions_30d                  | sensor        | activity          | Tesla Drive Sessions 30d        | History stats: drive session count in last 30 days (rolling)
 sensor.tesla_monthly_driving_duration            | sensor        | activity          | Tesla Monthly Driving Duration  | Template: 30d driving time formatted as "Xd Xh" for Driving analytics TOTAL badge
 sensor.tesla_daily_efficiency_wh_per_km          | sensor        | efficiency        | Tesla Daily Efficiency Wh Per Km | Template: today's actual Wh/km (daily_energy_consumed*1000/daily_distance); falls back to static 228 Wh/km when no driving
+
+# ─────────────────────────────────────────────────────────────
+# FIX: Analytics "Duration" / "Speed efficiency" / "Temperature
+# efficiency" charts always showed no data ("N/A" / infinite "Loading...")
+# ─────────────────────────────────────────────────────────────
+#
+# New sensor:
+#   sensor.tesla_driving_time_30d - plain numeric "min" sensor (no
+#   device_class), mirrors the existing tesla_driving_time_today /
+#   tesla_driving_time_7d formatted sensors. Used by the Duration chart's
+#   TOTAL header stat instead of the raw device_class:duration
+#   history_stats sensor (sensor.tesla_driving_time_30d_raw), which
+#   apexcharts-card could never parse into a usable header value/graph
+#   (confirmed: sensor.tesla_drive_sessions_30d -- a "type: count"
+#   history_stats sensor built from the identical source binary_sensor and
+#   time window -- DOES render correctly on the "Total drives" chart right
+#   next to it, proving the underlying binary_sensor.tesla_driving_active
+#   history itself was never the problem; only "type: time" / device_class:
+#   duration history_stats sensors were affected).
+#
+# Root cause identified for all 3 charts:
+#  - Duration: fed directly off a `history_stats` "type: time" sensor,
+#    which HA's platform automatically assigns `device_class: duration` +
+#    native unit "h". Every OTHER time-based tile in this project (e.g. the
+#    Dashboard hub's Drives/Charges tiles) instead reads through a plain
+#    "minutes, no device_class" derived sensor -- the Duration chart was the
+#    only place bypassing that and consuming the raw duration-typed sensor
+#    directly, which apexcharts-card's history fetch couldn't turn into
+#    numeric graph data (header stayed "N/A", chart empty).
+#  - Speed efficiency / Temperature efficiency: their second (line) series
+#    used apexcharts-card's `statistics: {type: mean, period: day}` option
+#    (HA long-term statistics) against sensor.vehicle_speed /
+#    sensor.vehicle_outside_temperature. This was the ONLY use of the
+#    `statistics:` feature anywhere in either dashboard -- every other
+#    30d/7d chart (Distance, Energy, Speed, Total Drives, Energy Efficiency,
+#    etc.) uses plain multi-week recorder history + `group_by`, which is
+#    proven reliable (all show real data). `statistics:` depends on HA's
+#    separate long-term-statistics compilation pipeline and apexcharts-card
+#    waits for every series before rendering -- if that pipeline's query
+#    for a given entity never resolves (repair issue, cold-start gap, etc.)
+#    the whole chart hangs on "Loading..." forever with no visible error.
+#    Fixed by switching both to the same proven `group_by: {func: avg,
+#    duration: 1d}` pattern already used successfully by the "Speed" chart's
+#    own AVERAGE series on the exact same sensor.vehicle_speed entity.
+#
+# Decision: kept and fixed rather than deleted -- all 3 are genuinely useful
+# (Tessie-inspired "Efficiency vs Speed"/"vs Temperature" and trip-duration
+# tracking), and the fix only required swapping which existing sensors/
+# card features they read from, no new architecture.
