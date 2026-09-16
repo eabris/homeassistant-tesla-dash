@@ -32,10 +32,17 @@
 #   bash refresh_tesla_token.sh --apply         # writes the token into /config/secrets.yaml
 #   bash refresh_tesla_token.sh --apply --restart   # also restarts Home Assistant afterwards
 #   bash refresh_tesla_token.sh --config-path /config --apply   # custom /config path
+#   bash refresh_tesla_token.sh --apply --keep-backups 5   # keep 5 old backups instead of 2
+#   bash refresh_tesla_token.sh --apply --keep-backups 0   # don't create a backup at all
 #
 # SAFETY:
 # - Dry-run by default; nothing is written unless --apply is passed.
-# - Always backs up secrets.yaml to secrets.yaml.bak-<timestamp> before editing.
+# - Backs up secrets.yaml to secrets.yaml.bak-<timestamp> before editing.
+#   Since this runs on a schedule (see tesla_refresh_fleet_token automation,
+#   every 6h) these would otherwise pile up forever — only the
+#   --keep-backups most recent are kept (default: 2), older ones are
+#   deleted automatically right after each successful --apply run. Pass
+#   --keep-backups 0 to skip creating a backup at all (not recommended).
 # - Never prints the full token to the terminal unless --show is passed
 #   (only a masked preview is shown otherwise), to avoid it lingering in
 #   your shell's scrollback/history.
@@ -59,6 +66,7 @@ CONFIG_PATH="/config"
 APPLY=0
 RESTART=0
 SHOW=0
+KEEP_BACKUPS=2
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -66,6 +74,7 @@ while [[ $# -gt 0 ]]; do
     --apply) APPLY=1; shift ;;
     --restart) RESTART=1; shift ;;
     --show) SHOW=1; shift ;;
+    --keep-backups) KEEP_BACKUPS="$2"; shift 2 ;;
     -h|--help)
       grep '^#' "$0" | sed 's/^#//'
       exit 0
@@ -76,6 +85,11 @@ while [[ $# -gt 0 ]]; do
       ;;
   esac
 done
+
+if ! [[ "$KEEP_BACKUPS" =~ ^[0-9]+$ ]]; then
+  echo "ERROR: --keep-backups must be a non-negative integer, got '$KEEP_BACKUPS'." >&2
+  exit 1
+fi
 
 ENTRIES_FILE="$CONFIG_PATH/.storage/core.config_entries"
 SECRETS_FILE="$CONFIG_PATH/secrets.yaml"
@@ -143,15 +157,26 @@ fi
 # decide whether to notify you that a restart would help; without this
 # check it would fire that notification every single run, even when nothing
 # actually changed.
-CURRENT_TOKEN="$(grep '^tesla_fleet_token:' "$SECRETS_FILE" 2>/dev/null | sed -E 's/^tesla_fleet_token:[[:space:]]*"?([^"]*)"?[[:space:]]*$/\1/')"
+## NOTE: the `|| true` is required here, not cosmetic — under `set -eo
+## pipefail`, if secrets.yaml has no tesla_fleet_token line yet (e.g. the
+## very first run on a fresh install), grep exits 1 (no match), pipefail
+## propagates that through the pipe into sed, and without `|| true` the
+## assignment's non-zero status silently kills the whole script right here
+## with no error message at all. Discovered via a synthetic first-run
+## fixture (secrets.yaml with no prior tesla_fleet_token: line).
+CURRENT_TOKEN="$(grep '^tesla_fleet_token:' "$SECRETS_FILE" 2>/dev/null | sed -E 's/^tesla_fleet_token:[[:space:]]*"?([^"]*)"?[[:space:]]*$/\1/' || true)"
 if [[ "$CURRENT_TOKEN" == "$TOKEN" ]]; then
   echo "Token unchanged — secrets.yaml already up to date. Nothing written."
   exit 0
 fi
 
 BACKUP="$SECRETS_FILE.bak-$(date +%Y%m%d%H%M%S)"
-cp "$SECRETS_FILE" "$BACKUP"
-echo "Backed up secrets.yaml to $BACKUP"
+if [[ "$KEEP_BACKUPS" -gt 0 ]]; then
+  cp "$SECRETS_FILE" "$BACKUP"
+  echo "Backed up secrets.yaml to $BACKUP"
+else
+  echo "--keep-backups 0: skipping backup (not recommended)."
+fi
 
 if grep -q '^tesla_fleet_token:' "$SECRETS_FILE"; then
   # Replace existing line.
@@ -161,6 +186,18 @@ else
   printf '\ntesla_fleet_token: "%s"\n' "$TOKEN" >> "$SECRETS_FILE"
 fi
 echo "Updated tesla_fleet_token in $SECRETS_FILE."
+
+# Retention: this runs every ~6h via the tesla_refresh_fleet_token
+# automation, so without pruning, secrets.yaml.bak-<timestamp> files pile
+# up forever. Keep only the $KEEP_BACKUPS most recent (newest-first sort),
+# deleting the rest -- this also cleans up any pile that had already
+# accumulated before this feature existed, right on the next real token
+# change.
+mapfile -t OLD_BACKUPS < <(ls -1t "$SECRETS_FILE".bak-* 2>/dev/null | tail -n +"$((KEEP_BACKUPS + 1))")
+if [[ ${#OLD_BACKUPS[@]} -gt 0 ]]; then
+  rm -f "${OLD_BACKUPS[@]}"
+  echo "Pruned ${#OLD_BACKUPS[@]} old backup(s), keeping the $KEEP_BACKUPS most recent."
+fi
 
 if [[ "$RESTART" -eq 1 ]]; then
   if command -v ha >/dev/null 2>&1; then

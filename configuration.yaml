@@ -460,13 +460,23 @@ input_text:
     name: "Tesla Model"
     initial: "Tesla Model X"
     icon: mdi:car-electric
+  # NOTE: VIN is no longer read from here directly (see
+  # sensor.tesla_vin_live above, which pulls the real VIN straight from the
+  # Tesla Fleet integration's device registry) — this is now only a manual
+  # fallback used if that live lookup ever fails. No `initial:` here
+  # (unlike tesla_model/tesla_car_name above) so a manually-entered value
+  # actually persists across config reloads/restarts instead of resetting
+  # to the placeholder every time (see agents.md Section 11 for why
+  # `initial:` causes that and why it was removed here specifically).
   tesla_vin:
     name: "Tesla VIN"
-    initial: "5YJ12345678901234"
     icon: mdi:identifier
+  # No `initial:` here either — Plate has no Fleet API equivalent to
+  # auto-pull (Tesla doesn't expose license plates), so this is the only
+  # source of truth; it must persist whatever you type, not reset on
+  # every reload.
   tesla_plate:
     name: "Tesla Plate"
-    initial: "XXYY-123"
     icon: mdi:card-text
 
   # --- Saved Location Rates: names + schedule descriptions ---
@@ -938,6 +948,29 @@ template:
           {{ daily_cost > (weekly_avg * 1.8) and daily_cost > 800 }}
 
   - sensor:
+      # === Vehicle Identity (auto-pulled from Tesla Fleet) ===
+      # The Tesla Fleet integration's own __init__.py builds each vehicle's
+      # HA device registry entry with `serial_number=vin` and
+      # `model=api_vehicle.model` (confirmed against HA core source) — so
+      # the real VIN and model name are already sitting in HA's device
+      # registry, just not exposed as an entity attribute anywhere. Read
+      # them via the `device_attr()` Jinja function (needs a device_id,
+      # which `device_id()` resolves from any entity belonging to that
+      # device — sensor.<car>_battery_level is used here as a stable
+      # anchor entity). Falls back to the manually-entered
+      # input_text.tesla_vin if the Fleet device lookup ever comes back
+      # empty (e.g. integration not yet set up), so the footer never goes
+      # fully blank.
+      - name: "Tesla Vin Live"
+        unique_id: tesla_vin_live_v1
+        icon: mdi:identifier
+        state: >
+          {% set car = states('input_text.tesla_car_name') %}
+          {% set dev = device_id('sensor.' + car + '_battery_level') %}
+          {% set vin = device_attr(dev, 'serial_number') if dev else none %}
+          {% set fallback = states('input_text.tesla_vin') %}
+          {{ vin if vin not in [none, 'unknown', 'unavailable', ''] else (fallback if fallback not in ['unknown', 'unavailable', ''] else 'Unknown') }}
+
       # === Currency ===
       - name: "Tesla Currency Symbol"
         unique_id: tesla_currency_symbol_v1

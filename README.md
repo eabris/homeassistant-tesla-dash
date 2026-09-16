@@ -184,6 +184,59 @@ Under the hood, the dashboards/automations never read your car's raw entities di
 
 ---
 
+## 🧩 Step 5b (Optional) — Add your own car photos for the Dashboard/Tires images
+
+The Dashboard tab's vehicle hero card and the Tires tab's pressure-overlay
+card display your own car photos with tappable icons/pressure readouts on
+top. These two image files are **not included in this repo** and are **not
+tracked by git** — you need to upload them yourself, once, directly into
+your Home Assistant instance:
+
+1. In Home Assistant, go to **Settings → Media** (or the **Media** panel in
+   the sidebar if you've enabled it).
+2. Open (or create) the **`local`** media source folder — this maps to the
+   `/config/www/` folder on your HA host.
+3. Upload two image files:
+   - A **side-view photo** of your car, named exactly **`tesla-car-image.png`**
+     (used on the Dashboard tab's hero card, with the Lock/Wake/Charge-port
+     overlay icons).
+   - A **top-down photo** of your car, named exactly **`teslaTopDown.png`**
+     (used on the Tires tab, with the 4 tire-pressure overlay pills).
+4. That's it — no config reload needed. Both dashboard cards already point
+   at `media-source://media_source/local/tesla-car-image.png` and
+   `media-source://media_source/local/teslaTopDown.png` respectively; they
+   just start resolving to real images as soon as the files exist under
+   that `local` folder.
+
+> 💡 **Alternative upload method:** if you'd rather not use the Media
+> panel, you can instead copy the files directly to `/config/www/` on the
+> HA host (via the Samba/File Editor add-on, or `scp`) — Home Assistant's
+> built-in `local` media source is just that folder. Either method produces
+> the exact same result.
+
+> ⚠️ **File names are case-sensitive and must match exactly** —
+> `tesla-car-image.png` (all lowercase, hyphens) and `teslaTopDown.png`
+> (camelCase, no hyphens), matching what's hardcoded in
+> `dashboards/tesla-overview.yaml`. If you'd rather use different file
+> names, or `.jpg`/`.jpeg` instead of `.png`, just edit the two `image:`
+> lines in that file to match.
+
+> ⚠️ **If you skip this step**, the two picture-elements cards will simply
+> render as a blank/broken image area — this is harmless. The overlay
+> icons/pressure readouts on top of them are independent dashboard elements
+> and will still work and update normally; only the background photo itself
+> will be missing until you upload it.
+
+> 📐 **Icon/pressure-pill positions are best-effort placeholders.** The
+> exact `top`/`left` percentages for the hero card's 3 overlay icons and
+> the tires card's 4 pressure pills were chosen without seeing your actual
+> photos, so they may not land exactly on the car body/wheels in your
+> images. After uploading, check how they look and nudge the `style: {top,
+> left}` values for each element in `dashboards/tesla-overview.yaml` (search
+> for "Vehicle Hero Image" and "Tire Pressure Overlay") if needed.
+
+---
+
 ## 🧩 Step 6 (Optional) — Set up TeslaMate for deep history & analytics
 
 [TeslaMate](https://github.com/teslamate-org/teslamate) records long-term trip, charge, and idle history in its own database, and this repo's Analytics dashboard can pull from it via Grafana/MQTT for richer charts.
@@ -273,6 +326,10 @@ bash refresh_tesla_token.sh --apply
 
 # 3. Apply it and restart Home Assistant Core in the same step:
 bash refresh_tesla_token.sh --apply --restart
+
+# 4. Keep more/fewer old secrets.yaml.bak-<timestamp> backups (default: 2):
+bash refresh_tesla_token.sh --apply --keep-backups 5
+bash refresh_tesla_token.sh --apply --keep-backups 0   # don't back up at all
 ```
 
 It finds your current token inside Home Assistant's own
@@ -284,6 +341,13 @@ available in your SSH/Terminal add-on shell (most images have at least one).
 A full Home Assistant restart is required afterwards for the new token to
 take effect (the script can do this for you with `--restart`, if the `ha`
 CLI is available in your shell).
+
+Each `--apply` run backs up `secrets.yaml` first, to
+`secrets.yaml.bak-<timestamp>`. Since this runs automatically every 6 hours
+(see below), the script automatically prunes old backups down to the 2 most
+recent by default right after each run — no manual cleanup needed, and no
+unbounded pile of `.bak-*` files. Adjust with `--keep-backups N`, or
+`--keep-backups 0` to skip backups entirely.
 
 > 💡 If you find yourself refreshing this token often and would rather not
 > bother, ask for the window-close script to be switched back to using the

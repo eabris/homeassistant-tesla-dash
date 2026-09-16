@@ -60,6 +60,111 @@ views:
                     - height: 60px
                     - padding: 8px
 
+          # 1.1a Vehicle Hero Image
+          # Car side-photo replacing the old oversized default charging-icon
+          # visual, with 3 tap-to-act overlay icons. Reuses the same
+          # `states['domain.' + car + '_suffix']` JS pattern used throughout
+          # this dashboard for dynamic icon/color — no new template entities
+          # needed, since only the visual state needs car-name resolution
+          # (each button's own tap_action calls a fixed, car-name-agnostic
+          # script that resolves the car internally, same as elsewhere).
+          # NOTE: the 3 icons' top/left % positions below are a best-effort
+          # placement for a typical side-view photo (front-left ~ lock,
+          # front area ~ wake, rear ~ charge port) — nudge these percentages
+          # to match your exact tesla-car-image.png if they don't land where
+          # you'd like on the car body.
+          - type: picture-elements
+            image: media-source://media_source/local/tesla-car-image.png
+            style:
+              border-radius: 12px
+              overflow: hidden
+            elements:
+              # Lock / Unlock — centered on the car body
+              - type: custom:button-card
+                entity: script.tesla_lock_toggle
+                show_name: false
+                show_label: false
+                size: 20px
+                icon: |
+                  [[[
+                    const car = states['input_text.tesla_car_name']?.state || 'tesla';
+                    return states['lock.' + car + '_lock']?.state === 'locked' ? 'mdi:lock' : 'mdi:lock-open-variant';
+                  ]]]
+                tap_action:
+                  action: call-service
+                  service: script.tesla_lock_toggle
+                styles:
+                  card:
+                    - width: 38px
+                    - height: 38px
+                    - border-radius: 50%
+                    - background-color: |
+                        [[[
+                          const car = states['input_text.tesla_car_name']?.state || 'tesla';
+                          return states['lock.' + car + '_lock']?.state === 'locked' ? 'rgba(76, 175, 80, 0.85)' : 'rgba(244, 67, 54, 0.85)';
+                        ]]]
+                style:
+                  top: 50%
+                  left: 50%
+                  transform: translate(-50%, -50%)
+
+              # Wake — near the front of the car
+              - type: custom:button-card
+                entity: binary_sensor.vehicle_status
+                show_name: false
+                show_label: false
+                size: 20px
+                icon: mdi:sleep-off
+                tap_action:
+                  action: call-service
+                  service: script.tesla_wake
+                styles:
+                  card:
+                    - width: 38px
+                    - height: 38px
+                    - border-radius: 50%
+                    - background-color: |
+                        [[[
+                          return states['binary_sensor.vehicle_status']?.state === 'on' ? 'rgba(76, 175, 80, 0.85)' : 'rgba(120, 120, 120, 0.85)';
+                        ]]]
+                style:
+                  top: 20%
+                  left: 15%
+                  transform: translate(-50%, -50%)
+
+              # Charge port lock/unlock — near the rear/charger area
+              - type: custom:button-card
+                entity: binary_sensor.vehicle_charge_cable
+                show_name: false
+                show_label: false
+                size: 20px
+                icon: |
+                  [[[
+                    return states['binary_sensor.vehicle_charge_cable']?.state === 'on' ? 'mdi:ev-plug-tesla' : 'mdi:ev-plug-tesla-off';
+                  ]]]
+                tap_action:
+                  action: call-service
+                  service: script.tesla_unlock_port
+                  confirmation:
+                    text: Unlock the charge port?
+                styles:
+                  card:
+                    - width: 38px
+                    - height: 38px
+                    - border-radius: 50%
+                    - background-color: |
+                        [[[
+                          const charging = states['binary_sensor.tesla_charging_active']?.state === 'on';
+                          const plugged = states['binary_sensor.vehicle_charge_cable']?.state === 'on';
+                          if (charging) return 'rgba(76, 175, 80, 0.85)';
+                          if (plugged) return 'rgba(33, 150, 243, 0.85)';
+                          return 'rgba(120, 120, 120, 0.85)';
+                        ]]]
+                style:
+                  top: 80%
+                  left: 85%
+                  transform: translate(-50%, -50%)
+
           # 1.2 Charging Status Card (Conditional)
           - type: conditional
             conditions:
@@ -70,6 +175,7 @@ views:
               entity: binary_sensor.tesla_charging_active
               name: "CHARGING >"
               show_label: true
+              show_icon: false
               label: |
                 [[[
                   const raw = String(states['sensor.vehicle_time_to_full_charge']?.state || '');
@@ -208,9 +314,25 @@ views:
           # "home"/"work") or "not_home". There's no real street address exposed
           # by the API, so this shows the zone name rather than pretending to be
           # a geocoded address like Tessie's own app can.
+          # NOTE: icon is an explicit small JS template below (home/work/away/
+          # other-zone specific) rather than the card's default — without this,
+          # button-card falls back to input_text.tesla_car_name's own registry
+          # icon (mdi:car-electric, set in configuration.yaml), rendered at
+          # full default size, which is the "gigantic icon" the user reported.
           - type: custom:button-card
             entity: input_text.tesla_car_name
-            name: "📍 Current Location"
+            name: "Current Location"
+            size: 28px
+            icon: |
+              [[[
+                const car = states['input_text.tesla_car_name']?.state || 'tesla';
+                const zone = String(states['device_tracker.' + car + '_location']?.state || '').toLowerCase();
+                if (!zone || zone === 'unknown' || zone === 'unavailable') return 'mdi:map-marker-off';
+                if (zone === 'not_home') return 'mdi:map-marker-question';
+                if (zone === 'home') return 'mdi:home';
+                if (zone.includes('work') || zone.includes('office')) return 'mdi:office-building';
+                return 'mdi:map-marker';
+              ]]]
             show_label: true
             label: |
               [[[
@@ -233,6 +355,21 @@ views:
               card:
                 - background-color: rgba(33, 150, 243, 0.15)
                 - padding: 12px
+                - display: flex
+                - flex-direction: row
+                - justify-content: flex-start
+                - align-items: center
+                - gap: 10px
+              icon:
+                - color: |
+                    [[[
+                      const car = states['input_text.tesla_car_name']?.state || 'tesla';
+                      const zone = String(states['device_tracker.' + car + '_location']?.state || '').toLowerCase();
+                      return zone === 'home' ? 'rgb(76, 175, 80)' : 'rgb(33, 150, 243)';
+                    ]]]
+              label:
+                - font-size: 13px
+                - margin-top: 0px
 
           # 1.5 Information Overview Grid (9 cards, 2 columns)
           # NOTE: the original Tessie-parity spec called for a 10th "Profiler"
@@ -428,7 +565,7 @@ views:
           - type: markdown
             content: |
               ---
-              **{{ states('input_text.tesla_model') | default('Tesla Model X') }}** • VIN: {{ states('input_text.tesla_vin') | default('Unknown') }} • Plate: {{ states('input_text.tesla_plate') | default('Unknown') }}
+              **{{ states('input_text.tesla_model') | default('Tesla Model X') }}** • VIN: {{ states('sensor.tesla_vin_live') | default('Unknown') }} • Plate: {{ states('input_text.tesla_plate') | default('Unknown') }}
           
               {% set car = states('input_text.tesla_car_name') %}
               {% set unit_sys = states('input_select.tesla_unit_system') %}
@@ -1271,15 +1408,23 @@ views:
               {% set size = states('input_select.tesla_wheel_size') %}
               💡 **Recommended cold pressure ({{ size }} wheels): {{ (p * 14.5038) | round(0) ~ ' psi' if is_psi else p | round(2) ~ ' bar' }}**
 
-          # 5.2 Wheel Pressure Matrix (2×2)
-          - type: grid
-            columns: 2
-            square: false
-            cards:
+          # 5.2 Tire Pressure Overlay (top-down car image)
+          # Replaces the previous 2x2 icon grid with 4 pressure readouts
+          # positioned over a top-down photo of the car. No lock icon here,
+          # per explicit user request — this tab is pressure-readouts only.
+          # NOTE: assumes the image has the front of the car facing up (FL/FR
+          # at top, RL/RR at bottom) — nudge the top/left % below if your
+          # teslaTopDown.png is oriented differently.
+          - type: picture-elements
+            image: media-source://media_source/local/teslaTopDown.png
+            style:
+              border-radius: 12px
+              overflow: hidden
+            elements:
               # FL
               - type: custom:button-card
                 entity: sensor.vehicle_tyre_pressure_front_left
-                icon: mdi:tire
+                show_icon: false
                 name: "FL"
                 show_label: true
                 label: |
@@ -1294,12 +1439,25 @@ views:
                   action: none
                 styles:
                   card:
-                    - background-color: rgba(76, 175, 80, 0.2)
+                    - background-color: rgba(76, 175, 80, 0.85)
+                    - border-radius: 10px
+                    - padding: 4px
+                  name:
+                    - font-size: 10px
+                    - font-weight: 700
+                  label:
+                    - font-size: 12px
+                    - font-weight: 700
+                style:
+                  top: 18%
+                  left: 25%
+                  width: 22%
+                  transform: translate(-50%, -50%)
 
               # FR
               - type: custom:button-card
                 entity: sensor.vehicle_tyre_pressure_front_right
-                icon: mdi:tire
+                show_icon: false
                 name: "FR"
                 show_label: true
                 label: |
@@ -1314,12 +1472,25 @@ views:
                   action: none
                 styles:
                   card:
-                    - background-color: rgba(76, 175, 80, 0.2)
+                    - background-color: rgba(76, 175, 80, 0.85)
+                    - border-radius: 10px
+                    - padding: 4px
+                  name:
+                    - font-size: 10px
+                    - font-weight: 700
+                  label:
+                    - font-size: 12px
+                    - font-weight: 700
+                style:
+                  top: 18%
+                  left: 75%
+                  width: 22%
+                  transform: translate(-50%, -50%)
 
               # RL
               - type: custom:button-card
                 entity: sensor.vehicle_tyre_pressure_rear_left
-                icon: mdi:tire
+                show_icon: false
                 name: "RL"
                 show_label: true
                 label: |
@@ -1334,12 +1505,25 @@ views:
                   action: none
                 styles:
                   card:
-                    - background-color: rgba(76, 175, 80, 0.2)
+                    - background-color: rgba(76, 175, 80, 0.85)
+                    - border-radius: 10px
+                    - padding: 4px
+                  name:
+                    - font-size: 10px
+                    - font-weight: 700
+                  label:
+                    - font-size: 12px
+                    - font-weight: 700
+                style:
+                  top: 82%
+                  left: 25%
+                  width: 22%
+                  transform: translate(-50%, -50%)
 
               # RR
               - type: custom:button-card
                 entity: sensor.vehicle_tyre_pressure_rear_right
-                icon: mdi:tire
+                show_icon: false
                 name: "RR"
                 show_label: true
                 label: |
@@ -1354,7 +1538,20 @@ views:
                   action: none
                 styles:
                   card:
-                    - background-color: rgba(76, 175, 80, 0.2)
+                    - background-color: rgba(76, 175, 80, 0.85)
+                    - border-radius: 10px
+                    - padding: 4px
+                  name:
+                    - font-size: 10px
+                    - font-weight: 700
+                  label:
+                    - font-size: 12px
+                    - font-weight: 700
+                style:
+                  top: 82%
+                  left: 75%
+                  width: 22%
+                  transform: translate(-50%, -50%)
 
           # 5.3 Historical Pressure Chart
           # Two variants (bar vs psi) because apexcharts-card's yaxis min/max and

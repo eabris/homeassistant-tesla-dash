@@ -135,8 +135,9 @@ button.tesla_keyless_driving                     | button        | action       
 # --- HELPERS ---
 input_text.tesla_car_name                       | input_text    | helper            | Tesla Car Name (entity prefix)  | ⚠️ CRITICAL: must match your Tesla Fleet integration's real entity prefix (e.g. "tesla", "x", "0", "42" — anything except "vehicle"). Every vehicle_* alias, script, and automation in this project reads it dynamically. Default: "tesla"
 input_text.tesla_model                          | input_text    | helper            | Tesla Model                     | Editable vehicle model name (default: Tesla Model X); shown in footer
-input_text.tesla_vin                            | input_text    | helper            | Tesla VIN                       | Editable VIN number (default: 5YJ12345678901234, placeholder — set to your real VIN locally, never commit it); shown in footer
-input_text.tesla_plate                          | input_text    | helper            | Tesla Plate                     | Editable license plate (default: XXYY-123, placeholder — set to your real plate locally, never commit it); shown in footer
+input_text.tesla_vin                            | input_text    | helper            | Tesla VIN                       | Manual fallback ONLY — no longer the primary VIN source (see sensor.tesla_vin_live below). No `initial:`, so a manually-typed value now persists across reloads instead of resetting.
+input_text.tesla_plate                          | input_text    | helper            | Tesla Plate                     | Editable license plate (no default placeholder anymore — Tesla's API has no plate field to auto-pull). No `initial:`, so it now persists across reloads instead of resetting to a placeholder every time.
+sensor.tesla_vin_live                            | sensor        | vehicle_identity  | Tesla Vin Live                  | Real VIN pulled live from the Tesla Fleet integration's own HA device registry entry (`device_attr(device_id(...), 'serial_number')` — confirmed against tesla_fleet's __init__.py, which sets `serial_number=vin` on the vehicle device). Falls back to input_text.tesla_vin if the device lookup fails. Used by the Dashboard tab footer instead of the old manual-only input_text.tesla_vin.
 input_number.tesla_odometer_monthly_baseline    | input_number  | helper            | Tesla Odometer Monthly Baseline | Odometer snapshot on 1st of month for monthly distance template
 input_number.tesla_previous_month_distance      | input_number  | helper            | Tesla Previous Month Distance   | Automation-managed (no `initial:`): snapshot of the just-completed month's distance, captured by automation.tesla_odometer_monthly_baseline right before it resets the baseline each 1st. Reads 0 until the first rollover after this was added. Powers sensor.tesla_previous_month_distance and the History tab's "Previous Month" card.
 input_number.tesla_target_charge_limit          | input_number  | helper            | Tesla Target Charge Limit       | Helper slider for planned charge target in automations
@@ -249,6 +250,19 @@ binary_sensor.tesla_anomaly_high_daily_cost      | binary_sensor | anomaly      
 #      packages/tesla/automations.yaml (at most 1 start + 1 stop per day,
 #      no flapping; syncs the vehicle's own charge limit as a safety net).
 # 7. "froot" entity = Frunk (front trunk). Keep the original entity_id.
+# 8. Dashboard hero/tire images (dashboards/tesla-overview.yaml): the
+#    Dashboard tab's vehicle hero card and the Tires tab's pressure-overlay
+#    card are `picture-elements` cards pointing at
+#    media-source://media_source/local/tesla-car-image.png and
+#    .../teslaTopDown.png respectively. These reference files you upload
+#    yourself via Settings → Media (or the Media Source `local` folder on
+#    the HA host) — they are NOT included in this repo and NOT tracked by
+#    git. If either image is missing/renamed, that card silently renders as
+#    a blank/broken image; the overlay icons (lock, wake, charge port, tire
+#    pressures) still work independently since they're separate elements.
+#    The overlay icons' top/left percentages are best-effort placeholders —
+#    adjust them in the dashboard YAML to match your own photos' exact
+#    proportions/orientation.
 
 # ============================================================
 # CUSTOM HELPERS - PHASE 1 (2026-06-23)

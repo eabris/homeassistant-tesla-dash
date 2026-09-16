@@ -1168,6 +1168,42 @@ something. Verified via a synthetic fixture: first `--apply` run updates and
 backs up; an immediate second run with the same token reports "unchanged"
 and creates zero additional backups.
 
+**Automatic backup pruning added (`--keep-backups N`, default 2):** the
+idempotency fix above stops *new* pileup on unchanged-token runs, but every
+run where the token genuinely *does* change (~every 8h in practice, since
+the token's lifetime is shorter than the 6h polling interval) still created
+one more `secrets.yaml.bak-<timestamp>` file forever — a user's File Editor
+screenshot showed a real pile of a dozen+ of these. Added a
+`ls -1t secrets.yaml.bak-* | tail -n +$((KEEP_BACKUPS+1))` + `rm -f` step
+immediately after each successful token update, keeping only the
+`--keep-backups` most recent (default 2, matching the user's stated
+preference); `--keep-backups 0` skips creating a backup at all for that run.
+This also retroactively cleans up any backlog that had already accumulated
+before this feature existed, the very next time the token changes. Argument
+is validated as a non-negative integer up front (`ERROR: --keep-backups must
+be a non-negative integer...`) rather than letting a bad value blow up later
+inside the numeric comparison.
+
+**Bug found and fixed while testing the pruning change (pre-existing, not
+introduced by it):** the idempotency check
+(`CURRENT_TOKEN="$(grep '^tesla_fleet_token:' "$SECRETS_FILE" | sed ...)"`)
+silently killed the entire script with **no error message** whenever
+`secrets.yaml` had no `tesla_fleet_token:` line yet — e.g. a genuine
+first-ever run on a fresh install. Under `set -eo pipefail`, `grep` finding
+no match exits 1, `pipefail` propagates that exit code through the pipe into
+`sed`, and since the pipeline's result is being assigned to a variable as a
+standalone statement (not inside an `if`/`while` condition, where `set -e`
+is suspended), the non-zero status terminates the script right there. This
+had gone unnoticed because every prior test/production run happened to
+start from a `secrets.yaml` that already had a `tesla_fleet_token:` line
+(steady state) — a synthetic first-run fixture (`secrets.yaml` with no such
+line, used to validate the new pruning logic end-to-end) is what surfaced
+it. Fixed with a trailing `|| true` on that assignment, so a genuinely empty
+match correctly falls through to an empty `CURRENT_TOKEN` (and thus proceeds
+to write the token normally) instead of aborting. Re-verified the full
+first-run → apply → re-run-unchanged → token-changes-again → `--keep-backups
+0`/`--keep-backups N` matrix against a synthetic fixture after the fix.
+
 ### 10. Never Commit Real Personal/Private Information
 
 **Rule:** Never hardcode a real Home Assistant URL, Long-Lived Access
@@ -1309,6 +1345,30 @@ first-boot default is needed, prefer documenting the expected first-set
 value in a comment (as already done throughout this file) rather than
 forcing it via `initial:`, since the two are not interchangeable despite
 looking similar in the YAML.
+
+**Follow-up refinement — even 2 of the original "acceptable to reset"
+placeholders turned out not to be:** the 4 vehicle-identity fields
+(`tesla_car_name`, `tesla_model`, `tesla_vin`, `tesla_plate`) were
+deliberately exempted above as "one-time example text meant to be
+overwritten once during setup." In practice, a user reported VIN and Plate
+specifically resetting to their placeholder values on every single config
+reload — which is exactly the same `initial:` behavior described in this
+section, just not caught for these two fields the first time around
+because they're rarely reloaded right after being set. Removed `initial:`
+from `tesla_vin` and `tesla_plate` for this reason. `tesla_car_name` and
+`tesla_model` still deliberately keep `initial:` — `tesla_car_name` is the
+master key every alias in Section 5 depends on and must always boot to a
+sane value ("tesla"), and `tesla_model` is lower-stakes cosmetic text with
+no live-data source to fall back to. VIN in particular no longer needs a
+placeholder at all: `sensor.tesla_vin_live` now pulls the real VIN
+directly from the Tesla Fleet integration's own device registry entry
+(`device_attr(device_id('sensor.' + car + '_battery_level'), 'serial_number')`
+— confirmed against `tesla_fleet`'s core `__init__.py`, which constructs
+each vehicle's `DeviceInfo` with `serial_number=vin`), falling back to the
+manually-typed `input_text.tesla_vin` only if that device-registry lookup
+ever comes back empty. Plate has no Fleet API equivalent (Tesla doesn't
+expose license plates at all), so it remains purely manual — just
+persistent now instead of resetting.
 
 
 
@@ -1488,3 +1548,90 @@ card:
 Both new sensors were documented in `entities-list.txt` immediately after
 `sensor.tesla_monthly_fuel_cost`, matching the existing ordering convention
 for this sensor family.
+
+### 15. VIN Live-Pull, Backup Pruning, and Vehicle/Tire Image Overlays
+
+**VIN persistence fix + live Fleet pull:** a user reported that both
+`input_text.tesla_vin` and `input_text.tesla_plate` reset to their
+placeholder default values on every config reload — this is the exact
+`initial:` trap described in Section 11, except these two fields had
+originally been judged (incorrectly, per this direct report) as acceptable
+one-time placeholders alongside `tesla_car_name`/`tesla_model`. Fixed by
+removing `initial:` from both, same as the 29 other fields in Section 11.
+Additionally, since the Tesla Fleet integration exposes VIN in the HA
+**device registry** (`serial_number`, set from `DeviceInfo(serial_number=vin,
+...)` in `tesla_fleet`'s own `__init__.py`) but never as an entity
+state/attribute, a new `sensor.tesla_vin_live` template was added that reads
+it via `device_attr(device_id('sensor.' + car + '_battery_level'),
+'serial_number')`, falling back to `input_text.tesla_vin` and finally
+`'Unknown'`. The Dashboard tab footer now reads this live sensor instead of
+the manually-entered `input_text.tesla_vin` — no more manual VIN entry
+needed at all (Plate still has no Fleet API equivalent, so
+`input_text.tesla_plate` remains manual-entry-only, now at least correctly
+persisting).
+
+**`secrets.yaml.bak-*` pileup fix:** `scripts/refresh_tesla_token.sh` now
+prunes old backups down to `--keep-backups` most recent (default 2) after
+every successful `--apply` run, via `ls -1t ... | tail -n +N | rm -f`;
+`--keep-backups 0` skips creating a backup for that run entirely. This
+matters because the token-refresh automation runs every 6h — see Section
+10a for the full writeup, including a real pre-existing bug (`grep`-into-
+`sed` silently killing the whole script under `set -eo pipefail` on a
+brand-new `secrets.yaml` with no `tesla_fleet_token:` line yet) discovered
+and fixed while building/testing this feature.
+
+**Dashboard hero image + overlay icons (Dashboard tab):** the Charging
+Status conditional card's default oversized icon (rendered by
+`custom:button-card` when no icon/size override is set) and the Location
+Strip card's oversized default icon (inherited from
+`input_text.tesla_car_name`'s own registry `icon: mdi:car-electric`) were
+both user-reported as "gigantic." Fixed two ways:
+1. Added `show_icon: false` to the Charging Status card — it still shows
+   its text rows (time remaining, amp/volt/power), just without the icon.
+2. Added a new `picture-elements` hero card (1.1a, positioned right after
+   the header row) using `media-source://media_source/local/tesla-car-
+   image.png` — confirmed via HA frontend source (`hui-image.ts`) that
+   Lovelace image cards resolve `media-source://` URIs natively, no manual
+   conversion needed. Three `custom:button-card` overlay elements (lock
+   toggle, wake, charge-port unlock) are absolutely positioned on top via
+   `style: {top, left, transform}`, each reusing the same
+   `states['domain.' + car + '_suffix']` JS pattern already used everywhere
+   else in this file for car-name resolution — **no new template entities
+   were needed**, since only the icon/color needs dynamic car-name lookup;
+   each button's `tap_action` calls a fixed, already car-name-agnostic
+   script (`script.tesla_lock_toggle`, `script.tesla_wake`,
+   `script.tesla_unlock_port`).
+
+**Location card icon fix:** replaced the implicit default icon with an
+explicit small (`size: 28px`) JS-templated icon based on the vehicle's
+current zone (`device_tracker.<car>_location`): `mdi:home` for the `home`
+zone, `mdi:office-building` for any zone name containing "work"/"office",
+`mdi:map-marker-question` for `not_home`, `mdi:map-marker-off` for
+unknown/unavailable, and a generic `mdi:map-marker` for any other named
+zone. Card layout changed to a horizontal flex row (icon + label
+side-by-side) instead of the default stacked icon-above-label, to better
+suit a slim banner card.
+
+**Tires tab top-down image overlay (item 5):** replaced the previous 2x2
+`type: grid` of 4 separate wheel-icon cards with a single `picture-elements`
+card using `media-source://media_source/local/teslaTopDown.png`, with 4
+small pill-style `custom:button-card` elements (FL/FR/RL/RR) positioned at
+approximate wheel corners via `style: {top, left}`, reusing the exact same
+bar/psi conversion JS the old grid cards had. No lock icon on this overlay,
+per explicit user instruction (this tab is tire-pressure-only). The existing
+"Target Pressure Notice" banner and "Historical Pressure Chart" (with its
+dual bar/psi `conditional` pair) sections are unchanged.
+
+**Known limitation, all 3 image/icon changes above:** the exact
+top/left/transform percentages for every overlay element (hero card's 3
+icons, tires card's 4 pressure pills) are best-effort placeholder positions,
+not verified against the user's actual photos (only described/shown via
+screenshots, not measured pixel coordinates). Both images
+(`tesla-car-image.png`, `teslaTopDown.png`) are user-supplied media files
+uploaded via Home Assistant's Media Source (`local` media folder) — they
+are not part of this git repo and won't be present on a fresh clone; if
+missing, the affected card just renders a blank/broken image while its
+overlay icons keep working (they're independent elements, not clipped to
+the image loading). Ask the user to verify visually after reload and adjust
+the percentages in `dashboards/tesla-overview.yaml` if any icon doesn't line
+up with their actual car body/wheel positions.
