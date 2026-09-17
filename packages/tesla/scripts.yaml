@@ -78,10 +78,22 @@ tesla_set_departure_now_plus_2h:
 tesla_lock_toggle:
   alias: "Tesla Lock Toggle"
   icon: mdi:lock
+  # Tesla Fleet does not implement lock.toggle (HA reports
+  # "action lock.toggle which was not found"). Toggle via lock/unlock.
   sequence:
-    - action: lock.toggle
-      target:
-        entity_id: "{{ 'lock.' + states('input_text.tesla_car_name') + '_lock' }}"
+    - choose:
+        - conditions:
+            - condition: template
+              value_template: >
+                {{ is_state('lock.' + states('input_text.tesla_car_name') + '_lock', 'locked') }}
+          sequence:
+            - action: lock.unlock
+              target:
+                entity_id: "{{ 'lock.' + states('input_text.tesla_car_name') + '_lock' }}"
+      default:
+        - action: lock.lock
+          target:
+            entity_id: "{{ 'lock.' + states('input_text.tesla_car_name') + '_lock' }}"
 
 tesla_climate_toggle:
   alias: "Tesla Climate Toggle"

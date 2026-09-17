@@ -251,18 +251,18 @@ binary_sensor.tesla_anomaly_high_daily_cost      | binary_sensor | anomaly      
 #      no flapping; syncs the vehicle's own charge limit as a safety net).
 # 7. "froot" entity = Frunk (front trunk). Keep the original entity_id.
 # 8. Dashboard hero/tire images (dashboards/tesla-overview.yaml): the
-#    Dashboard tab's vehicle hero card and the Tires tab's pressure-overlay
-#    card are `picture-elements` cards pointing at
-#    media-source://media_source/local/tesla-car-image.png and
-#    .../teslaTopDown.png respectively. These reference files you upload
-#    yourself via Settings → Media (or the Media Source `local` folder on
-#    the HA host) — they are NOT included in this repo and NOT tracked by
-#    git. If either image is missing/renamed, that card silently renders as
-#    a blank/broken image; the overlay icons (lock, wake, charge port, tire
-#    pressures) still work independently since they're separate elements.
-#    The overlay icons' top/left percentages are best-effort placeholders —
-#    adjust them in the dashboard YAML to match your own photos' exact
-#    proportions/orientation.
+#    Dashboard tab's vehicle hero card points at
+#    media-source://media_source/local/tesla-car-image-2.jpg (button-card
+#    grid: clean photo + Lock/Wake/Port dock *under* the car). The Tires
+#    tab's pressure-overlay card is still `picture-elements` pointing at
+#    .../teslaTopDown.png. These reference files you upload yourself via
+#    Settings → Media (or the Media Source `local` folder on the HA host)
+#    — they are NOT included in this repo and NOT tracked by git. If
+#    either image is missing/renamed, that card silently renders as a
+#    blank/broken image; the hero dock buttons and tire-pressure pills
+#    still work independently. The Tires overlay pills' top/left
+#    percentages are best-effort placeholders — adjust them in the
+#    dashboard YAML to match your own photo.
 # 9. The Tires tab's picture-elements card is intentionally shrunk to a
 #    150px-wide thumbnail (via card-mod's `card_mod: style:` on `ha-card`,
 #    not a plain `style: {...}` mapping — that flat form isn't valid

@@ -1756,3 +1756,51 @@ Mushroom cards:** don't assume a visually-"nested-looking" element requires
 a `$`-piercing selector — check DevTools first for whether the element is
 actually inside the target's own shadow root (needs piercing) or is a
 light-DOM/slotted child (reachable directly, no piercing).
+
+### 17. Vehicle Hero — Tesla-app Dock (no overlay icons on the paint)
+
+**What changed:** the Dashboard tab's 1.1 hero is no longer a
+`picture-elements` card with 3 filled traffic-light circles (lock / wake /
+charge-port) absolutely positioned on the car body, and the old 1.1
+header row (vehicle-name card + battery/range card) is gone. Replaced
+with a single `custom:button-card` 3-column grid wrapping:
+
+1. **Hero** — nested `picture-elements` showing
+   `media-source://media_source/local/tesla-car-image-2.jpg`
+   (`aspect_ratio: "2:1"`). Overlays are typography only: model name +
+   status caption top-left (`input_text.tesla_model`,
+   `Parked · Locked` / …), battery/range top-right (same unit-system +
+   wheel-adjusted formula as the old header). Overlay `ha-card` chrome
+   is killed with `--ha-card-border-width: 0px` (the default theme
+   border was the rounded box around "Tesla Model X"). No tap targets
+   on the photo.
+2. **Dock** — three labelled `custom:button-card` custom_fields
+   (`lock` / `wake` / `port`) *under* the photo, equal columns. State
+   is a 1.5px ring + caption, not a filled blob. Same scripts as
+   before (`script.tesla_lock_toggle`, `script.tesla_wake`,
+   `script.tesla_unlock_port` with the existing charge-port
+   confirmation). Wake icon is `mdi:lightning-bolt` to match the
+   Tesla-app preview.
+
+Nested picture-elements inside the button-card grid keeps this as **one
+card** with a single `#070708` background — no gap between photo and
+dock. No new entities. card-mod is still used on the inner
+picture-elements (`ha-card { border: none; box-shadow: none; }`) using
+the CSS-string form from Section 16.
+
+**`lock.toggle` is not a Tesla Fleet action.**
+`script.tesla_lock_toggle` used to call `action: lock.toggle`, which HA
+rejects with `Action script.tesla_lock_toggle uses action lock.toggle
+which was not found`. The script now `choose`s `lock.unlock` vs
+`lock.lock` based on the current `lock.<car>_lock` state. Reload
+scripts after pulling this change.
+
+**Image filename:** `tesla-car-image-2.jpg` (not the older
+`tesla-car-image.png`). Users must upload that file to HA Media Source
+`local`. The Tires tab still uses `teslaTopDown.png` with overlay pills;
+only the Dashboard hero dropped on-paint icons.
+
+**Known limitation that no longer applies to the hero:** overlay
+top/left percentages for lock/wake/port on the car body. Those three
+controls are in the dock now. The Tires-tab pressure-pill placeholders
+from Sections 15–16 are unchanged.

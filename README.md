@@ -14,7 +14,7 @@ Two ready-made Lovelace dashboards, wired directly to your Tesla's native entiti
 
 ### 🧭 Tesla Overview dashboard
 Six tabs covering everyday use of the car:
-- **Dashboard** — the main cockpit: header with vehicle name + battery/range readout, a conditional "Charging" status card (time remaining, amps/volts/kW), a 6-button quick-action row (lock, climate, frunk, trunk, flash lights, more), a tap-to-open location strip, and an info grid (climate, battery, schedule, tires, drives, charges, idles, activity, automation, profiler) plus a vehicle specs footer (model, VIN, plate, firmware, odometer, alerts).
+- **Dashboard** — the main cockpit: header with vehicle name + battery/range readout, a Tesla-app-style vehicle hero (clean side photo with model/status overlay and a Lock / Wake / Port dock under the car), a conditional "Charging" status card (time remaining, amps/volts/kW), a 6-button quick-action row (lock, climate, frunk, trunk, flash lights, more), a tap-to-open location strip, and an info grid (climate, battery, schedule, tires, drives, charges, idles, activity, automation, profiler) plus a vehicle specs footer (model, VIN, plate, firmware, odometer, alerts).
 - **Controls** — window venting, sentry mode toggle, media playback, valet mode & speed limit.
 - **Climate** — interior/exterior temperature readout, a seat-heater map for all 6 seats + steering wheel heater, a temperature stepper, and quick toggles for Dog Mode, Camp Mode, Bio Defense, Climate, Defrost, and Cabin Overheat Protection.
 - **Battery** — battery level gauge, detailed telemetry table (range, drain, energy, pack temperature, amperage, voltage, lifetime energy used), a charge-limit slider, and start/stop charging + unlock charge port buttons.
@@ -197,13 +197,13 @@ your Home Assistant instance:
 2. Open (or create) the **`local`** media source folder — this maps to the
    `/config/www/` folder on your HA host.
 3. Upload two image files:
-   - A **side-view photo** of your car, named exactly **`tesla-car-image.png`**
-     (used on the Dashboard tab's hero card, with the Lock/Wake/Charge-port
-     overlay icons).
+   - A **side-view photo** of your car, named exactly **`tesla-car-image-2.jpg`**
+     (used on the Dashboard tab's hero card — clean photo, with Lock / Wake /
+     Port as a dock *under* the car, not as overlay icons on the paint).
    - A **top-down photo** of your car, named exactly **`teslaTopDown.png`**
      (used on the Tires tab, with the 4 tire-pressure overlay pills).
 4. That's it — no config reload needed. Both dashboard cards already point
-   at `media-source://media_source/local/tesla-car-image.png` and
+   at `media-source://media_source/local/tesla-car-image-2.jpg` and
    `media-source://media_source/local/teslaTopDown.png` respectively; they
    just start resolving to real images as soon as the files exist under
    that `local` folder.
@@ -215,25 +215,24 @@ your Home Assistant instance:
 > the exact same result.
 
 > ⚠️ **File names are case-sensitive and must match exactly** —
-> `tesla-car-image.png` (all lowercase, hyphens) and `teslaTopDown.png`
+> `tesla-car-image-2.jpg` (all lowercase, hyphens, `.jpg`) and `teslaTopDown.png`
 > (camelCase, no hyphens), matching what's hardcoded in
 > `dashboards/tesla-overview.yaml`. If you'd rather use different file
-> names, or `.jpg`/`.jpeg` instead of `.png`, just edit the two `image:`
-> lines in that file to match.
+> names, just edit the two `image:` lines in that file to match.
 
-> ⚠️ **If you skip this step**, the two picture-elements cards will simply
-> render as a blank/broken image area — this is harmless. The overlay
-> icons/pressure readouts on top of them are independent dashboard elements
+> ⚠️ **If you skip this step**, the two image cards will simply
+> render as a blank/broken image area — this is harmless. The hero dock
+> buttons and Tires-tab pressure readouts are independent dashboard elements
 > and will still work and update normally; only the background photo itself
 > will be missing until you upload it.
 
-> 📐 **Icon/pressure-pill positions are best-effort placeholders.** The
-> exact `top`/`left` percentages for the hero card's 3 overlay icons and
-> the tires card's 4 pressure pills were chosen without seeing your actual
-> photos, so they may not land exactly on the car body/wheels in your
-> images. After uploading, check how they look and nudge the `style: {top,
-> left}` values for each element in `dashboards/tesla-overview.yaml` (search
-> for "Vehicle Hero Image" and "Tire Pressure Overlay") if needed.
+> 📐 **Tire pressure-pill positions are best-effort placeholders.** The
+> exact `top`/`left` percentages for the tires card's 4 pressure pills were
+> chosen without seeing your actual photo, so they may not land exactly on
+> the wheels. After uploading, check how they look and nudge the
+> `style: {top, left}` values for each element in
+> `dashboards/tesla-overview.yaml` (search for "Tire Pressure Overlay") if
+> needed. The Dashboard hero no longer uses overlay icons on the car body.
 
 ---
 

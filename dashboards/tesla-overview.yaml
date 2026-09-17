@@ -8,174 +8,428 @@ views:
     cards:
       - type: vertical-stack
         cards:
-          # 1.1 Header Status Row
-          - type: horizontal-stack
-            cards:
-              - type: custom:button-card
-                name: |
-                  [[[
-                    const car = states['input_text.tesla_car_name']?.state || 'tesla';
-                    return car.charAt(0).toUpperCase() + car.slice(1);
-                  ]]]
-                icon: mdi:car-electric
-                label: "🔔"
-                tap_action:
-                  action: none
-                styles:
-                  card:
-                    - background-color: rgba(0, 0, 0, 0.3)
-                    - height: 60px
-                    - padding: 8px
-
-              - type: custom:button-card
-                entity: sensor.vehicle_battery_range
-                icon: mdi:battery
-                show_name: false
-                show_label: true
-                label: |
-                  [[[
-                    const soc = parseFloat(String(states['sensor.vehicle_battery_level']?.state || '0'));
-                    const rawRange = String(states['sensor.vehicle_battery_range']?.state || '');
-                    const rangeKm = (!rawRange || rawRange === 'unknown' || rawRange === 'unavailable')
-                      ? soc * 4.1
-                      : parseFloat(rawRange);
-                    const adjPct = parseFloat(states['input_number.tesla_wheel_range_adjustment_pct']?.state || '0');
-                    const calcKm = rangeKm * (1 - adjPct / 100);
-                    const unitSys = states['input_select.tesla_unit_system']?.state || 'Metric (km, °C, bar)';
-                    const isMi = unitSys !== 'Metric (km, °C, bar)';
-                    const range = Math.round(isMi ? rangeKm * 0.621371 : rangeKm);
-                    const calc = Math.round(isMi ? calcKm * 0.621371 : calcKm);
-                    const unit = isMi ? 'mi' : 'km';
-                    return `${soc.toFixed(0)}% • ${range} (${calc}) ${unit}`;
-                  ]]]
-                styles:
-                  card:
-                    - background-color: >
-                        [[[
-                          const soc = parseFloat(String(states['sensor.vehicle_battery_level']?.state || '0'));
-                          if (soc > 70) return 'rgba(76, 175, 80, 0.3)';
-                          if (soc > 40) return 'rgba(255, 193, 7, 0.3)';
-                          return 'rgba(244, 67, 54, 0.3)';
-                        ]]]
-                    - height: 60px
-                    - padding: 8px
-
-          # 1.1a Vehicle Hero Image
-          # Car side-photo replacing the old oversized default charging-icon
-          # visual, with 3 tap-to-act overlay icons. Reuses the same
-          # `states['domain.' + car + '_suffix']` JS pattern used throughout
-          # this dashboard for dynamic icon/color — no new template entities
-          # needed, since only the visual state needs car-name resolution
-          # (each button's own tap_action calls a fixed, car-name-agnostic
-          # script that resolves the car internally, same as elsewhere).
-          # NOTE: the 3 icons' top/left % positions below are a best-effort
-          # placement for a typical side-view photo (front-left ~ lock,
-          # front area ~ wake, rear ~ charge port) — nudge these percentages
-          # to match your exact tesla-car-image.png if they don't land where
-          # you'd like on the car body.
-          # NOTE: aspect_ratio forces the card to use a cropped
-          # background-size:cover render (HA's hui-image component) instead
-          # of the image's own natural (tall/letterboxed) aspect ratio — this
-          # is what keeps the card from being taller than the car photo
-          # needs. Adjust the ratio (width:height) if your photo needs more
-          # or less vertical crop.
-          - type: picture-elements
-            image: media-source://media_source/local/tesla-car-image.png
-            aspect_ratio: "5:2"
-            card_mod:
-              style: |
-                ha-card {
-                  border-radius: 12px;
-                  overflow: hidden;
-                }
-            elements:
-              # Lock / Unlock — centered on the car body
-              - type: custom:button-card
-                entity: script.tesla_lock_toggle
-                show_name: false
-                show_label: false
-                size: 20px
-                icon: |
-                  [[[
-                    const car = states['input_text.tesla_car_name']?.state || 'tesla';
-                    return states['lock.' + car + '_lock']?.state === 'locked' ? 'mdi:lock' : 'mdi:lock-open-variant';
-                  ]]]
-                tap_action:
-                  action: call-service
-                  service: script.tesla_lock_toggle
-                styles:
-                  card:
-                    - width: 38px
-                    - height: 38px
-                    - border-radius: 50%
-                    - background-color: |
+          # 1.1 Vehicle Hero (Tesla-app dock layout)
+          # Car name (input_text.tesla_car_name) + range live ON the photo.
+          # Lock / Wake / Port sit in a 3-column dock under the photo.
+          - type: custom:button-card
+            show_icon: false
+            show_name: false
+            tap_action:
+              action: none
+            styles:
+              card:
+                - padding: 0
+                - background-color: "#070708"
+                - border-radius: 20px
+                - overflow: hidden
+                - border: 1px solid rgba(255,255,255,0.08)
+                - box-shadow: none
+                - --ha-card-border-width: 0px
+              grid:
+                - grid-template-areas: '"hero" "dock"'
+                - grid-template-columns: 1fr
+                - grid-template-rows: auto min-content
+              custom_fields:
+                hero:
+                  - grid-area: hero
+                  - padding: 0
+                dock:
+                  - grid-area: dock
+                  - padding: 4px 0 16px
+                  - width: 100%
+            custom_fields:
+              hero:
+                card:
+                  type: picture-elements
+                  image: media-source://media_source/local/tesla-car-image-2.jpg
+                  aspect_ratio: "2:1"
+                  card_mod:
+                    style: |
+                      ha-card {
+                        border-radius: 0;
+                        overflow: visible;
+                        background: #070708;
+                        border: none;
+                        box-shadow: none;
+                      }
+                  elements:
+                    - type: custom:button-card
+                      tap_action:
+                        action: none
+                      hold_action:
+                        action: none
+                      show_icon: false
+                      show_name: true
+                      show_label: true
+                      name: |
                         [[[
                           const car = states['input_text.tesla_car_name']?.state || 'tesla';
-                          return states['lock.' + car + '_lock']?.state === 'locked' ? 'rgba(76, 175, 80, 0.85)' : 'rgba(244, 67, 54, 0.85)';
+                          return car.charAt(0).toUpperCase() + car.slice(1);
                         ]]]
-                style:
-                  top: 50%
-                  left: 50%
-                  transform: translate(-50%, -50%)
-
-              # Wake — near the front of the car
-              - type: custom:button-card
-                entity: binary_sensor.vehicle_status
-                show_name: false
-                show_label: false
-                size: 20px
-                icon: mdi:sleep-off
-                tap_action:
-                  action: call-service
-                  service: script.tesla_wake
-                styles:
-                  card:
-                    - width: 38px
-                    - height: 38px
-                    - border-radius: 50%
-                    - background-color: |
+                      label: |
                         [[[
-                          return states['binary_sensor.vehicle_status']?.state === 'on' ? 'rgba(76, 175, 80, 0.85)' : 'rgba(120, 120, 120, 0.85)';
+                          const car = states['input_text.tesla_car_name']?.state || 'tesla';
+                          const awake = states['binary_sensor.vehicle_status']?.state === 'on';
+                          const locked = states['lock.' + car + '_lock']?.state === 'locked';
+                          const plugged = states['binary_sensor.vehicle_charge_cable']?.state === 'on';
+                          const charging = states['binary_sensor.tesla_charging_active']?.state === 'on';
+                          const bits = [
+                            awake ? 'Parked' : 'Asleep',
+                            locked ? 'Locked' : 'Unlocked',
+                            charging ? 'Charging' : plugged ? 'Plugged in' : '',
+                          ];
+                          return bits.filter(Boolean).join(' · ');
                         ]]]
-                style:
-                  top: 20%
-                  left: 15%
-                  transform: translate(-50%, -50%)
+                      styles:
+                        card:
+                          - background: none
+                          - background-color: transparent
+                          - box-shadow: none
+                          - border: none
+                          - padding: 0
+                          - width: auto
+                          - --ha-card-border-width: 0px
+                          - --ha-card-border-color: transparent
+                          - --ha-card-background: transparent
+                          - --ha-card-box-shadow: none
+                        name:
+                          - color: "#f4f4f5"
+                          - font-size: 18px
+                          - font-weight: 600
+                          - letter-spacing: -0.03em
+                          - justify-self: start
+                          - text-shadow: 0 1px 8px rgba(0,0,0,0.55)
+                        label:
+                          - color: rgba(244,244,245,0.55)
+                          - font-size: 12px
+                          - font-weight: 500
+                          - justify-self: start
+                          - margin-top: 2px
+                          - text-shadow: 0 1px 8px rgba(0,0,0,0.55)
+                      style:
+                        top: 18px
+                        left: 20px
+                        transform: none
+                        background: none
+                        border: none
+                        box-shadow: none
 
-              # Charge port lock/unlock — Model X charge port is on the rear
-              # quarter panel near the tail light, not down by the wheel/
-              # ground — positioned at light height, near the rear of the car.
-              - type: custom:button-card
-                entity: binary_sensor.vehicle_charge_cable
-                show_name: false
-                show_label: false
-                size: 20px
-                icon: |
-                  [[[
-                    return states['binary_sensor.vehicle_charge_cable']?.state === 'on' ? 'mdi:ev-plug-tesla' : 'mdi:ev-plug-tesla-off';
-                  ]]]
-                tap_action:
-                  action: call-service
-                  service: script.tesla_unlock_port
-                  confirmation:
-                    text: Unlock the charge port?
-                styles:
-                  card:
-                    - width: 38px
-                    - height: 38px
-                    - border-radius: 50%
-                    - background-color: |
+                    - type: custom:button-card
+                      tap_action:
+                        action: none
+                      hold_action:
+                        action: none
+                      show_icon: true
+                      show_name: true
+                      show_label: false
+                      size: 16px
+                      icon: mdi:battery
+                      name: |
+                        [[[
+                          const soc = parseFloat(String(states['sensor.vehicle_battery_level']?.state || '0'));
+                          const rawRange = String(states['sensor.vehicle_battery_range']?.state || '');
+                          const rangeKm = (!rawRange || rawRange === 'unknown' || rawRange === 'unavailable')
+                            ? soc * 4.1
+                            : parseFloat(rawRange);
+                          const adjPct = parseFloat(states['input_number.tesla_wheel_range_adjustment_pct']?.state || '0');
+                          const calcKm = rangeKm * (1 - adjPct / 100);
+                          const unitSys = states['input_select.tesla_unit_system']?.state || 'Metric (km, °C, bar)';
+                          const isMi = unitSys !== 'Metric (km, °C, bar)';
+                          const range = Math.round(isMi ? rangeKm * 0.621371 : rangeKm);
+                          const calc = Math.round(isMi ? calcKm * 0.621371 : calcKm);
+                          const unit = isMi ? 'mi' : 'km';
+                          return `${soc.toFixed(0)}% · ${range} (${calc}) ${unit}`;
+                        ]]]
+                      styles:
+                        card:
+                          - background: none
+                          - background-color: transparent
+                          - box-shadow: none
+                          - border: none
+                          - padding: 0
+                          - width: max-content
+                          - overflow: visible
+                          - --ha-card-border-width: 0px
+                          - --ha-card-border-color: transparent
+                          - --ha-card-background: transparent
+                          - --ha-card-box-shadow: none
+                        grid:
+                          - grid-template-areas: '"i n"'
+                          - grid-template-columns: 18px max-content
+                          - column-gap: 6px
+                          - align-items: center
+                        icon:
+                          - color: |
+                              [[[
+                                const soc = parseFloat(String(states['sensor.vehicle_battery_level']?.state || '0'));
+                                if (soc > 70) return '#6ee7b7';
+                                if (soc > 40) return '#fbbf24';
+                                return '#f87171';
+                              ]]]
+                          - width: 16px
+                          - height: 16px
+                        img_cell:
+                          - width: 18px
+                          - height: 18px
+                          - background: none
+                          - border: none
+                          - box-shadow: none
+                        name:
+                          - color: "#f4f4f5"
+                          - font-size: 13px
+                          - font-weight: 500
+                          - justify-self: start
+                          - white-space: nowrap
+                          - overflow: visible
+                          - text-shadow: 0 1px 8px rgba(0,0,0,0.55)
+                      style:
+                        top: 18px
+                        left: auto
+                        right: 14px
+                        width: auto
+                        transform: none
+                        background: none
+                        border: none
+                        box-shadow: none
+                        overflow: visible
+
+              dock:
+                card:
+                  type: horizontal-stack
+                  cards:
+                    - type: custom:button-card
+                      entity: script.tesla_lock_toggle
+                      layout: vertical
+                      show_state: false
+                      show_name: true
+                      show_label: false
+                      size: 22px
+                      name: |
+                        [[[
+                          const car = states['input_text.tesla_car_name']?.state || 'tesla';
+                          return states['lock.' + car + '_lock']?.state === 'locked' ? 'Locked' : 'Unlocked';
+                        ]]]
+                      icon: |
+                        [[[
+                          const car = states['input_text.tesla_car_name']?.state || 'tesla';
+                          return states['lock.' + car + '_lock']?.state === 'locked' ? 'mdi:lock' : 'mdi:lock-open-variant';
+                        ]]]
+                      tap_action:
+                        action: call-service
+                        service: script.tesla_lock_toggle
+                      hold_action:
+                        action: none
+                      styles:
+                        card:
+                          - background: none
+                          - background-color: transparent
+                          - box-shadow: none
+                          - border: none
+                          - border-radius: 0
+                          - display: flex
+                          - flex-direction: column
+                          - align-items: center
+                          - justify-content: flex-start
+                          - width: 100%
+                          - padding: 8px 0 0
+                          - --ha-card-border-width: 0px
+                          - --ha-card-background: transparent
+                          - --ha-card-box-shadow: none
+                        grid:
+                          - grid-template-areas: '"i" "n"'
+                          - grid-template-columns: 1fr
+                          - justify-content: center
+                          - justify-items: center
+                          - align-items: center
+                          - width: 100%
+                        icon:
+                          - color: "#f4f4f5"
+                          - width: 22px
+                          - height: 22px
+                        img_cell:
+                          - width: 52px
+                          - height: 52px
+                          - border-radius: 50%
+                          - background: rgba(255,255,255,0.04)
+                          - justify-self: center
+                          - place-self: center
+                          - margin: 0 auto
+                          - border: |
+                              [[[
+                                const car = states['input_text.tesla_car_name']?.state || 'tesla';
+                                return states['lock.' + car + '_lock']?.state === 'locked'
+                                  ? '1.5px solid rgba(110, 231, 183, 0.7)'
+                                  : '1.5px solid rgba(248, 113, 113, 0.7)';
+                              ]]]
+                          - box-shadow: none
+                        name:
+                          - color: rgba(244,244,245,0.62)
+                          - font-size: 11px
+                          - font-weight: 500
+                          - letter-spacing: 0.04em
+                          - margin-top: 8px
+                          - white-space: nowrap
+                          - overflow: visible
+                          - justify-self: center
+                          - text-align: center
+                          - width: 100%
+
+                    - type: custom:button-card
+                      entity: binary_sensor.vehicle_status
+                      layout: vertical
+                      show_state: false
+                      show_name: true
+                      show_label: false
+                      size: 22px
+                      name: |
+                        [[[
+                          return states['binary_sensor.vehicle_status']?.state === 'on' ? 'Awake' : 'Asleep';
+                        ]]]
+                      icon: mdi:lightning-bolt
+                      tap_action:
+                        action: call-service
+                        service: script.tesla_wake
+                      hold_action:
+                        action: none
+                      styles:
+                        card:
+                          - background: none
+                          - background-color: transparent
+                          - box-shadow: none
+                          - border: none
+                          - border-radius: 0
+                          - display: flex
+                          - flex-direction: column
+                          - align-items: center
+                          - justify-content: flex-start
+                          - width: 100%
+                          - padding: 8px 0 0
+                          - --ha-card-border-width: 0px
+                          - --ha-card-background: transparent
+                          - --ha-card-box-shadow: none
+                        grid:
+                          - grid-template-areas: '"i" "n"'
+                          - grid-template-columns: 1fr
+                          - justify-content: center
+                          - justify-items: center
+                          - align-items: center
+                          - width: 100%
+                        icon:
+                          - color: |
+                              [[[
+                                return states['binary_sensor.vehicle_status']?.state === 'on'
+                                  ? '#f4f4f5'
+                                  : 'rgba(244,244,245,0.45)';
+                              ]]]
+                          - width: 22px
+                          - height: 22px
+                        img_cell:
+                          - width: 52px
+                          - height: 52px
+                          - border-radius: 50%
+                          - background: rgba(255,255,255,0.04)
+                          - justify-self: center
+                          - place-self: center
+                          - margin: 0 auto
+                          - border: 1.5px solid rgba(255,255,255,0.18)
+                          - box-shadow: none
+                        name:
+                          - color: rgba(244,244,245,0.62)
+                          - font-size: 11px
+                          - font-weight: 500
+                          - letter-spacing: 0.04em
+                          - margin-top: 8px
+                          - white-space: nowrap
+                          - overflow: visible
+                          - justify-self: center
+                          - text-align: center
+                          - width: 100%
+
+                    - type: custom:button-card
+                      entity: binary_sensor.vehicle_charge_cable
+                      layout: vertical
+                      show_state: false
+                      show_name: true
+                      show_label: false
+                      size: 22px
+                      name: |
                         [[[
                           const charging = states['binary_sensor.tesla_charging_active']?.state === 'on';
                           const plugged = states['binary_sensor.vehicle_charge_cable']?.state === 'on';
-                          if (charging) return 'rgba(76, 175, 80, 0.85)';
-                          if (plugged) return 'rgba(33, 150, 243, 0.85)';
-                          return 'rgba(120, 120, 120, 0.85)';
+                          if (charging) return 'Charging';
+                          if (plugged) return 'Plugged';
+                          return 'Port';
                         ]]]
-                style:
-                  top: 40%
-                  left: 92%
-                  transform: translate(-50%, -50%)
+                      icon: mdi:ev-plug-tesla
+                      tap_action:
+                        action: call-service
+                        service: script.tesla_unlock_port
+                        confirmation:
+                          text: Unlock the charge port?
+                      hold_action:
+                        action: none
+                      styles:
+                        card:
+                          - background: none
+                          - background-color: transparent
+                          - box-shadow: none
+                          - border: none
+                          - border-radius: 0
+                          - display: flex
+                          - flex-direction: column
+                          - align-items: center
+                          - justify-content: flex-start
+                          - width: 100%
+                          - padding: 8px 0 0
+                          - --ha-card-border-width: 0px
+                          - --ha-card-background: transparent
+                          - --ha-card-box-shadow: none
+                        grid:
+                          - grid-template-areas: '"i" "n"'
+                          - grid-template-columns: 1fr
+                          - justify-content: center
+                          - justify-items: center
+                          - align-items: center
+                          - width: 100%
+                        icon:
+                          - color: |
+                              [[[
+                                const charging = states['binary_sensor.tesla_charging_active']?.state === 'on';
+                                const plugged = states['binary_sensor.vehicle_charge_cable']?.state === 'on';
+                                if (charging) return '#6ee7b7';
+                                if (plugged) return '#7dd3fc';
+                                return '#f4f4f5';
+                              ]]]
+                          - width: 22px
+                          - height: 22px
+                        img_cell:
+                          - width: 52px
+                          - height: 52px
+                          - border-radius: 50%
+                          - background: rgba(255,255,255,0.04)
+                          - justify-self: center
+                          - place-self: center
+                          - margin: 0 auto
+                          - border: |
+                              [[[
+                                const charging = states['binary_sensor.tesla_charging_active']?.state === 'on';
+                                const plugged = states['binary_sensor.vehicle_charge_cable']?.state === 'on';
+                                if (charging) return '1.5px solid rgba(110, 231, 183, 0.7)';
+                                if (plugged) return '1.5px solid rgba(125, 211, 252, 0.6)';
+                                return '1.5px solid rgba(255,255,255,0.18)';
+                              ]]]
+                          - box-shadow: none
+                        name:
+                          - color: rgba(244,244,245,0.62)
+                          - font-size: 11px
+                          - font-weight: 500
+                          - letter-spacing: 0.04em
+                          - margin-top: 8px
+                          - white-space: nowrap
+                          - overflow: visible
+                          - justify-self: center
+                          - text-align: center
+                          - width: 100%
 
           # 1.2 Charging Status Card (Conditional)
           - type: conditional
