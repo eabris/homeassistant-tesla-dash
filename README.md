@@ -16,7 +16,7 @@ Two ready-made Lovelace dashboards, wired directly to your Tesla's native entiti
 Six tabs covering everyday use of the car:
 - **Dashboard** — the main cockpit: header with vehicle name + battery/range readout, a Tesla-app-style vehicle hero (clean side photo with model/status overlay and a Lock / Wake / Port dock under the car), a conditional "Charging" status card (time remaining, amps/volts/kW), a 6-button quick-action row (lock, climate, frunk, trunk, flash lights, more), a tap-to-open location strip, and an info grid (climate, battery, schedule, tires, drives, charges, idles, activity, automation, profiler) plus a vehicle specs footer (model, VIN, plate, firmware, odometer, alerts).
 - **Controls** — window venting, sentry mode toggle, media playback, valet mode & speed limit.
-- **Climate** — interior/exterior temperature readout, a seat-heater map for all 6 seats + steering wheel heater, a temperature stepper, and quick toggles for Dog Mode, Camp Mode, Bio Defense, Climate, Defrost, and Cabin Overheat Protection.
+- **Climate** — Tesla-app-style 6-seat cabin map (`tesla-cabin-topdown.png`) with tappable heat-wave icons on each seat and the steering wheel, interior/exterior readout, Off / target-temp / Vent dock, Defrost, plus Dog/Camp presets.
 - **Battery** — battery level gauge, detailed telemetry table (range, drain, energy, pack temperature, amperage, voltage, lifetime energy used), a charge-limit slider, and start/stop charging + unlock charge port buttons.
 - **Tires** — real-time pressure readout for all 4 wheels plus a historical pressure graph with color-coded safe/warning zones.
 - **Cost Projections** — monthly/annual/5-year charging cost breakdown by network (home, Supercharger, other).
@@ -196,12 +196,15 @@ your Home Assistant instance:
    the sidebar if you've enabled it).
 2. Open (or create) the **`local`** media source folder — this maps to the
    `/config/www/` folder on your HA host.
-3. Upload two image files:
+3. Upload these image files:
    - A **side-view photo** of your car, named exactly **`tesla-car-image-2.jpg`**
      (used on the Dashboard tab's hero card — clean photo, with Lock / Wake /
      Port as a dock *under* the car, not as overlay icons on the paint).
    - A **top-down photo** of your car, named exactly **`teslaTopDown.png`**
      (used on the Tires tab, with the 4 tire-pressure overlay pills).
+   - The **6-seat cabin schematic**, named exactly **`tesla-cabin-topdown.png`**
+     (Climate tab; original artwork in this repo root — copy it into Media
+     `local`. Do **not** use a Tesla-app screenshot).
 4. That's it — no config reload needed. Both dashboard cards already point
    at `media-source://media_source/local/tesla-car-image-2.jpg` and
    `media-source://media_source/local/teslaTopDown.png` respectively; they
@@ -215,16 +218,14 @@ your Home Assistant instance:
 > the exact same result.
 
 > ⚠️ **File names are case-sensitive and must match exactly** —
-> `tesla-car-image-2.jpg` (all lowercase, hyphens, `.jpg`) and `teslaTopDown.png`
-> (camelCase, no hyphens), matching what's hardcoded in
-> `dashboards/tesla-overview.yaml`. If you'd rather use different file
-> names, just edit the two `image:` lines in that file to match.
+> `tesla-car-image-2.jpg` (all lowercase, hyphens, `.jpg`), `teslaTopDown.png`
+> (camelCase, no hyphens), and `tesla-cabin-topdown.png`, matching what's
+> hardcoded in `dashboards/tesla-overview.yaml`. If you'd rather use different
+> file names, just edit the `image:` lines in that file to match.
 
-> ⚠️ **If you skip this step**, the two image cards will simply
-> render as a blank/broken image area — this is harmless. The hero dock
-> buttons and Tires-tab pressure readouts are independent dashboard elements
-> and will still work and update normally; only the background photo itself
-> will be missing until you upload it.
+> ⚠️ **If you skip this step**, image cards will simply render as a
+> blank/broken image area — this is harmless. Overlay buttons (hero dock,
+> tire pills, Climate seat heaters) still work without the photos.
 
 > 📐 **Tire pressure-pill positions are best-effort placeholders.** The
 > exact `top`/`left` percentages for the tires card's 4 pressure pills were

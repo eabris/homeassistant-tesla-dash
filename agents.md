@@ -1800,6 +1800,12 @@ scripts after pulling this change.
 `local`. The Tires tab still uses `teslaTopDown.png` with overlay pills;
 only the Dashboard hero dropped on-paint icons.
 
+**Climate cabin map:** original schematic `tesla-cabin-topdown.png`
+(repo root + Media `local`). Tap `mdi:heat-wave` overlays on 6 seats +
+wheel — scripts unchanged (`tesla_seat_heater_next_*`,
+`tesla_steering_heater_next`). Do not paste Tesla-app screenshots
+(copyright). Heat color: off muted, low/med/high yellow→orange→red.
+
 **Known limitation that no longer applies to the hero:** overlay
 top/left percentages for lock/wake/port on the car body. Those three
 controls are in the dock now. The Tires-tab pressure-pill placeholders

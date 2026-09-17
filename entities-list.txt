@@ -255,14 +255,13 @@ binary_sensor.tesla_anomaly_high_daily_cost      | binary_sensor | anomaly      
 #    media-source://media_source/local/tesla-car-image-2.jpg (button-card
 #    grid: clean photo + Lock/Wake/Port dock *under* the car). The Tires
 #    tab's pressure-overlay card is still `picture-elements` pointing at
-#    .../teslaTopDown.png. These reference files you upload yourself via
-#    Settings → Media (or the Media Source `local` folder on the HA host)
-#    — they are NOT included in this repo and NOT tracked by git. If
-#    either image is missing/renamed, that card silently renders as a
-#    blank/broken image; the hero dock buttons and tire-pressure pills
-#    still work independently. The Tires overlay pills' top/left
-#    percentages are best-effort placeholders — adjust them in the
-#    dashboard YAML to match your own photo.
+#    .../teslaTopDown.png. Climate tab cabin map:
+#    .../tesla-cabin-topdown.png (original 6-seat schematic in this repo;
+#    copy into Media `local` — do not use a Tesla-app screenshot).
+#    Car photos you upload yourself via Settings → Media. If an image is
+#    missing, that card renders blank; overlays/dock buttons still work.
+#    Seat heat-wave top/left % match tesla-cabin-topdown.png; nudge in
+#    dashboards/tesla-overview.yaml if you swap the artwork.
 # 9. The Tires tab's picture-elements card is intentionally shrunk to a
 #    150px-wide thumbnail (via card-mod's `card_mod: style:` on `ha-card`,
 #    not a plain `style: {...}` mapping — that flat form isn't valid

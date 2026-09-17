@@ -10,7 +10,7 @@ views:
         cards:
           # 1.1 Vehicle Hero (Tesla-app dock layout)
           # Car name (input_text.tesla_car_name) + range live ON the photo.
-          # Lock / Wake / Port sit in a 3-column dock under the photo.
+          # Lock / Wake / Charge / Unlock sit in a 4-column dock under the photo.
           - type: custom:button-card
             show_icon: false
             show_name: false
@@ -26,8 +26,8 @@ views:
                 - box-shadow: none
                 - --ha-card-border-width: 0px
               grid:
-                - grid-template-areas: '"hero hero hero" "lock wake port"'
-                - grid-template-columns: 1fr 1fr 1fr
+                - grid-template-areas: '"hero hero hero hero" "lock wake charge unlock"'
+                - grid-template-columns: 1fr 1fr 1fr 1fr
                 - grid-template-rows: auto min-content
               custom_fields:
                 hero:
@@ -45,8 +45,14 @@ views:
                   - align-self: start
                   - width: min-content
                   - padding: 12px 0 18px
-                port:
-                  - grid-area: port
+                charge:
+                  - grid-area: charge
+                  - justify-self: center
+                  - align-self: start
+                  - width: min-content
+                  - padding: 12px 0 18px
+                unlock:
+                  - grid-area: unlock
                   - justify-self: center
                   - align-self: start
                   - width: min-content
@@ -215,7 +221,7 @@ views:
                   show_state: false
                   show_name: true
                   show_label: false
-                  size: 22px
+                  size: 20px
                   name: |
                     [[[
                       const car = states['input_text.tesla_car_name']?.state || 'tesla';
@@ -248,11 +254,11 @@ views:
                       - justify-items: center
                     icon:
                       - color: "#f4f4f5"
-                      - width: 22px
-                      - height: 22px
+                      - width: 20px
+                      - height: 20px
                     img_cell:
-                      - width: 56px
-                      - height: 56px
+                      - width: 48px
+                      - height: 48px
                       - border-radius: 50%
                       - background: rgba(255,255,255,0.06)
                       - border: |
@@ -264,7 +270,7 @@ views:
                           ]]]
                     name:
                       - color: rgba(244,244,245,0.58)
-                      - font-size: 11px
+                      - font-size: 10px
                       - font-weight: 500
                       - letter-spacing: 0.04em
                       - margin-top: 8px
@@ -279,7 +285,7 @@ views:
                   show_state: false
                   show_name: true
                   show_label: false
-                  size: 22px
+                  size: 20px
                   name: |
                     [[[
                       return states['binary_sensor.vehicle_status']?.state === 'on' ? 'Awake' : 'Asleep';
@@ -312,24 +318,24 @@ views:
                               ? '#f4f4f5'
                               : 'rgba(244,244,245,0.45)';
                           ]]]
-                      - width: 22px
-                      - height: 22px
+                      - width: 20px
+                      - height: 20px
                     img_cell:
-                      - width: 56px
-                      - height: 56px
+                      - width: 48px
+                      - height: 48px
                       - border-radius: 50%
                       - background: rgba(255,255,255,0.06)
                       - border: 1.5px solid rgba(255,255,255,0.18)
                     name:
                       - color: rgba(244,244,245,0.58)
-                      - font-size: 11px
+                      - font-size: 10px
                       - font-weight: 500
                       - letter-spacing: 0.04em
                       - margin-top: 8px
                       - white-space: nowrap
                       - text-align: center
 
-              port:
+              charge:
                 card:
                   type: custom:button-card
                   entity: binary_sensor.vehicle_charge_cable
@@ -337,21 +343,18 @@ views:
                   show_state: false
                   show_name: true
                   show_label: false
-                  size: 22px
+                  size: 20px
                   name: |
                     [[[
                       const charging = states['binary_sensor.tesla_charging_active']?.state === 'on';
                       const plugged = states['binary_sensor.vehicle_charge_cable']?.state === 'on';
                       if (charging) return 'Charging';
                       if (plugged) return 'Plugged';
-                      return 'Port';
+                      return 'Charge';
                     ]]]
                   icon: mdi:ev-plug-tesla
                   tap_action:
-                    action: call-service
-                    service: script.tesla_unlock_port
-                    confirmation:
-                      text: Unlock the charge port?
+                    action: none
                   hold_action:
                     action: none
                   styles:
@@ -378,11 +381,11 @@ views:
                             if (plugged) return '#7dd3fc';
                             return '#f4f4f5';
                           ]]]
-                      - width: 22px
-                      - height: 22px
+                      - width: 20px
+                      - height: 20px
                     img_cell:
-                      - width: 56px
-                      - height: 56px
+                      - width: 48px
+                      - height: 48px
                       - border-radius: 50%
                       - background: rgba(255,255,255,0.06)
                       - border: |
@@ -395,7 +398,59 @@ views:
                           ]]]
                     name:
                       - color: rgba(244,244,245,0.58)
-                      - font-size: 11px
+                      - font-size: 10px
+                      - font-weight: 500
+                      - letter-spacing: 0.04em
+                      - margin-top: 8px
+                      - white-space: nowrap
+                      - text-align: center
+
+              unlock:
+                card:
+                  type: custom:button-card
+                  entity: script.tesla_unlock_port
+                  layout: vertical
+                  show_state: false
+                  show_name: true
+                  show_label: false
+                  size: 20px
+                  name: "Unlock"
+                  icon: mdi:ev-station
+                  tap_action:
+                    action: call-service
+                    service: script.tesla_unlock_port
+                    confirmation:
+                      text: Unlock the charge port?
+                  hold_action:
+                    action: none
+                  styles:
+                    card:
+                      - background: none
+                      - background-color: transparent
+                      - box-shadow: none
+                      - border: none
+                      - width: min-content
+                      - padding: 0
+                      - --ha-card-border-width: 0px
+                      - --ha-card-background: transparent
+                      - --ha-card-box-shadow: none
+                    grid:
+                      - grid-template-areas: '"i" "n"'
+                      - grid-template-columns: min-content
+                      - justify-items: center
+                    icon:
+                      - color: "#f4f4f5"
+                      - width: 20px
+                      - height: 20px
+                    img_cell:
+                      - width: 48px
+                      - height: 48px
+                      - border-radius: 50%
+                      - background: rgba(255,255,255,0.06)
+                      - border: 1.5px solid rgba(255,255,255,0.18)
+                    name:
+                      - color: rgba(244,244,245,0.58)
+                      - font-size: 10px
                       - font-weight: 500
                       - letter-spacing: 0.04em
                       - margin-top: 8px
@@ -1562,344 +1617,818 @@ views:
 
 
   # ========== VIEW 3: CLIMATE ==========
+  # 6-seat cabin overlay: original schematic tesla-cabin-topdown.png
+  # (NOT Tesla's copyrighted app screenshot). Tap heat-wave icons on
+  # seats / wheel — same tesla_seat_heater_next_* / steering scripts.
   - title: Climate
     path: climate
     icon: mdi:hvac
     cards:
       - type: vertical-stack
         cards:
-          # Header with outdoor temp
-          - type: horizontal-stack
-            cards:
-              - type: custom:button-card
-                name: "Climate"
-                icon: mdi:hvac
-                styles:
-                  card:
-                    - background-color: rgba(0, 0, 0, 0.3)
-
-              - type: custom:button-card
-                entity: sensor.vehicle_outside_temperature
-                icon: mdi:weather-sunny
-                name: "Outdoor"
-                show_label: true
-                label: |
-                  [[[
-                    const temp = parseFloat(String(states['sensor.vehicle_outside_temperature']?.state || '0'));
-                    const isF = states['input_select.tesla_unit_system']?.state === 'US Imperial (mi, °F, psi)';
-                    if (isNaN(temp)) return 'N/A';
-                    const disp = isF ? (temp * 9 / 5 + 32) : temp;
-                    return `${disp.toFixed(1)}°${isF ? 'F' : 'C'}`;
-                  ]]]
-                styles:
-                  card:
-                    - background-color: rgba(0, 0, 0, 0.3)
-
-          # Interior Temp Hero
-          - type: custom:button-card
-            entity: sensor.vehicle_inside_temperature
-            name: "INTERIOR"
-            show_label: true
-            label: |
-              [[[
-                const temp = parseFloat(String(states['sensor.vehicle_inside_temperature']?.state || '0'));
-                const isF = states['input_select.tesla_unit_system']?.state === 'US Imperial (mi, °F, psi)';
-                if (isNaN(temp)) return 'N/A';
-                const disp = isF ? (temp * 9 / 5 + 32) : temp;
-                return `${disp.toFixed(1)}°${isF ? 'F' : 'C'}`;
-              ]]]
-            styles:
-              card:
-                - font-size: 24px
-                - padding: 20px
-                - background-color: rgba(76, 175, 80, 0.15)
-                - height: 100px
-
-          # Seat Heating Matrix - Car cabin layout: Left | Center | Right
-          - type: grid
-            columns: 3
-            square: false
-            cards:
-              # Row 1: empty | Steering Wheel | empty
-              - type: custom:button-card
-                show_icon: false
-                show_name: false
-                styles:
-                  card:
-                    - background: transparent
-                    - box-shadow: none
-
+          # Cabin map
+          - type: picture-elements
+            image: media-source://media_source/local/tesla-cabin-topdown.png
+            aspect_ratio: "5:8"
+            card_mod:
+              style: |
+                ha-card {
+                  background: #070708;
+                  border: 1px solid rgba(255,255,255,0.08);
+                  border-radius: 20px;
+                  overflow: hidden;
+                  box-shadow: none;
+                }
+            elements:
+              # Steering wheel heater
               - type: custom:button-card
                 entity: select.vehicle_steering_wheel_heater
-                icon: mdi:steering
-                name: "Wheel"
+                icon: mdi:heat-wave
+                show_name: false
+                show_label: false
+                show_state: false
+                size: 26px
                 tap_action:
                   action: call-service
                   service: script.tesla_steering_heater_next
-                show_label: true
-                label: |
-                  [[[
-                    const car = states['input_text.tesla_car_name']?.state || 'tesla';
-                    const state = String(states['select.' + car + '_steering_wheel_heater']?.state || '0');
-                    return state === 'unknown' ? '0' : state;
-                  ]]]
-
-              - type: custom:button-card
-                show_icon: false
-                show_name: false
+                hold_action:
+                  action: none
                 styles:
                   card:
-                    - background: transparent
+                    - background: none
+                    - background-color: transparent
                     - box-shadow: none
+                    - border: none
+                    - padding: 0
+                    - --ha-card-border-width: 0px
+                    - --ha-card-background: transparent
+                  icon:
+                    - color: |
+                        [[[
+                          const car = states['input_text.tesla_car_name']?.state || 'tesla';
+                          const s = String(states['select.' + car + '_steering_wheel_heater']?.state || '').toLowerCase();
+                          if (['off','0','unknown','unavailable',''].includes(s)) return '#f4f4f5';
+                          return '#fb923c';
+                        ]]]
+                    - width: 26px
+                    - height: 26px
+                    - filter: drop-shadow(0 1px 4px rgba(0,0,0,0.85))
+                  img_cell:
+                    - width: 40px
+                    - height: 40px
+                    - background: none
+                    - border: none
+                style:
+                  top: 13.5%
+                  left: 34%
+                  transform: translate(-50%, -50%)
 
-              # Row 2: FL | empty | FR
+              # FL
               - type: custom:button-card
                 entity: script.tesla_seat_heater_next_fl
-                icon: mdi:seat-recline-extra
-                name: "FL"
+                icon: mdi:heat-wave
+                show_name: false
+                show_label: false
+                show_state: false
+                size: 28px
                 tap_action:
                   action: call-service
                   service: script.tesla_seat_heater_next_fl
-                show_label: true
-                label: |
-                  [[[
-                    const car = states['input_text.tesla_car_name']?.state || 'tesla';
-                    const state = String(states['select.' + car + '_seat_heater_front_left']?.state || '0');
-                    return state === 'unknown' ? '0' : state;
-                  ]]]
-
-              - type: custom:button-card
-                show_icon: false
-                show_name: false
+                hold_action:
+                  action: none
                 styles:
                   card:
-                    - background: transparent
+                    - background: none
+                    - background-color: transparent
                     - box-shadow: none
+                    - border: none
+                    - padding: 0
+                    - --ha-card-border-width: 0px
+                    - --ha-card-background: transparent
+                  icon:
+                    - color: |
+                        [[[
+                          const car = states['input_text.tesla_car_name']?.state || 'tesla';
+                          const s = String(states['select.' + car + '_seat_heater_front_left']?.state || '').toLowerCase();
+                          if (['1','low'].includes(s)) return '#fde68a';
+                          if (['2','medium','med'].includes(s)) return '#fb923c';
+                          if (['3','high','on'].includes(s)) return '#f87171';
+                          return '#f4f4f5';
+                        ]]]
+                    - width: 28px
+                    - height: 28px
+                    - filter: drop-shadow(0 1px 4px rgba(0,0,0,0.85))
+                  img_cell:
+                    - width: 44px
+                    - height: 44px
+                    - background: none
+                    - border: none
+                style:
+                  top: 27%
+                  left: 34%
+                  transform: translate(-50%, -50%)
 
+              # FR
               - type: custom:button-card
                 entity: script.tesla_seat_heater_next_fr
-                icon: mdi:seat-recline-extra
-                name: "FR"
+                icon: mdi:heat-wave
+                show_name: false
+                show_label: false
+                show_state: false
+                size: 28px
                 tap_action:
                   action: call-service
                   service: script.tesla_seat_heater_next_fr
-                show_label: true
-                label: |
-                  [[[
-                    const car = states['input_text.tesla_car_name']?.state || 'tesla';
-                    const state = String(states['select.' + car + '_seat_heater_front_right']?.state || '0');
-                    return state === 'unknown' ? '0' : state;
-                  ]]]
+                hold_action:
+                  action: none
+                styles:
+                  card:
+                    - background: none
+                    - background-color: transparent
+                    - box-shadow: none
+                    - border: none
+                    - padding: 0
+                    - --ha-card-border-width: 0px
+                    - --ha-card-background: transparent
+                  icon:
+                    - color: |
+                        [[[
+                          const car = states['input_text.tesla_car_name']?.state || 'tesla';
+                          const s = String(states['select.' + car + '_seat_heater_front_right']?.state || '').toLowerCase();
+                          if (['1','low'].includes(s)) return '#fde68a';
+                          if (['2','medium','med'].includes(s)) return '#fb923c';
+                          if (['3','high','on'].includes(s)) return '#f87171';
+                          return '#f4f4f5';
+                        ]]]
+                    - width: 28px
+                    - height: 28px
+                    - filter: drop-shadow(0 1px 4px rgba(0,0,0,0.85))
+                  img_cell:
+                    - width: 44px
+                    - height: 44px
+                    - background: none
+                    - border: none
+                style:
+                  top: 27%
+                  left: 66%
+                  transform: translate(-50%, -50%)
 
-              # Row 3: RL | empty | RR
+              # RL
               - type: custom:button-card
                 entity: script.tesla_seat_heater_next_rl
-                icon: mdi:seat
-                name: "RL"
+                icon: mdi:heat-wave
+                show_name: false
+                show_label: false
+                show_state: false
+                size: 28px
                 tap_action:
                   action: call-service
                   service: script.tesla_seat_heater_next_rl
-                show_label: true
-                label: |
-                  [[[
-                    const car = states['input_text.tesla_car_name']?.state || 'tesla';
-                    const state = String(states['select.' + car + '_seat_heater_rear_left']?.state || '0');
-                    return state === 'unknown' ? '0' : state;
-                  ]]]
-
-              - type: custom:button-card
-                show_icon: false
-                show_name: false
+                hold_action:
+                  action: none
                 styles:
                   card:
-                    - background: transparent
+                    - background: none
+                    - background-color: transparent
                     - box-shadow: none
+                    - border: none
+                    - padding: 0
+                    - --ha-card-border-width: 0px
+                    - --ha-card-background: transparent
+                  icon:
+                    - color: |
+                        [[[
+                          const car = states['input_text.tesla_car_name']?.state || 'tesla';
+                          const s = String(states['select.' + car + '_seat_heater_rear_left']?.state || '').toLowerCase();
+                          if (['1','low'].includes(s)) return '#fde68a';
+                          if (['2','medium','med'].includes(s)) return '#fb923c';
+                          if (['3','high','on'].includes(s)) return '#f87171';
+                          return '#f4f4f5';
+                        ]]]
+                    - width: 28px
+                    - height: 28px
+                    - filter: drop-shadow(0 1px 4px rgba(0,0,0,0.85))
+                  img_cell:
+                    - width: 44px
+                    - height: 44px
+                    - background: none
+                    - border: none
+                style:
+                  top: 48%
+                  left: 34%
+                  transform: translate(-50%, -50%)
 
+              # RR
               - type: custom:button-card
                 entity: script.tesla_seat_heater_next_rr
-                icon: mdi:seat
-                name: "RR"
+                icon: mdi:heat-wave
+                show_name: false
+                show_label: false
+                show_state: false
+                size: 28px
                 tap_action:
                   action: call-service
                   service: script.tesla_seat_heater_next_rr
-                show_label: true
-                label: |
-                  [[[
-                    const car = states['input_text.tesla_car_name']?.state || 'tesla';
-                    const state = String(states['select.' + car + '_seat_heater_rear_right']?.state || '0');
-                    return state === 'unknown' ? '0' : state;
-                  ]]]
+                hold_action:
+                  action: none
+                styles:
+                  card:
+                    - background: none
+                    - background-color: transparent
+                    - box-shadow: none
+                    - border: none
+                    - padding: 0
+                    - --ha-card-border-width: 0px
+                    - --ha-card-background: transparent
+                  icon:
+                    - color: |
+                        [[[
+                          const car = states['input_text.tesla_car_name']?.state || 'tesla';
+                          const s = String(states['select.' + car + '_seat_heater_rear_right']?.state || '').toLowerCase();
+                          if (['1','low'].includes(s)) return '#fde68a';
+                          if (['2','medium','med'].includes(s)) return '#fb923c';
+                          if (['3','high','on'].includes(s)) return '#f87171';
+                          return '#f4f4f5';
+                        ]]]
+                    - width: 28px
+                    - height: 28px
+                    - filter: drop-shadow(0 1px 4px rgba(0,0,0,0.85))
+                  img_cell:
+                    - width: 44px
+                    - height: 44px
+                    - background: none
+                    - border: none
+                style:
+                  top: 48%
+                  left: 66%
+                  transform: translate(-50%, -50%)
 
-              # Row 4: 3L | empty | 3R
+              # 3L
               - type: custom:button-card
                 entity: script.tesla_seat_heater_next_3l
-                icon: mdi:seat
-                name: "3L"
+                icon: mdi:heat-wave
+                show_name: false
+                show_label: false
+                show_state: false
+                size: 28px
                 tap_action:
                   action: call-service
                   service: script.tesla_seat_heater_next_3l
-                show_label: true
-                label: |
+                hold_action:
+                  action: none
+                styles:
+                  card:
+                    - background: none
+                    - background-color: transparent
+                    - box-shadow: none
+                    - border: none
+                    - padding: 0
+                    - --ha-card-border-width: 0px
+                    - --ha-card-background: transparent
+                  icon:
+                    - color: |
+                        [[[
+                          const car = states['input_text.tesla_car_name']?.state || 'tesla';
+                          const s = String(states['select.' + car + '_seat_heater_third_row_left']?.state || '').toLowerCase();
+                          if (['1','low'].includes(s)) return '#fde68a';
+                          if (['2','medium','med'].includes(s)) return '#fb923c';
+                          if (['3','high','on'].includes(s)) return '#f87171';
+                          return '#f4f4f5';
+                        ]]]
+                    - width: 28px
+                    - height: 28px
+                    - filter: drop-shadow(0 1px 4px rgba(0,0,0,0.85))
+                  img_cell:
+                    - width: 44px
+                    - height: 44px
+                    - background: none
+                    - border: none
+                style:
+                  top: 66%
+                  left: 40%
+                  transform: translate(-50%, -50%)
+
+              # 3R
+              - type: custom:button-card
+                entity: script.tesla_seat_heater_next_3r
+                icon: mdi:heat-wave
+                show_name: false
+                show_label: false
+                show_state: false
+                size: 28px
+                tap_action:
+                  action: call-service
+                  service: script.tesla_seat_heater_next_3r
+                hold_action:
+                  action: none
+                styles:
+                  card:
+                    - background: none
+                    - background-color: transparent
+                    - box-shadow: none
+                    - border: none
+                    - padding: 0
+                    - --ha-card-border-width: 0px
+                    - --ha-card-background: transparent
+                  icon:
+                    - color: |
+                        [[[
+                          const car = states['input_text.tesla_car_name']?.state || 'tesla';
+                          const s = String(states['select.' + car + '_seat_heater_third_row_right']?.state || '').toLowerCase();
+                          if (['1','low'].includes(s)) return '#fde68a';
+                          if (['2','medium','med'].includes(s)) return '#fb923c';
+                          if (['3','high','on'].includes(s)) return '#f87171';
+                          return '#f4f4f5';
+                        ]]]
+                    - width: 28px
+                    - height: 28px
+                    - filter: drop-shadow(0 1px 4px rgba(0,0,0,0.85))
+                  img_cell:
+                    - width: 44px
+                    - height: 44px
+                    - background: none
+                    - border: none
+                style:
+                  top: 66%
+                  left: 61%
+                  transform: translate(-50%, -50%)
+
+          # Interior · Exterior
+          - type: custom:button-card
+            show_icon: false
+            show_name: false
+            show_state: false
+            tap_action:
+              action: none
+            custom_fields:
+              temps: |
+                [[[
+                  const isF = states['input_select.tesla_unit_system']?.state === 'US Imperial (mi, °F, psi)';
+                  const fmt = (raw) => {
+                    const t = parseFloat(String(raw || ''));
+                    if (isNaN(t)) return '–';
+                    const d = isF ? (t * 9 / 5 + 32) : t;
+                    return `${d.toFixed(0)}°`;
+                  };
+                  const inside = fmt(states['sensor.vehicle_inside_temperature']?.state);
+                  const outside = fmt(states['sensor.vehicle_outside_temperature']?.state);
+                  return `<div style="text-align:center;width:100%">
+                    <div style="color:rgba(244,244,245,0.55);font-size:13px;font-weight:500">Interior ${inside} · Exterior ${outside}</div>
+                  </div>`;
+                ]]]
+            styles:
+              card:
+                - background: none
+                - background-color: transparent
+                - box-shadow: none
+                - border: none
+                - padding: 4px 8px 2px
+                - --ha-card-border-width: 0px
+              grid:
+                - grid-template-areas: '"temps"'
+              custom_fields:
+                temps:
+                  - width: 100%
+
+          # Off · setpoint · Vent  (3 equal columns so the temp isn't 1/5 of the phone)
+          - type: horizontal-stack
+            cards:
+              - type: custom:button-card
+                entity: script.tesla_climate_toggle
+                icon: mdi:power
+                name: |
                   [[[
                     const car = states['input_text.tesla_car_name']?.state || 'tesla';
-                    const state = String(states['select.' + car + '_seat_heater_third_row_left']?.state || '0');
-                    return state === 'unknown' ? '0' : state;
+                    return states['climate.' + car + '_climate']?.state !== 'off' ? 'On' : 'Off';
                   ]]]
+                size: 20px
+                show_state: false
+                tap_action:
+                  action: call-service
+                  service: script.tesla_climate_toggle
+                styles:
+                  card:
+                    - background-color: rgba(255,255,255,0.04)
+                    - border: 1px solid rgba(255,255,255,0.08)
+                    - border-radius: 16px
+                    - box-shadow: none
+                    - padding: 8px 4px
+                    - --ha-card-border-width: 0px
+                  icon:
+                    - width: 20px
+                    - color: |
+                        [[[
+                          const car = states['input_text.tesla_car_name']?.state || 'tesla';
+                          return states['climate.' + car + '_climate']?.state !== 'off' ? '#6ee7b7' : 'rgba(244,244,245,0.55)';
+                        ]]]
+                  name:
+                    - font-size: 11px
+                    - font-weight: 500
+                    - color: rgba(244,244,245,0.62)
 
               - type: custom:button-card
                 show_icon: false
                 show_name: false
-                styles:
-                  card:
-                    - background: transparent
-                    - box-shadow: none
-
-              - type: custom:button-card
-                entity: script.tesla_seat_heater_next_3r
-                icon: mdi:seat
-                name: "3R"
-                tap_action:
-                  action: call-service
-                  service: script.tesla_seat_heater_next_3r
-                show_label: true
-                label: |
-                  [[[
-                    const car = states['input_text.tesla_car_name']?.state || 'tesla';
-                    const state = String(states['select.' + car + '_seat_heater_third_row_right']?.state || '0');
-                    return state === 'unknown' ? '0' : state;
-                  ]]]
-
-          # Temperature Setpoint Stepper
-          - type: horizontal-stack
-            cards:
-              - type: custom:button-card
-                entity: script.tesla_climate_temp_down
-                icon: mdi:minus
-                show_name: false
-                tap_action:
-                  action: call-service
-                  service: script.tesla_climate_temp_down
-                styles:
-                  card:
-                    - background-color: rgba(244, 67, 54, 0.2)
-
-              - type: custom:button-card
-                entity: input_text.tesla_car_name
-                icon: mdi:thermometer
-                name: "Target Temp"
-                show_label: true
-                label: |
-                  [[[
-                    const car = states['input_text.tesla_car_name']?.state || 'tesla';
-                    const target = states['climate.' + car + '_climate']?.attributes?.temperature;
-                    const isF = states['input_select.tesla_unit_system']?.state === 'US Imperial (mi, °F, psi)';
-                    // The vehicle's actual set point always stays in °C internally
-                    // (tesla_climate_temp_up/down step it by a fixed 0.5°C) — only
-                    // this readout is converted for display.
-                    const c = target ? parseFloat(target) : 22.0;
-                    const disp = isF ? (c * 9 / 5 + 32) : c;
-                    return `${disp.toFixed(1)}°${isF ? 'F' : 'C'}`;
-                  ]]]
                 tap_action:
                   action: none
                 styles:
                   card:
-                    - background-color: rgba(0, 0, 0, 0.2)
-                    - flex-grow: 2
+                    - background: none
+                    - background-color: transparent
+                    - box-shadow: none
+                    - border: none
+                    - padding: 0
+                    - --ha-card-border-width: 0px
+                  grid:
+                    - grid-template-areas: '"down temp up"'
+                    - grid-template-columns: 28px min-content 28px
+                    - justify-content: center
+                    - align-items: center
+                    - column-gap: 2px
+                  custom_fields:
+                    down:
+                      - grid-area: down
+                    temp:
+                      - grid-area: temp
+                    up:
+                      - grid-area: up
+                custom_fields:
+                  down:
+                    card:
+                      type: custom:button-card
+                      entity: script.tesla_climate_temp_down
+                      icon: mdi:chevron-left
+                      show_name: false
+                      size: 22px
+                      tap_action:
+                        action: call-service
+                        service: script.tesla_climate_temp_down
+                      styles:
+                        card:
+                          - background: none
+                          - background-color: transparent
+                          - box-shadow: none
+                          - border: none
+                          - padding: 0
+                          - --ha-card-border-width: 0px
+                        icon:
+                          - width: 22px
+                          - color: rgba(244,244,245,0.7)
+                  temp:
+                    card:
+                      type: custom:button-card
+                      show_icon: false
+                      show_name: true
+                      name: |
+                        [[[
+                          const car = states['input_text.tesla_car_name']?.state || 'tesla';
+                          const target = states['climate.' + car + '_climate']?.attributes?.temperature;
+                          const isF = states['input_select.tesla_unit_system']?.state === 'US Imperial (mi, °F, psi)';
+                          const c = target ? parseFloat(target) : 22.0;
+                          const disp = isF ? (c * 9 / 5 + 32) : c;
+                          return `${disp.toFixed(1)}°`;
+                        ]]]
+                      tap_action:
+                        action: none
+                      styles:
+                        card:
+                          - background: none
+                          - background-color: transparent
+                          - box-shadow: none
+                          - border: none
+                          - padding: 0
+                          - width: min-content
+                          - --ha-card-border-width: 0px
+                        name:
+                          - font-size: 22px
+                          - font-weight: 500
+                          - letter-spacing: -0.02em
+                          - color: "#f4f4f5"
+                          - white-space: nowrap
+                          - overflow: visible
+                  up:
+                    card:
+                      type: custom:button-card
+                      entity: script.tesla_climate_temp_up
+                      icon: mdi:chevron-right
+                      show_name: false
+                      size: 22px
+                      tap_action:
+                        action: call-service
+                        service: script.tesla_climate_temp_up
+                      styles:
+                        card:
+                          - background: none
+                          - background-color: transparent
+                          - box-shadow: none
+                          - border: none
+                          - padding: 0
+                          - --ha-card-border-width: 0px
+                        icon:
+                          - width: 22px
+                          - color: rgba(244,244,245,0.7)
 
               - type: custom:button-card
-                entity: script.tesla_climate_temp_up
-                icon: mdi:plus
-                show_name: false
+                entity: script.tesla_windows_vent
+                icon: mdi:window-open-variant
+                name: "Vent"
+                size: 20px
+                show_state: false
                 tap_action:
                   action: call-service
-                  service: script.tesla_climate_temp_up
+                  service: script.tesla_windows_vent
                 styles:
                   card:
-                    - background-color: rgba(76, 175, 80, 0.2)
+                    - background-color: rgba(255,255,255,0.04)
+                    - border: 1px solid rgba(255,255,255,0.08)
+                    - border-radius: 16px
+                    - box-shadow: none
+                    - padding: 8px 4px
+                    - --ha-card-border-width: 0px
+                  icon:
+                    - width: 20px
+                    - color: |
+                        [[[
+                          const car = states['input_text.tesla_car_name']?.state || 'tesla';
+                          return states['cover.' + car + '_windows']?.state === 'open'
+                            ? '#fbbf24'
+                            : '#f4f4f5';
+                        ]]]
+                  name:
+                    - font-size: 11px
+                    - font-weight: 500
+                    - color: rgba(244,244,245,0.62)
 
-          # Auxiliary Climate Buttons (2×3 grid)
-          - type: grid
-            columns: 3
-            square: false
+          # Close Windows (same script as Controls)
+          - type: custom:button-card
+            entity: script.tesla_windows_close
+            icon: mdi:window-closed-variant
+            name: "Close Windows"
+            size: 20px
+            show_state: false
+            show_label: true
+            label: |
+              [[[
+                const car = states['input_text.tesla_car_name']?.state || 'tesla';
+                const s = states['cover.' + car + '_windows']?.state;
+                return s === 'closed' ? 'Already closed' : s === 'open' ? 'Tap to close' : '–';
+              ]]]
+            tap_action:
+              action: call-service
+              service: script.tesla_windows_close
+            styles:
+              card:
+                - background-color: rgba(255,255,255,0.04)
+                - border: 1px solid rgba(255,255,255,0.08)
+                - border-radius: 16px
+                - box-shadow: none
+                - padding: 12px 16px
+                - --ha-card-border-width: 0px
+              grid:
+                - grid-template-areas: '"i n" "i l"'
+                - grid-template-columns: 40px 1fr
+                - column-gap: 10px
+                - align-items: center
+              icon:
+                - width: 20px
+                - color: "#f4f4f5"
+              img_cell:
+                - width: 40px
+                - height: 40px
+                - border-radius: 50%
+                - background: rgba(255,255,255,0.06)
+              name:
+                - justify-self: start
+                - font-size: 14px
+                - font-weight: 600
+                - color: "#f4f4f5"
+              label:
+                - justify-self: start
+                - font-size: 12px
+                - margin-top: 0
+                - color: rgba(244,244,245,0.5)
+
+          # Defrost
+          - type: custom:button-card
+            entity: script.tesla_defrost_toggle
+            icon: mdi:car-defrost-front
+            name: "Defrost Car"
+            size: 22px
+            show_state: false
+            show_label: true
+            label: |
+              [[[
+                const car = states['input_text.tesla_car_name']?.state || 'tesla';
+                return String(states['switch.' + car + '_defrost']?.state || 'off') === 'on' ? 'On' : 'Off';
+              ]]]
+            tap_action:
+              action: call-service
+              service: script.tesla_defrost_toggle
+            styles:
+              card:
+                - background-color: |
+                    [[[
+                      const car = states['input_text.tesla_car_name']?.state || 'tesla';
+                      return String(states['switch.' + car + '_defrost']?.state || 'off') === 'on'
+                        ? 'rgba(125, 211, 252, 0.12)'
+                        : 'rgba(255,255,255,0.04)';
+                    ]]]
+                - border: 1px solid rgba(255,255,255,0.08)
+                - border-radius: 16px
+                - box-shadow: none
+                - padding: 14px 16px
+                - --ha-card-border-width: 0px
+              grid:
+                - grid-template-areas: '"i n" "i l"'
+                - grid-template-columns: 40px 1fr
+                - column-gap: 10px
+                - align-items: center
+              icon:
+                - width: 22px
+                - color: |
+                    [[[
+                      const car = states['input_text.tesla_car_name']?.state || 'tesla';
+                      return String(states['switch.' + car + '_defrost']?.state || 'off') === 'on'
+                        ? '#7dd3fc'
+                        : '#f4f4f5';
+                    ]]]
+              img_cell:
+                - width: 40px
+                - height: 40px
+                - border-radius: 50%
+                - background: rgba(255,255,255,0.06)
+              name:
+                - justify-self: start
+                - font-size: 14px
+                - font-weight: 600
+                - color: "#f4f4f5"
+              label:
+                - justify-self: start
+                - font-size: 12px
+                - margin-top: 0
+                - color: rgba(244,244,245,0.5)
+
+          # Dog / Camp
+          - type: horizontal-stack
             cards:
               - type: custom:button-card
                 entity: script.tesla_dog_mode
                 icon: mdi:dog
                 name: "Dog Mode"
+                size: 20px
+                show_state: false
                 tap_action:
                   action: call-service
                   service: script.tesla_dog_mode
                 styles:
                   card:
-                    - background-color: rgba(76, 175, 80, 0.2)
+                    - background-color: rgba(255,255,255,0.04)
+                    - border: 1px solid rgba(255,255,255,0.08)
+                    - border-radius: 16px
+                    - box-shadow: none
+                    - padding: 14px 16px
+                    - --ha-card-border-width: 0px
+                  grid:
+                    - grid-template-areas: '"i n"'
+                    - grid-template-columns: 40px 1fr
+                    - column-gap: 10px
+                    - align-items: center
+                  icon:
+                    - width: 20px
+                    - color: "#f4f4f5"
+                  img_cell:
+                    - width: 40px
+                    - height: 40px
+                    - border-radius: 50%
+                    - background: rgba(255,255,255,0.06)
+                  name:
+                    - justify-self: start
+                    - font-size: 14px
+                    - font-weight: 600
+                    - color: "#f4f4f5"
 
               - type: custom:button-card
                 entity: script.tesla_camp_mode
                 icon: mdi:tent
                 name: "Camp Mode"
+                size: 20px
+                show_state: false
                 tap_action:
                   action: call-service
                   service: script.tesla_camp_mode
                 styles:
                   card:
-                    - background-color: rgba(76, 175, 80, 0.2)
+                    - background-color: rgba(255,255,255,0.04)
+                    - border: 1px solid rgba(255,255,255,0.08)
+                    - border-radius: 16px
+                    - box-shadow: none
+                    - padding: 14px 16px
+                    - --ha-card-border-width: 0px
+                  grid:
+                    - grid-template-areas: '"i n"'
+                    - grid-template-columns: 40px 1fr
+                    - column-gap: 10px
+                    - align-items: center
+                  icon:
+                    - width: 20px
+                    - color: "#f4f4f5"
+                  img_cell:
+                    - width: 40px
+                    - height: 40px
+                    - border-radius: 50%
+                    - background: rgba(255,255,255,0.06)
+                  name:
+                    - justify-self: start
+                    - font-size: 14px
+                    - font-weight: 600
+                    - color: "#f4f4f5"
 
+          # Unavailable Fleet features
+          - type: horizontal-stack
+            cards:
               - type: custom:button-card
                 icon: mdi:biohazard
                 name: "Bio Defense"
+                size: 20px
+                show_state: false
                 show_label: true
-                label: "Not available in Tesla Fleet API"
+                label: "Not in Fleet API"
                 tap_action:
                   action: none
                 styles:
                   card:
-                    - opacity: 0.4
-
-              - type: custom:button-card
-                entity: script.tesla_climate_toggle
-                icon: mdi:fan
-                name: "Climate"
-                tap_action:
-                  action: call-service
-                  service: script.tesla_climate_toggle
-                show_label: true
-                label: |
-                  [[[
-                    const car = states['input_text.tesla_car_name']?.state || 'tesla';
-                    return states['climate.' + car + '_climate']?.state !== 'off' ? 'On' : 'Off';
-                  ]]]
-                styles:
-                  card:
-                    - background-color: rgba(76, 175, 80, 0.2)
-
-              - type: custom:button-card
-                entity: script.tesla_defrost_toggle
-                icon: mdi:snowflake
-                name: "Defrost"
-                tap_action:
-                  action: call-service
-                  service: script.tesla_defrost_toggle
-                show_label: true
-                label: |
-                  [[[
-                    const car = states['input_text.tesla_car_name']?.state || 'tesla';
-                    return String(states['switch.' + car + '_defrost']?.state || 'off') === 'on' ? 'On' : 'Off';
-                  ]]]
-                styles:
-                  card:
-                    - background-color: rgba(76, 175, 80, 0.2)
+                    - background-color: rgba(255,255,255,0.03)
+                    - border: 1px solid rgba(255,255,255,0.06)
+                    - border-radius: 16px
+                    - box-shadow: none
+                    - padding: 14px 16px
+                    - opacity: 0.5
+                    - --ha-card-border-width: 0px
+                  grid:
+                    - grid-template-areas: '"i n" "i l"'
+                    - grid-template-columns: 40px 1fr
+                    - column-gap: 10px
+                    - align-items: center
+                  icon:
+                    - width: 20px
+                    - color: rgba(244,244,245,0.45)
+                  img_cell:
+                    - width: 40px
+                    - height: 40px
+                    - border-radius: 50%
+                    - background: rgba(255,255,255,0.05)
+                  name:
+                    - justify-self: start
+                    - font-size: 14px
+                    - font-weight: 600
+                    - color: "#f4f4f5"
+                  label:
+                    - justify-self: start
+                    - font-size: 11px
+                    - margin-top: 0
+                    - color: rgba(244,244,245,0.4)
 
               - type: custom:button-card
                 icon: mdi:shield-thermometer
                 name: "Cabin Protect"
+                size: 20px
+                show_state: false
                 show_label: true
-                label: "Not available in Tesla Fleet API"
+                label: "Not in Fleet API"
                 tap_action:
                   action: none
                 styles:
                   card:
-                    - opacity: 0.4
+                    - background-color: rgba(255,255,255,0.03)
+                    - border: 1px solid rgba(255,255,255,0.06)
+                    - border-radius: 16px
+                    - box-shadow: none
+                    - padding: 14px 16px
+                    - opacity: 0.5
+                    - --ha-card-border-width: 0px
+                  grid:
+                    - grid-template-areas: '"i n" "i l"'
+                    - grid-template-columns: 40px 1fr
+                    - column-gap: 10px
+                    - align-items: center
+                  icon:
+                    - width: 20px
+                    - color: rgba(244,244,245,0.45)
+                  img_cell:
+                    - width: 40px
+                    - height: 40px
+                    - border-radius: 50%
+                    - background: rgba(255,255,255,0.05)
+                  name:
+                    - justify-self: start
+                    - font-size: 14px
+                    - font-weight: 600
+                    - color: "#f4f4f5"
+                  label:
+                    - justify-self: start
+                    - font-size: 11px
+                    - margin-top: 0
+                    - color: rgba(244,244,245,0.4)
 
   # ========== VIEW 4: BATTERY ==========
   - title: Battery
