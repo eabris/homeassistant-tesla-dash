@@ -73,11 +73,21 @@ views:
           # front area ~ wake, rear ~ charge port) — nudge these percentages
           # to match your exact tesla-car-image.png if they don't land where
           # you'd like on the car body.
+          # NOTE: aspect_ratio forces the card to use a cropped
+          # background-size:cover render (HA's hui-image component) instead
+          # of the image's own natural (tall/letterboxed) aspect ratio — this
+          # is what keeps the card from being taller than the car photo
+          # needs. Adjust the ratio (width:height) if your photo needs more
+          # or less vertical crop.
           - type: picture-elements
             image: media-source://media_source/local/tesla-car-image.png
-            style:
-              border-radius: 12px
-              overflow: hidden
+            aspect_ratio: "5:2"
+            card_mod:
+              style: |
+                ha-card {
+                  border-radius: 12px;
+                  overflow: hidden;
+                }
             elements:
               # Lock / Unlock — centered on the car body
               - type: custom:button-card
@@ -132,7 +142,9 @@ views:
                   left: 15%
                   transform: translate(-50%, -50%)
 
-              # Charge port lock/unlock — near the rear/charger area
+              # Charge port lock/unlock — Model X charge port is on the rear
+              # quarter panel near the tail light, not down by the wheel/
+              # ground — positioned at light height, near the rear of the car.
               - type: custom:button-card
                 entity: binary_sensor.vehicle_charge_cable
                 show_name: false
@@ -161,8 +173,8 @@ views:
                           return 'rgba(120, 120, 120, 0.85)';
                         ]]]
                 style:
-                  top: 80%
-                  left: 85%
+                  top: 40%
+                  left: 92%
                   transform: translate(-50%, -50%)
 
           # 1.2 Charging Status Card (Conditional)
@@ -1409,149 +1421,216 @@ views:
               💡 **Recommended cold pressure ({{ size }} wheels): {{ (p * 14.5038) | round(0) ~ ' psi' if is_psi else p | round(2) ~ ' bar' }}**
 
           # 5.2 Tire Pressure Overlay (top-down car image)
-          # Replaces the previous 2x2 icon grid with 4 pressure readouts
-          # positioned over a top-down photo of the car. No lock icon here,
-          # per explicit user request — this tab is pressure-readouts only.
+          # Small thumbnail-style card (150px wide, centered) with 4 minimal
+          # pressure readouts overlaid. No lock icon here, per explicit user
+          # request — this tab is pressure-readouts only.
           # NOTE: assumes the image has the front of the car facing up (FL/FR
           # at top, RL/RR at bottom) — nudge the top/left % below if your
           # teslaTopDown.png is oriented differently.
+          # NOTE: card-mod ("card_mod:" key) is used here, not the flat
+          # `style: {border-radius: ..., overflow: ...}` mapping this file's
+          # picture-elements cards used previously — that flat-mapping form
+          # isn't valid card_mod syntax (card_mod expects a CSS string, or a
+          # map of shadow-DOM-part-selector -> CSS string) and isn't part of
+          # picture-elements' own schema either, so it was silently a no-op.
+          # card-mod is already a required HACS card for this project (see
+          # README's HACS card table).
+          # NOTE: the 4 pressure elements below follow the user-supplied
+          # card_mod pattern as closely as possible: transparent/borderless
+          # ha-card (no green pill background/padding — that previous
+          # attempt made the numbers unreadable), left-aligned primary/
+          # secondary text sized via `ha-tile-info$`. A text-shadow was
+          # added purely so white text stays legible over a busy/light car
+          # photo background — remove it if you'd rather match the pasted
+          # snippet exactly. Kept this project's live bar/psi unit-system
+          # toggle (reading input_select.tesla_unit_system) instead of the
+          # pasted snippet's static "Bar" secondary, and read the existing
+          # sensor.vehicle_tyre_pressure_* Fleet Sensor Aliases directly
+          # (no need to rebuild `sensor.<car>_tyre_pressure_*` via
+          # input_text.tesla_car_name string concatenation — the alias layer
+          # already exists for exactly this, see agents.md Section 5).
           - type: picture-elements
             image: media-source://media_source/local/teslaTopDown.png
-            style:
-              border-radius: 12px
-              overflow: hidden
+            card_mod:
+              style: |
+                ha-card {
+                  border-radius: 12px;
+                  overflow: hidden;
+                  width: 150px;
+                  margin: 0 auto;
+                }
             elements:
               # FL
-              - type: custom:button-card
-                entity: sensor.vehicle_tyre_pressure_front_left
-                show_icon: false
-                name: "FL"
-                show_label: true
-                label: |
-                  [[[
-                    const pressStr = String(states['sensor.vehicle_tyre_pressure_front_left']?.state || '0');
-                    const pressure = parseFloat(pressStr);
-                    const isPsi = states['input_select.tesla_unit_system']?.state === 'US Imperial (mi, °F, psi)';
-                    if (isNaN(pressure)) return isPsi ? '0.0 psi' : '0.00 bar';
-                    return isPsi ? `${(pressure * 14.5038).toFixed(1)} psi` : `${pressure.toFixed(2)} bar`;
-                  ]]]
-                tap_action:
-                  action: none
-                styles:
-                  card:
-                    - background-color: rgba(76, 175, 80, 0.85)
-                    - border-radius: 10px
-                    - padding: 4px
-                  name:
-                    - font-size: 10px
-                    - font-weight: 700
-                  label:
-                    - font-size: 12px
-                    - font-weight: 700
+              - type: custom:mushroom-template-card
+                primary: >-
+                  {% set p = states('sensor.vehicle_tyre_pressure_front_left') | float(0) %}
+                  {% set is_psi = states('input_select.tesla_unit_system') == 'US Imperial (mi, °F, psi)' %}
+                  {{ (p * 14.5038) | round(1) if is_psi else p | round(2) }}
+                secondary: >-
+                  {{ 'psi' if states('input_select.tesla_unit_system') == 'US Imperial (mi, °F, psi)' else 'Bar' }}
+                multiline_secondary: false
+                fill_container: false
+                card_mod:
+                  style:
+                    ha-tile-info$: |
+                      .primary {
+                        font-size: 13px !important;
+                        position: relative;
+                        overflow: visible !important;
+                        text-align: left;
+                        color: #fff !important;
+                        text-shadow: 0 0 3px #000, 0 0 3px #000;
+                      }
+                      .secondary {
+                        font-size: 9px !important;
+                        position: relative;
+                        overflow: visible !important;
+                        text-align: left;
+                        color: #fff !important;
+                        text-shadow: 0 0 3px #000, 0 0 3px #000;
+                      }
+                    .: |
+                      ha-card {
+                        background-color: transparent;
+                        border: none;
+                        box-shadow: none;
+                      }
+                      .content {
+                        padding: 0px !important;
+                      }
                 style:
-                  top: 18%
-                  left: 25%
-                  width: 22%
-                  transform: translate(-50%, -50%)
+                  top: 15%
+                  left: 12%
+                  width: 20%
 
               # FR
-              - type: custom:button-card
-                entity: sensor.vehicle_tyre_pressure_front_right
-                show_icon: false
-                name: "FR"
-                show_label: true
-                label: |
-                  [[[
-                    const pressStr = String(states['sensor.vehicle_tyre_pressure_front_right']?.state || '0');
-                    const pressure = parseFloat(pressStr);
-                    const isPsi = states['input_select.tesla_unit_system']?.state === 'US Imperial (mi, °F, psi)';
-                    if (isNaN(pressure)) return isPsi ? '0.0 psi' : '0.00 bar';
-                    return isPsi ? `${(pressure * 14.5038).toFixed(1)} psi` : `${pressure.toFixed(2)} bar`;
-                  ]]]
-                tap_action:
-                  action: none
-                styles:
-                  card:
-                    - background-color: rgba(76, 175, 80, 0.85)
-                    - border-radius: 10px
-                    - padding: 4px
-                  name:
-                    - font-size: 10px
-                    - font-weight: 700
-                  label:
-                    - font-size: 12px
-                    - font-weight: 700
+              - type: custom:mushroom-template-card
+                primary: >-
+                  {% set p = states('sensor.vehicle_tyre_pressure_front_right') | float(0) %}
+                  {% set is_psi = states('input_select.tesla_unit_system') == 'US Imperial (mi, °F, psi)' %}
+                  {{ (p * 14.5038) | round(1) if is_psi else p | round(2) }}
+                secondary: >-
+                  {{ 'psi' if states('input_select.tesla_unit_system') == 'US Imperial (mi, °F, psi)' else 'Bar' }}
+                multiline_secondary: false
+                fill_container: false
+                card_mod:
+                  style:
+                    ha-tile-info$: |
+                      .primary {
+                        font-size: 13px !important;
+                        position: relative;
+                        overflow: visible !important;
+                        text-align: left;
+                        color: #fff !important;
+                        text-shadow: 0 0 3px #000, 0 0 3px #000;
+                      }
+                      .secondary {
+                        font-size: 9px !important;
+                        position: relative;
+                        overflow: visible !important;
+                        text-align: left;
+                        color: #fff !important;
+                        text-shadow: 0 0 3px #000, 0 0 3px #000;
+                      }
+                    .: |
+                      ha-card {
+                        background-color: transparent;
+                        border: none;
+                        box-shadow: none;
+                      }
+                      .content {
+                        padding: 0px !important;
+                      }
                 style:
-                  top: 18%
-                  left: 75%
-                  width: 22%
-                  transform: translate(-50%, -50%)
+                  top: 15%
+                  left: 90%
+                  width: 20%
 
               # RL
-              - type: custom:button-card
-                entity: sensor.vehicle_tyre_pressure_rear_left
-                show_icon: false
-                name: "RL"
-                show_label: true
-                label: |
-                  [[[
-                    const pressStr = String(states['sensor.vehicle_tyre_pressure_rear_left']?.state || '0');
-                    const pressure = parseFloat(pressStr);
-                    const isPsi = states['input_select.tesla_unit_system']?.state === 'US Imperial (mi, °F, psi)';
-                    if (isNaN(pressure)) return isPsi ? '0.0 psi' : '0.00 bar';
-                    return isPsi ? `${(pressure * 14.5038).toFixed(1)} psi` : `${pressure.toFixed(2)} bar`;
-                  ]]]
-                tap_action:
-                  action: none
-                styles:
-                  card:
-                    - background-color: rgba(76, 175, 80, 0.85)
-                    - border-radius: 10px
-                    - padding: 4px
-                  name:
-                    - font-size: 10px
-                    - font-weight: 700
-                  label:
-                    - font-size: 12px
-                    - font-weight: 700
+              - type: custom:mushroom-template-card
+                primary: >-
+                  {% set p = states('sensor.vehicle_tyre_pressure_rear_left') | float(0) %}
+                  {% set is_psi = states('input_select.tesla_unit_system') == 'US Imperial (mi, °F, psi)' %}
+                  {{ (p * 14.5038) | round(1) if is_psi else p | round(2) }}
+                secondary: >-
+                  {{ 'psi' if states('input_select.tesla_unit_system') == 'US Imperial (mi, °F, psi)' else 'Bar' }}
+                multiline_secondary: false
+                fill_container: false
+                card_mod:
+                  style:
+                    ha-tile-info$: |
+                      .primary {
+                        font-size: 13px !important;
+                        position: relative;
+                        overflow: visible !important;
+                        text-align: left;
+                        color: #fff !important;
+                        text-shadow: 0 0 3px #000, 0 0 3px #000;
+                      }
+                      .secondary {
+                        font-size: 9px !important;
+                        position: relative;
+                        overflow: visible !important;
+                        text-align: left;
+                        color: #fff !important;
+                        text-shadow: 0 0 3px #000, 0 0 3px #000;
+                      }
+                    .: |
+                      ha-card {
+                        background-color: transparent;
+                        border: none;
+                        box-shadow: none;
+                      }
+                      .content {
+                        padding: 0px !important;
+                      }
                 style:
-                  top: 82%
-                  left: 25%
-                  width: 22%
-                  transform: translate(-50%, -50%)
+                  top: 78%
+                  left: 12%
+                  width: 20%
 
               # RR
-              - type: custom:button-card
-                entity: sensor.vehicle_tyre_pressure_rear_right
-                show_icon: false
-                name: "RR"
-                show_label: true
-                label: |
-                  [[[
-                    const pressStr = String(states['sensor.vehicle_tyre_pressure_rear_right']?.state || '0');
-                    const pressure = parseFloat(pressStr);
-                    const isPsi = states['input_select.tesla_unit_system']?.state === 'US Imperial (mi, °F, psi)';
-                    if (isNaN(pressure)) return isPsi ? '0.0 psi' : '0.00 bar';
-                    return isPsi ? `${(pressure * 14.5038).toFixed(1)} psi` : `${pressure.toFixed(2)} bar`;
-                  ]]]
-                tap_action:
-                  action: none
-                styles:
-                  card:
-                    - background-color: rgba(76, 175, 80, 0.85)
-                    - border-radius: 10px
-                    - padding: 4px
-                  name:
-                    - font-size: 10px
-                    - font-weight: 700
-                  label:
-                    - font-size: 12px
-                    - font-weight: 700
+              - type: custom:mushroom-template-card
+                primary: >-
+                  {% set p = states('sensor.vehicle_tyre_pressure_rear_right') | float(0) %}
+                  {% set is_psi = states('input_select.tesla_unit_system') == 'US Imperial (mi, °F, psi)' %}
+                  {{ (p * 14.5038) | round(1) if is_psi else p | round(2) }}
+                secondary: >-
+                  {{ 'psi' if states('input_select.tesla_unit_system') == 'US Imperial (mi, °F, psi)' else 'Bar' }}
+                multiline_secondary: false
+                fill_container: false
+                card_mod:
+                  style:
+                    ha-tile-info$: |
+                      .primary {
+                        font-size: 13px !important;
+                        position: relative;
+                        overflow: visible !important;
+                        text-align: left;
+                        color: #fff !important;
+                        text-shadow: 0 0 3px #000, 0 0 3px #000;
+                      }
+                      .secondary {
+                        font-size: 9px !important;
+                        position: relative;
+                        overflow: visible !important;
+                        text-align: left;
+                        color: #fff !important;
+                        text-shadow: 0 0 3px #000, 0 0 3px #000;
+                      }
+                    .: |
+                      ha-card {
+                        background-color: transparent;
+                        border: none;
+                        box-shadow: none;
+                      }
+                      .content {
+                        padding: 0px !important;
+                      }
                 style:
-                  top: 82%
-                  left: 75%
-                  width: 22%
-                  transform: translate(-50%, -50%)
+                  top: 78%
+                  left: 90%
+                  width: 20%
 
           # 5.3 Historical Pressure Chart
           # Two variants (bar vs psi) because apexcharts-card's yaxis min/max and

@@ -263,6 +263,15 @@ binary_sensor.tesla_anomaly_high_daily_cost      | binary_sensor | anomaly      
 #    The overlay icons' top/left percentages are best-effort placeholders —
 #    adjust them in the dashboard YAML to match your own photos' exact
 #    proportions/orientation.
+# 9. The Tires tab's picture-elements card is intentionally shrunk to a
+#    150px-wide thumbnail (via card-mod's `card_mod: style:` on `ha-card`,
+#    not a plain `style: {...}` mapping — that flat form isn't valid
+#    card_mod/picture-elements syntax and silently does nothing). Its 4
+#    pressure overlays use `custom:mushroom-template-card` (transparent,
+#    borderless via card_mod), not custom:button-card, matching the compact
+#    look of a smaller reference dashboard. Requires the `card-mod` and
+#    `Mushroom` HACS cards (already listed as project prerequisites in
+#    README's HACS table).
 
 # ============================================================
 # CUSTOM HELPERS - PHASE 1 (2026-06-23)

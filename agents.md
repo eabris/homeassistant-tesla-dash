@@ -1635,3 +1635,124 @@ overlay icons keep working (they're independent elements, not clipped to
 the image loading). Ask the user to verify visually after reload and adjust
 the percentages in `dashboards/tesla-overview.yaml` if any icon doesn't line
 up with their actual car body/wheel positions.
+
+### 16. Tires Tab Shrunk to Thumbnail + Charge Port Repositioned (card-mod fix)
+
+**Two follow-up refinements requested after Section 15's image overlays went
+live**, both against `dashboards/tesla-overview.yaml`:
+
+1. **Dashboard hero card**: shortened (via `aspect_ratio: "5:2"`, forcing
+   HA's `hui-image` to render with CSS `background-size: cover` instead of
+   the photo's natural, taller aspect ratio) and the charge-port overlay
+   icon moved from a low/near-ground position to `top: 40%, left: 92%` —
+   roughly tail-light height near the actual rear charge port on a Model X,
+   instead of down by the rear bumper/wheel.
+2. **Tires tab**: shrunk from a full-width card down to a **150px-wide
+   thumbnail** (matching a smaller reference dashboard the user showed), and
+   the 4 pressure overlays were rebuilt using `custom:mushroom-template-card`
+   (transparent, borderless pill showing `primary` = pressure value /
+   `secondary` = unit) instead of `custom:button-card`, per an idea the user
+   pasted from another project's dashboard. Adapted to this project's actual
+   conventions rather than copied verbatim: reads the existing
+   `sensor.vehicle_tyre_pressure_*` Fleet Sensor Aliases directly (no need
+   to reconstruct `sensor.<car>_tyre_pressure_*` via
+   `input_text.tesla_car_name` string concatenation the way the pasted
+   example did, since the alias layer already exists for exactly this), and
+   the psi conversion Jinja mirrors the same `× 14.5038` factor and
+   `input_select.tesla_unit_system` check already used everywhere else in
+   this file (rather than the pasted example's Bar-only, no-unit-toggle
+   version).
+
+**Bug discovered and fixed while implementing this: the picture-elements
+`style: {border-radius: ..., overflow: ...}` blocks added in Section 15 were
+never valid syntax and were silently doing nothing.** `picture-elements`
+card's own schema (confirmed against HA frontend source,
+`hui-picture-elements-card.ts` → `PictureElementsCardConfig` in
+`cards/types.ts`) has no `style:` property at all — only `image`,
+`image_entity`, `camera_image`, `aspect_ratio`, `elements`, `theme`,
+`dark_mode_image`/`dark_mode_filter`, `title`. Separately, `card-mod` (also
+already a required HACS card per README) only recognizes a **CSS string**
+(applied to `ha-card` by default) or an **object mapping shadow-DOM-part
+selectors to CSS strings** under its own `style:`/`card_mod: style:` keys —
+never a flat property-name-to-value YAML mapping like
+`{border-radius: 12px, overflow: hidden}`, which is actually the
+**`custom:button-card`-specific `styles: card: [...]` convention** (a list
+of single-key maps), mistakenly reused here on a card that isn't
+button-card. Since neither the card's own schema nor card-mod recognized
+this flat mapping, HA silently ignored it — no rendering error, just no
+effect (the corners were simply never rounded/clipped). Fixed on **both**
+picture-elements cards (Dashboard hero + Tires overlay) by switching to the
+correct `card_mod: style: | ha-card { border-radius: ...; overflow: ...; }`
+CSS-string form. The Tires card's shrink-to-150px also piggybacks on this
+same corrected block (`width: 150px; margin: 0 auto;` added to the same
+`ha-card` CSS string) — this is also how the whole 150px-wide container
+constrains its overlay elements down to matching proportions, since
+`elements:` are positioned as percentages of the picture-elements card's own
+rendered box, not fixed pixels; shrinking the parent shrinks everything
+inside it together.
+
+**Why `mushroom-template-card` was judged safe to introduce here**: this
+project's README already lists both **Mushroom** and **card-mod** as
+required HACS cards (`mushroom-number-card` is already used on the Battery
+tab's Charge Limit slider and 6 places on the Analytics Settings tab) —
+`mushroom-template-card` ships in the same Mushroom HACS package, so this
+doesn't add any new prerequisite for users who already followed Step 2 of
+the README setup.
+
+**Known limitation carried over from Section 15, still applies:** exact
+top/left/transform percentages (hero card's 3 icons, tires card's 4
+pressure pills) remain best-effort placeholders not verified against pixel
+measurements of the user's actual photos — ask the user to check visually
+after reload and nudge further if needed.
+
+**Immediate follow-up correction:** the green-pill treatment above
+(`background: rgba(76, 175, 80, 0.85); padding: 2px 4px; border-radius: 6px;`
+on each `mushroom-template-card`'s `ha-card`, combined with 10px/7px fonts
+and a `width: 30%` element box) rendered as solid, illegible green squares
+on the user's actual device — the small box + small font left no room to
+render both the pressure value and unit label cleanly. Reverted to match
+the user's originally-pasted reference far more literally: fully
+**transparent, borderless `ha-card`** (`background-color: transparent;
+border: none; box-shadow: none;`), **left-aligned** primary/secondary text
+(not centered), bumped to 13px/9px for legibility, and added a black
+`text-shadow` (not present in the user's pasted snippet, which presumably
+relied on a different, more uniformly-dark background image in its
+original dashboard) purely so white text stays readable against
+`teslaTopDown.png`'s lighter/mixed-tone areas. Element width narrowed from
+30% to 20% and repositioned slightly (`top: 15%/78%`, `left: 22%/60%`)
+since left-aligned text starting at the anchor point (rather than
+centered via `transform: translate(-50%, -50%)`) needed different anchor
+coordinates to land over the wheel corners. The pasted snippet's
+`var(--tesla-font-mm)`/`var(--tesla-font-sm)` CSS custom properties were
+intentionally **not** carried over as-is — they aren't defined anywhere in
+this project's theme, so using them verbatim would have silently fallen
+back to the browser's default font size; explicit px values were used
+instead. Data logic (unit-system-aware bar/psi conversion,
+`sensor.vehicle_tyre_pressure_*` aliases) was left untouched — only the
+`card_mod` visual styling changed.
+
+**Second follow-up fix — left/right anchor percentages and a `.content`
+padding bug:** per the user's own working reference (another card on their
+dashboard where FL/FR sit at `left: 12%`/`90%`), all 4 elements were
+repositioned from `left: 22%/60%` to `left: 12%/90%` to match. Separately,
+Chrome DevTools showed Mushroom's internal `.content` wrapper div still
+carrying its default `padding: 0px 10px` — visually pushing/clipping the
+pressure label. The first fix attempt targeted this via `card_mod: style:
+{ha-card$: | .content {...}}` — a nested-shadow-piercing selector, reasoning
+that `.content` lived inside `<ha-card>`'s own shadow root. **This was wrong
+and silently did nothing**: inspecting the actual DOM tree showed
+`<ha-card>`'s own shadow root contains only a `<slot>` (standard HA card
+wrapper behavior) — Mushroom renders `.background`/`.container`/`.row`/
+`.content` as **light-DOM children** of `<ha-card>`, not inside its shadow
+root. Piercing into `ha-card`'s (empty, slot-only) shadow root via
+`ha-card$` therefore matched nothing. Since light-DOM descendants of
+`<ha-card>` are reachable by ordinary CSS from the *outer* context
+(Mushroom's own top-level shadow root — the same place `card_mod`'s default
+`.` key already successfully targets `ha-card { background-color:
+transparent }`), the fix was to move `.content { padding: 0px !important; }`
+into that same top-level `.` block instead of the separate `ha-card$` block
+— no shadow-piercing needed at all. **Lesson for future card-mod work on
+Mushroom cards:** don't assume a visually-"nested-looking" element requires
+a `$`-piercing selector — check DevTools first for whether the element is
+actually inside the target's own shadow root (needs piercing) or is a
+light-DOM/slotted child (reachable directly, no piercing).
