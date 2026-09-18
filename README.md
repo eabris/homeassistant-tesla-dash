@@ -446,6 +446,7 @@ left alone by default (pass `--include-labels` to rename those too). Run
 | Some sensors show `Entity not available` in dashboard charts, and a full restart didn't fix it | An old, orphaned entity is probably still squatting on the exact entity_id the new sensor wants, so Home Assistant had to create it with a `_2` suffix instead (check **Settings → Devices & Services → Entities**, search the name without a domain filter — if you see two rows, one ending in `_2`, this is it). See the "Start clean" recipe below. |
 | Settings reset to their defaults after every restart (electricity rate, home/work rate names, currency, wheel size, tire pressure, smart-charge window, etc.) | This was a real bug in this project's `configuration.yaml`, fixed as of this commit — see "Why my settings used to reset on restart" below. If you're still seeing it, make sure you've pulled the latest version of this repo. |
 | Log shows `Received invalid sensor state: unknown for entity sensor.vehicle_...` | Harmless and already fixed as of this commit — happened whenever the car went to sleep/offline. Pull the latest version of this repo; no action needed on your end otherwise. |
+| `scripts/refresh_tesla_token.sh` fails with `$'\r': command not found` / `set: pipefail: invalid option name` | The script file has Windows-style CRLF line endings, which break on Linux. See "Fixing CRLF line endings" below. |
 
 > 🧹 **"Start clean" — wipe and re-create all Tesla entities from scratch:**
 > If you've renamed things, run a cleanup script, or just want a truly fresh
@@ -491,6 +492,26 @@ left alone by default (pass `--include-labels` to rename those too). Run
 > updating will show these fields as blank/`unknown` instead of their old
 > placeholder text — just re-enter your values once via the Settings tab
 > (or Developer Tools → States) and from then on they'll persist normally.
+
+> 🩹 **Fixing CRLF line endings** (`$'\r': command not found` / `set:
+> pipefail: invalid option name` when running any `scripts/*.sh` file):
+> this means the script was saved with Windows-style line endings at some
+> point (e.g. edited/copied on Windows) — these scripts only ever run on
+> Linux (the HA OS host or HA Core container), which doesn't tolerate the
+> extra `\r` character. Fix directly from the HA **SSH/Terminal** console
+> (or any shell with access to `/config`):
+> ```bash
+> # Fix the specific script:
+> sed -i 's/\r$//' /config/scripts/refresh_tesla_token.sh
+>
+> # Verify it worked (should show "text executable", no "CRLF" mention):
+> file /config/scripts/refresh_tesla_token.sh
+> ```
+> No restart needed — just re-run the script (or let the next scheduled
+> automation run trigger it). This repo's own copy of the script is fixed
+> as of this commit, and a `.gitattributes` rule now keeps `*.sh` files
+> normalized to LF automatically — but if you edit or re-upload any shell
+> script from a Windows machine, re-run this fix afterward.
 
 ---
 
