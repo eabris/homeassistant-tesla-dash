@@ -1810,3 +1810,52 @@ wheel — scripts unchanged (`tesla_seat_heater_next_*`,
 top/left percentages for lock/wake/port on the car body. Those three
 controls are in the dock now. The Tires-tab pressure-pill placeholders
 from Sections 15–16 are unchanged.
+
+### 18. CRLF Line Endings Broke `refresh_tesla_token.sh` on the HA Host
+
+**Symptom:** the token-refresh automation (Section 10a) started failing
+with `scripts/refresh_tesla_token.sh exited with code 2`, stderr:
+```
+/config/scripts/refresh_tesla_token.sh: line 62: $'\r': command not found
+/config/scripts/refresh_tesla_token.sh: line 63: set: pipefail
+: invalid option name
+```
+
+**Root cause:** the script file had been saved with **CRLF** (Windows-style)
+line endings at some point — likely from an edit made on a Windows-side
+editor/clipboard — even though this script only ever runs on Linux (either
+directly on the HA OS host via SSH, or inside the HA Core container via
+`shell_command`, per Section 10a). Bash on Linux doesn't strip the trailing
+`\r` from each line; it becomes a literal part of the last token on that
+line. So `set -eo pipefail\r` was parsed as `set -eo pipefail` followed by a
+stray `\r` "command" (→ `$'\r': command not found`) immediately after, and
+critically, the trailing `\r` glued onto `pipefail` itself made `set`
+receive the option name `pipefail\r`, which isn't a valid `set -o` name →
+`set: pipefail\r: invalid option name`. This is a generic Linux/CRLF
+footgun, not specific to this script's logic — every line in the file had
+the same trailing `\r`, but it only became visibly fatal at the `set -eo
+pipefail` line since that's the first line where bash's option-name parsing
+is strict about exact string matches.
+
+**Fix applied:** stripped all `\r` characters from
+`scripts/refresh_tesla_token.sh` (`sed -i 's/\r$//' ...`), verified via
+`file` (now reports plain "Bourne-Again shell script... UTF-8 text
+executable", no more "with CRLF line terminators") and `bash -n` (syntax
+check passes), and confirmed the diff against a pre-fix backup shows only
+line-ending changes — zero content/logic differences. Also scanned every
+other `scripts/*.sh` file for the same issue — none were affected, this was
+isolated to this one script.
+
+**Prevention — added `.gitattributes`:** a repo-root `.gitattributes` now
+declares `*.sh text eol=lf`, so Git normalizes any shell script to LF line
+endings on checkout/commit regardless of the contributing machine's OS or
+editor settings — this protects against the same CRLF corruption
+recurring for this script or any future one, without relying on every
+contributor remembering to configure their editor correctly.
+
+**General rule going forward:** if any future shell script in this project
+throws a cryptic `$'\r': command not found` or `invalid option name` error
+when run on the HA host/container, immediately suspect CRLF line endings
+first (`file scripts/<name>.sh` — look for "with CRLF line terminators")
+before investigating actual script logic; fix with `sed -i 's/\r$//'
+<file>`, never by manually rewriting the script's contents.

@@ -1,0 +1,6 @@
+# Force LF line endings for shell scripts — CRLF breaks them on Linux/HA
+# (e.g. "set: pipefail: invalid option name", "$'\r': command not found").
+# This project's scripts run inside the HA Core container / HA OS host,
+# both Linux — never Windows — so CRLF must never be introduced here,
+# even if edited from a Windows machine.
+*.sh text eol=lf
