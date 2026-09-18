@@ -281,13 +281,29 @@ custom_fields:
               : locRaw.replace(/_/g, ' ');
             const sentry = states['switch.' + car + '_sentry_mode']?.state === 'on' ? 'On' : 'Off';
             const plugged = states['binary_sensor.vehicle_charge_cable']?.state === 'on' ? 'Plugged in' : 'Unplugged';
-            const upd = states['update.' + car + '_update'];
-            const ver = upd?.attributes?.installed_version || '–';
             const ttf = String(states['sensor.vehicle_time_to_full_charge']?.state || '');
-            const ttfNum = parseFloat(ttf);
-            const ttfTxt = (!ttf || ttf === 'unknown' || ttf === 'unavailable' || isNaN(ttfNum) || ttfNum <= 0)
-              ? '–'
-              : (ttfNum >= 1 ? `${Math.floor(ttfNum)}h ${Math.round((ttfNum % 1) * 60)}m` : `${Math.round(ttfNum * 60)}m`);
+            let ttfTxt = '–';
+            if (ttf && ttf !== 'unknown' && ttf !== 'unavailable') {
+              const endTime = new Date(ttf);
+              if (!isNaN(endTime.getTime()) && ttf.includes('-')) {
+                const diffMins = Math.round((endTime - Date.now()) / 60000);
+                if (diffMins <= 0) {
+                  ttfTxt = 'Done';
+                } else {
+                  const h = Math.floor(diffMins / 60);
+                  const m = diffMins % 60;
+                  const clock = `${String(endTime.getHours()).padStart(2, '0')}:${String(endTime.getMinutes()).padStart(2, '0')}`;
+                  ttfTxt = `${h > 0 ? `${h}h ${m}m` : `${m}m`} · ${clock}`;
+                }
+              } else {
+                const hrs = parseFloat(ttf);
+                if (!isNaN(hrs) && hrs > 0 && hrs < 48) {
+                  const h = Math.floor(hrs);
+                  const m = Math.round((hrs % 1) * 60);
+                  ttfTxt = h > 0 ? `${h}h ${m}m` : `${m}m`;
+                }
+              }
+            }
             const row = (k, v) => `<div style="display:flex;justify-content:space-between;gap:8px;padding:6px 0;border-bottom:1px solid rgba(255,255,255,0.06)">
               <span style="color:rgba(244,244,245,0.45);font-size:11px">${k}</span>
               <span style="color:#f4f4f5;font-size:13px;font-weight:600;text-align:right">${v}</span>
@@ -301,7 +317,6 @@ custom_fields:
               ${row('To full', ttfTxt)}
               ${row('Outdoor', out)}
               ${row('Cabin', inn)}
-              ${row('Software', ver)}
               <div style="margin-top:10px;color:rgba(244,244,245,0.45);font-size:10px;letter-spacing:0.08em;text-transform:uppercase">Last charge</div>
               <div style="color:#f4f4f5;font-size:16px;font-weight:600;margin-top:4px">${energyTxt}</div>
               <div style="color:rgba(244,244,245,0.55);font-size:12px;margin-top:2px">${charging}</div>
