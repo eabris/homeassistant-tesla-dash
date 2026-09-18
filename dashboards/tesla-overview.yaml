@@ -524,36 +524,10 @@ views:
                   row:
                     - width: 100%
 
-          # 1.3 Quick Action Row (6 buttons)
+          # 1.3 Quick Action Row
+          # Lock lives in the hero dock — omitted here to avoid a duplicate.
           - type: horizontal-stack
             cards:
-              # Lock/Unlock
-              - type: custom:button-card
-                entity: script.tesla_lock_toggle
-                icon: mdi:lock
-                name: "Lock"
-                tap_action:
-                  action: call-service
-                  service: script.tesla_lock_toggle
-                styles:
-                  card:
-                    - background-color: rgba(255,255,255,0.05)
-                    - border: 1px solid rgba(255,255,255,0.08)
-                    - border-radius: 16px
-                    - box-shadow: none
-                    - --ha-card-border-width: 0px
-                  icon:
-                    - color: |
-                        [[[
-                          const car = states['input_text.tesla_car_name']?.state || 'tesla';
-                          return states['lock.' + car + '_lock']?.state === 'locked' ? '#6ee7b7' : '#f87171';
-                        ]]]
-                    - width: 22px
-                  name:
-                    - font-size: 11px
-                    - color: rgba(244,244,245,0.62)
-                    - font-weight: 500
-
               # Climate
               - type: custom:button-card
                 entity: script.tesla_climate_toggle
@@ -2437,7 +2411,8 @@ views:
     cards:
       - type: vertical-stack
         cards:
-          # 4.1 Primary Battery Gauge
+          # 4.1 SOC hero — the old gauge was a nameless thin bar, which
+          # rendered as the empty rounded strip at the top of this tab.
           - type: custom:button-card
             entity: sensor.vehicle_battery_level
             show_icon: false
@@ -2446,53 +2421,125 @@ views:
             tap_action:
               action: none
             custom_fields:
-              bar: |
+              hero: |
                 [[[
-                  const soc = parseFloat(states['sensor.vehicle_battery_level']?.state || '0');
-                  const car = states['input_text.tesla_car_name']?.state || 'tesla';
-                  const limit = parseFloat(states['number.' + car + '_charge_limit']?.state || '100');
-                  const color = soc > 70 ? '#4CAF50' : soc > 40 ? '#FFC107' : '#F44336';
-                  return `<div style="width:100%;background:rgba(255,255,255,0.1);border-radius:8px;height:14px;overflow:hidden;position:relative">
-                    <div style="width:${limit}%;background:rgba(255,255,255,0.08);height:100%;position:absolute;border-radius:8px"></div>
-                    <div style="width:${soc}%;background:${color};height:100%;border-radius:8px;position:relative"></div>
+                  const soc = parseFloat(String(states['sensor.vehicle_battery_level']?.state || '0'));
+                  const charging = states['binary_sensor.tesla_charging_active']?.state === 'on';
+                  const plugged = states['binary_sensor.vehicle_charge_cable']?.state === 'on';
+                  const limit = parseFloat(states['number.vehicle_charge_limit']?.state || '100');
+                  const unitSys = states['input_select.tesla_unit_system']?.state || 'Metric (km, °C, bar)';
+                  const isMi = unitSys !== 'Metric (km, °C, bar)';
+                  const unit = isMi ? 'mi' : 'km';
+                  const rawRange = String(states['sensor.vehicle_battery_range']?.state || '');
+                  const rangeKm = (!rawRange || rawRange === 'unknown' || rawRange === 'unavailable')
+                    ? soc * 4.1
+                    : parseFloat(rawRange);
+                  const adjPct = parseFloat(states['input_number.tesla_wheel_range_adjustment_pct']?.state || '0');
+                  const calcKm = rangeKm * (1 - adjPct / 100);
+                  const range = Math.round(isMi ? rangeKm * 0.621371 : rangeKm);
+                  const calc = Math.round(isMi ? calcKm * 0.621371 : calcKm);
+                  const color = soc > 70 ? '#6ee7b7' : soc > 40 ? '#fbbf24' : '#f87171';
+                  const status = charging ? 'Charging' : plugged ? 'Plugged in' : 'Not plugged in';
+                  const statusColor = charging ? '#6ee7b7' : plugged ? '#7dd3fc' : 'rgba(244,244,245,0.5)';
+                  const socSafe = isNaN(soc) ? 0 : Math.min(100, Math.max(0, soc));
+                  const limitSafe = isNaN(limit) ? 100 : Math.min(100, Math.max(0, limit));
+                  return `<div style="width:100%">
+                    <div style="display:flex;justify-content:space-between;align-items:flex-end;gap:12px">
+                      <div>
+                        <div style="color:rgba(244,244,245,0.48);font-size:11px;font-weight:500;letter-spacing:0.08em">BATTERY</div>
+                        <div style="color:#f4f4f5;font-size:42px;font-weight:600;letter-spacing:-0.04em;line-height:1.05;margin-top:4px">${isNaN(soc) ? '–' : soc.toFixed(0)}<span style="font-size:22px;font-weight:500;color:rgba(244,244,245,0.55)">%</span></div>
+                      </div>
+                      <div style="text-align:right">
+                        <div style="color:${statusColor};font-size:12px;font-weight:500">${status}</div>
+                        <div style="color:#f4f4f5;font-size:16px;font-weight:600;margin-top:4px">${isNaN(range) ? '–' : range} <span style="color:rgba(244,244,245,0.45);font-size:13px;font-weight:500">(${isNaN(calc) ? '–' : calc}) ${unit}</span></div>
+                      </div>
+                    </div>
+                    <div style="position:relative;width:100%;height:10px;background:rgba(255,255,255,0.08);border-radius:99px;margin-top:16px;overflow:hidden">
+                      <div style="position:absolute;left:0;top:0;height:100%;width:${limitSafe}%;background:rgba(255,255,255,0.06)"></div>
+                      <div style="position:absolute;left:0;top:0;height:100%;width:${socSafe}%;background:${color};border-radius:99px"></div>
+                    </div>
+                    <div style="display:flex;justify-content:space-between;margin-top:8px;color:rgba(244,244,245,0.42);font-size:11px;font-weight:500">
+                      <span>Limit ${limitSafe.toFixed(0)}%</span>
+                      <span>0–100</span>
+                    </div>
                   </div>`;
                 ]]]
             styles:
               card:
-                - padding: 14px 16px
-                - background-color: rgba(0, 0, 0, 0.2)
+                - background-color: rgba(255,255,255,0.04)
+                - border: 1px solid rgba(255,255,255,0.08)
+                - border-radius: 20px
+                - box-shadow: none
+                - padding: 18px 18px 16px
+                - --ha-card-border-width: 0px
+              grid:
+                - grid-template-areas: '"hero"'
+                - grid-template-columns: 1fr
               custom_fields:
-                bar:
+                hero:
                   - width: 100%
 
-          # 4.2 Telemetry Table (2×4 grid)
+          # 4.2 Telemetry tiles
           - type: grid
             columns: 2
             square: false
             cards:
-              # LEVEL
               - type: custom:button-card
                 entity: sensor.vehicle_battery_level
                 icon: mdi:percent
-                name: "LEVEL"
+                name: "Level"
+                size: 18px
+                show_state: false
                 show_label: true
+                tap_action:
+                  action: none
                 label: |
                   [[[
                     const level = parseFloat(String(states['sensor.vehicle_battery_level']?.state || '0'));
                     return isNaN(level) ? '– %' : `${level.toFixed(0)}%`;
                   ]]]
-                tap_action:
-                  action: none
                 styles:
                   card:
-                    - background-color: rgba(0, 0, 0, 0.2)
+                    - background-color: rgba(255,255,255,0.04)
+                    - border: 1px solid rgba(255,255,255,0.08)
+                    - border-radius: 16px
+                    - box-shadow: none
+                    - padding: 14px 16px
+                    - --ha-card-border-width: 0px
+                  grid:
+                    - grid-template-areas: '"i n" "l l"'
+                    - grid-template-columns: 22px 1fr
+                    - column-gap: 8px
+                    - row-gap: 6px
+                    - align-items: center
+                  icon:
+                    - width: 18px
+                    - color: rgba(244,244,245,0.55)
+                  img_cell:
+                    - width: 22px
+                    - height: 22px
+                  name:
+                    - justify-self: start
+                    - font-size: 11px
+                    - font-weight: 500
+                    - letter-spacing: 0.06em
+                    - color: rgba(244,244,245,0.48)
+                  label:
+                    - justify-self: start
+                    - font-size: 18px
+                    - font-weight: 600
+                    - color: "#f4f4f5"
+                    - margin-top: 0
 
-              # RANGE
               - type: custom:button-card
                 entity: sensor.vehicle_battery_range
                 icon: mdi:map-marker-distance
-                name: "RANGE"
+                name: "Range"
+                size: 18px
+                show_state: false
                 show_label: true
+                tap_action:
+                  action: none
                 label: |
                   [[[
                     const unitSys = states['input_select.tesla_unit_system']?.state || 'Metric (km, °C, bar)';
@@ -2504,119 +2551,287 @@ views:
                     const estKm = (!rawEst || rawEst === 'unknown' || rawEst === 'unavailable')
                       ? soc * 4.1
                       : parseFloat(rawEst);
-                    // Bracket value = official range adjusted down by the
-                    // wheel-size-based range impact % (Settings tab), not the
-                    // vehicle's separate "ideal" range concept.
                     const adjPct = parseFloat(states['input_number.tesla_wheel_range_adjustment_pct']?.state || '0');
                     const calcKm = estKm * (1 - adjPct / 100);
                     const estVal = Math.round(conv(estKm));
                     const calcVal = Math.round(conv(calcKm));
-                    return isNaN(estVal) ? `– ${unit}` : `${estVal} ${unit} (${calcVal} ${unit})`;
+                    return isNaN(estVal) ? `– ${unit}` : `${estVal} (${calcVal}) ${unit}`;
                   ]]]
-                tap_action:
-                  action: none
                 styles:
                   card:
-                    - background-color: rgba(0, 0, 0, 0.2)
-                    - font-size: 12px
+                    - background-color: rgba(255,255,255,0.04)
+                    - border: 1px solid rgba(255,255,255,0.08)
+                    - border-radius: 16px
+                    - box-shadow: none
+                    - padding: 14px 16px
+                    - --ha-card-border-width: 0px
+                  grid:
+                    - grid-template-areas: '"i n" "l l"'
+                    - grid-template-columns: 22px 1fr
+                    - column-gap: 8px
+                    - row-gap: 6px
+                    - align-items: center
+                  icon:
+                    - width: 18px
+                    - color: rgba(244,244,245,0.55)
+                  img_cell:
+                    - width: 22px
+                    - height: 22px
+                  name:
+                    - justify-self: start
+                    - font-size: 11px
+                    - font-weight: 500
+                    - letter-spacing: 0.06em
+                    - color: rgba(244,244,245,0.48)
+                  label:
+                    - justify-self: start
+                    - font-size: 16px
+                    - font-weight: 600
+                    - color: "#f4f4f5"
+                    - margin-top: 0
 
-              # DRAIN
               - type: custom:button-card
-                entity: sensor.vehicle_battery_level
+                entity: sensor.vehicle_charging
                 icon: mdi:water-remove
-                name: "DRAIN"
+                name: "Drain"
+                size: 18px
+                show_state: false
                 show_label: true
+                tap_action:
+                  action: none
                 label: |
                   [[[
                     const charging = String(states['sensor.vehicle_charging']?.state || '').toLowerCase();
                     const driving = states['binary_sensor.tesla_driving_active']?.state === 'on';
-                    if (charging === 'charging') return '+charging';
+                    if (charging === 'charging') return 'Charging';
                     if (driving) return 'Driving';
-                    return '–';
+                    return 'Idle';
                   ]]]
-                tap_action:
-                  action: none
                 styles:
                   card:
-                    - background-color: rgba(0, 0, 0, 0.2)
+                    - background-color: rgba(255,255,255,0.04)
+                    - border: 1px solid rgba(255,255,255,0.08)
+                    - border-radius: 16px
+                    - box-shadow: none
+                    - padding: 14px 16px
+                    - --ha-card-border-width: 0px
+                  grid:
+                    - grid-template-areas: '"i n" "l l"'
+                    - grid-template-columns: 22px 1fr
+                    - column-gap: 8px
+                    - row-gap: 6px
+                    - align-items: center
+                  icon:
+                    - width: 18px
+                    - color: rgba(244,244,245,0.55)
+                  img_cell:
+                    - width: 22px
+                    - height: 22px
+                  name:
+                    - justify-self: start
+                    - font-size: 11px
+                    - font-weight: 500
+                    - letter-spacing: 0.06em
+                    - color: rgba(244,244,245,0.48)
+                  label:
+                    - justify-self: start
+                    - font-size: 18px
+                    - font-weight: 600
+                    - color: "#f4f4f5"
+                    - margin-top: 0
 
-              # ENERGY
               - type: custom:button-card
                 entity: sensor.vehicle_battery_level
                 icon: mdi:lightning-bolt
-                name: "ENERGY"
+                name: "Energy"
+                size: 18px
+                show_state: false
                 show_label: true
+                tap_action:
+                  action: none
                 label: |
                   [[[
                     const soc = parseFloat(String(states['sensor.vehicle_battery_level']?.state || '0'));
                     const capacity = parseFloat(String(states['input_number.tesla_battery_capacity_kwh']?.state || '100'));
                     if (isNaN(soc) || isNaN(capacity)) return '– kWh';
-                    const currentKwh = (soc / 100 * capacity).toFixed(2);
-                    return `${currentKwh} / ${capacity.toFixed(2)} kWh`;
+                    const currentKwh = (soc / 100 * capacity).toFixed(1);
+                    return `${currentKwh} / ${capacity.toFixed(0)} kWh`;
                   ]]]
-                tap_action:
-                  action: none
                 styles:
                   card:
-                    - background-color: rgba(0, 0, 0, 0.2)
-                    - font-size: 12px
+                    - background-color: rgba(255,255,255,0.04)
+                    - border: 1px solid rgba(255,255,255,0.08)
+                    - border-radius: 16px
+                    - box-shadow: none
+                    - padding: 14px 16px
+                    - --ha-card-border-width: 0px
+                  grid:
+                    - grid-template-areas: '"i n" "l l"'
+                    - grid-template-columns: 22px 1fr
+                    - column-gap: 8px
+                    - row-gap: 6px
+                    - align-items: center
+                  icon:
+                    - width: 18px
+                    - color: rgba(244,244,245,0.55)
+                  img_cell:
+                    - width: 22px
+                    - height: 22px
+                  name:
+                    - justify-self: start
+                    - font-size: 11px
+                    - font-weight: 500
+                    - letter-spacing: 0.06em
+                    - color: rgba(244,244,245,0.48)
+                  label:
+                    - justify-self: start
+                    - font-size: 16px
+                    - font-weight: 600
+                    - color: "#f4f4f5"
+                    - margin-top: 0
 
-              # AMPERAGE
               - type: custom:button-card
                 entity: sensor.vehicle_charger_current
                 icon: mdi:sine-wave
-                name: "AMPERAGE"
+                name: "Amperage"
+                size: 18px
+                show_state: false
                 show_label: true
-                label: |
-                  [[[
-                    const ampStr = String(states['sensor.vehicle_charger_current']?.state || '0');
-                    const amp = parseFloat(ampStr);
-                    return isNaN(amp) ? '0.0 A' : `${amp.toFixed(1)} A`;
-                  ]]]
                 tap_action:
                   action: none
+                label: |
+                  [[[
+                    const amp = parseFloat(String(states['sensor.vehicle_charger_current']?.state || '0'));
+                    return isNaN(amp) ? '0.0 A' : `${amp.toFixed(1)} A`;
+                  ]]]
                 styles:
                   card:
-                    - background-color: rgba(0, 0, 0, 0.2)
+                    - background-color: rgba(255,255,255,0.04)
+                    - border: 1px solid rgba(255,255,255,0.08)
+                    - border-radius: 16px
+                    - box-shadow: none
+                    - padding: 14px 16px
+                    - --ha-card-border-width: 0px
+                  grid:
+                    - grid-template-areas: '"i n" "l l"'
+                    - grid-template-columns: 22px 1fr
+                    - column-gap: 8px
+                    - row-gap: 6px
+                    - align-items: center
+                  icon:
+                    - width: 18px
+                    - color: rgba(244,244,245,0.55)
+                  img_cell:
+                    - width: 22px
+                    - height: 22px
+                  name:
+                    - justify-self: start
+                    - font-size: 11px
+                    - font-weight: 500
+                    - letter-spacing: 0.06em
+                    - color: rgba(244,244,245,0.48)
+                  label:
+                    - justify-self: start
+                    - font-size: 18px
+                    - font-weight: 600
+                    - color: "#f4f4f5"
+                    - margin-top: 0
 
-              # VOLTAGE
               - type: custom:button-card
                 entity: sensor.vehicle_charger_voltage
                 icon: mdi:flash
-                name: "VOLTAGE"
+                name: "Voltage"
+                size: 18px
+                show_state: false
                 show_label: true
+                tap_action:
+                  action: none
                 label: |
                   [[[
-                    const voltStr = String(states['sensor.vehicle_charger_voltage']?.state || '0');
-                    const volt = parseFloat(voltStr);
+                    const volt = parseFloat(String(states['sensor.vehicle_charger_voltage']?.state || '0'));
                     return isNaN(volt) ? '0 V' : `${volt.toFixed(0)} V`;
                   ]]]
-                tap_action:
-                  action: none
                 styles:
                   card:
-                    - background-color: rgba(0, 0, 0, 0.2)
+                    - background-color: rgba(255,255,255,0.04)
+                    - border: 1px solid rgba(255,255,255,0.08)
+                    - border-radius: 16px
+                    - box-shadow: none
+                    - padding: 14px 16px
+                    - --ha-card-border-width: 0px
+                  grid:
+                    - grid-template-areas: '"i n" "l l"'
+                    - grid-template-columns: 22px 1fr
+                    - column-gap: 8px
+                    - row-gap: 6px
+                    - align-items: center
+                  icon:
+                    - width: 18px
+                    - color: rgba(244,244,245,0.55)
+                  img_cell:
+                    - width: 22px
+                    - height: 22px
+                  name:
+                    - justify-self: start
+                    - font-size: 11px
+                    - font-weight: 500
+                    - letter-spacing: 0.06em
+                    - color: rgba(244,244,245,0.48)
+                  label:
+                    - justify-self: start
+                    - font-size: 18px
+                    - font-weight: 600
+                    - color: "#f4f4f5"
+                    - margin-top: 0
 
-              # ENERGY USED (Lifetime, real accumulated driving consumption)
-              - type: custom:button-card
-                entity: sensor.tesla_drive_energy_consumed_total
-                icon: mdi:meter-gas
-                name: "ENERGY USED"
-                show_label: true
-                label: |
-                  [[[
-                    const raw = String(states['sensor.tesla_drive_energy_consumed_total']?.state || '');
-                    const kwh = parseFloat(raw);
-                    return (!raw || raw === 'unknown' || raw === 'unavailable' || isNaN(kwh))
-                      ? '– kWh'
-                      : `${kwh.toLocaleString('hu-HU', {maximumFractionDigits: 2})} kWh`;
-                  ]]]
-                tap_action:
-                  action: none
-                styles:
-                  card:
-                    - background-color: rgba(0, 0, 0, 0.2)
-                    - font-size: 12px
+          - type: custom:button-card
+            entity: sensor.tesla_drive_energy_consumed_total
+            icon: mdi:meter-gas
+            name: "Energy used"
+            size: 18px
+            show_state: false
+            show_label: true
+            tap_action:
+              action: none
+            label: |
+              [[[
+                const raw = String(states['sensor.tesla_drive_energy_consumed_total']?.state || '');
+                const kwh = parseFloat(raw);
+                return (!raw || raw === 'unknown' || raw === 'unavailable' || isNaN(kwh))
+                  ? '– kWh'
+                  : `${kwh.toLocaleString('hu-HU', {maximumFractionDigits: 1})} kWh lifetime`;
+              ]]]
+            styles:
+              card:
+                - background-color: rgba(255,255,255,0.04)
+                - border: 1px solid rgba(255,255,255,0.08)
+                - border-radius: 16px
+                - box-shadow: none
+                - padding: 14px 16px
+                - --ha-card-border-width: 0px
+              grid:
+                - grid-template-areas: '"i n" "i l"'
+                - grid-template-columns: 40px 1fr
+                - column-gap: 10px
+                - align-items: center
+              icon:
+                - width: 20px
+                - color: "#f4f4f5"
+              img_cell:
+                - width: 40px
+                - height: 40px
+                - border-radius: 50%
+                - background: rgba(255,255,255,0.06)
+              name:
+                - justify-self: start
+                - font-size: 14px
+                - font-weight: 600
+                - color: "#f4f4f5"
+              label:
+                - justify-self: start
+                - font-size: 12px
+                - margin-top: 0
+                - color: rgba(244,244,245,0.5)
 
           # 4.3 Charge Limit Slider
           - type: custom:mushroom-number-card
@@ -2625,6 +2840,14 @@ views:
             icon: mdi:battery-charging-100
             display_mode: slider
             fill_container: false
+            card_mod:
+              style: |
+                ha-card {
+                  background: rgba(255,255,255,0.04) !important;
+                  border: 1px solid rgba(255,255,255,0.08) !important;
+                  border-radius: 16px !important;
+                  box-shadow: none !important;
+                }
 
           # 4.4 Action Row (Start/Stop + Unlock Port)
           - type: horizontal-stack
@@ -2634,8 +2857,10 @@ views:
                 icon: mdi:lightning-bolt
                 name: |
                   [[[
-                    return states['binary_sensor.tesla_charging_active']?.state === 'on' ? 'Stop Charging' : 'Start Charging';
+                    return states['binary_sensor.tesla_charging_active']?.state === 'on' ? 'Stop charging' : 'Start charging';
                   ]]]
+                size: 20px
+                show_state: false
                 tap_action:
                   action: call-service
                   service: |
@@ -2646,13 +2871,32 @@ views:
                   card:
                     - background-color: |
                         [[[
-                          return states['binary_sensor.tesla_charging_active']?.state === 'on' ? 'rgba(244, 67, 54, 0.2)' : 'rgba(76, 175, 80, 0.2)';
+                          return states['binary_sensor.tesla_charging_active']?.state === 'on'
+                            ? 'rgba(248, 113, 113, 0.12)'
+                            : 'rgba(255,255,255,0.04)';
                         ]]]
+                    - border: 1px solid rgba(255,255,255,0.08)
+                    - border-radius: 16px
+                    - box-shadow: none
+                    - padding: 14px 12px
+                    - --ha-card-border-width: 0px
+                  icon:
+                    - width: 20px
+                    - color: |
+                        [[[
+                          return states['binary_sensor.tesla_charging_active']?.state === 'on' ? '#f87171' : '#6ee7b7';
+                        ]]]
+                  name:
+                    - font-size: 12px
+                    - font-weight: 500
+                    - color: rgba(244,244,245,0.72)
 
               - type: custom:button-card
                 entity: script.tesla_unlock_port
-                icon: mdi:lock-open
-                name: "Unlock Port"
+                icon: mdi:ev-station
+                name: "Unlock port"
+                size: 20px
+                show_state: false
                 tap_action:
                   action: call-service
                   service: script.tesla_unlock_port
@@ -2660,7 +2904,19 @@ views:
                     text: Unlock the charge port?
                 styles:
                   card:
-                    - background-color: rgba(76, 175, 80, 0.2)
+                    - background-color: rgba(255,255,255,0.04)
+                    - border: 1px solid rgba(255,255,255,0.08)
+                    - border-radius: 16px
+                    - box-shadow: none
+                    - padding: 14px 12px
+                    - --ha-card-border-width: 0px
+                  icon:
+                    - width: 20px
+                    - color: "#f4f4f5"
+                  name:
+                    - font-size: 12px
+                    - font-weight: 500
+                    - color: rgba(244,244,245,0.72)
 
   # ========== VIEW 5: TIRES ==========
   - title: Tires
