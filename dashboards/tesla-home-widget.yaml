@@ -1,0 +1,483 @@
+# Tesla Home dashboard widget (storage Lovelace card)
+#
+# Not loaded as its own dashboard. Paste from `type:` below into
+# Home → Edit card, replacing the old 400px absolute-positioned button-card.
+#
+# Why the old card clipped on phones: `width: 400px` + pixel `top`/`left`
+# for every overlay. This rewrite is width 100%, CSS grid, and a
+# max-width: 450px media query that stacks the lower row.
+# `input_number.tesla_card_height` is no longer used.
+
+type: custom:button-card
+show_icon: false
+show_name: false
+show_state: false
+tap_action:
+  action: none
+styles:
+  card:
+    - padding: 0
+    - width: 100%
+    - max-width: 100%
+    - height: auto
+    - background-color: "#070708"
+    - border-radius: 20px
+    - overflow: hidden
+    - border: 1px solid rgba(255,255,255,0.08)
+    - box-shadow: none
+    - --ha-card-border-width: 0px
+  grid:
+    - grid-template-areas: '"hero" "mid" "body"'
+    - grid-template-columns: 1fr
+    - grid-template-rows: auto auto auto
+  custom_fields:
+    hero:
+      - grid-area: hero
+      - padding: 0
+    mid:
+      - grid-area: mid
+      - padding: 0 14px 12px
+    body:
+      - grid-area: body
+      - padding: 0 10px 12px
+custom_fields:
+  hero:
+    card:
+      type: picture-elements
+      image: media-source://media_source/local/tesla-car-image-2.jpg
+      aspect_ratio: "2:1"
+      card_mod:
+        style: |
+          ha-card {
+            border: none;
+            box-shadow: none;
+            background: #070708;
+            border-radius: 0;
+            overflow: visible;
+          }
+      elements:
+        - type: custom:button-card
+          tap_action:
+            action: none
+          hold_action:
+            action: none
+          show_icon: false
+          show_name: false
+          show_label: true
+          label: |
+            [[[
+              const iso = states['sensor.vehicle_battery_level']?.last_changed;
+              if (!iso) return '–';
+              const s = Math.max(0, Math.floor((Date.now() - new Date(iso).getTime()) / 1000));
+              if (s < 60) return `${s}s ago`;
+              if (s < 3600) return `${Math.floor(s / 60)} min ago`;
+              if (s < 86400) return `${Math.floor(s / 3600)}h ago`;
+              return `${Math.floor(s / 86400)}d ago`;
+            ]]]
+          styles:
+            card:
+              - background: none
+              - background-color: transparent
+              - box-shadow: none
+              - padding: 0
+              - width: max-content
+              - overflow: visible
+              - --ha-card-border-width: 0px
+            label:
+              - color: rgba(244,244,245,0.55)
+              - font-size: 11px
+              - font-weight: 500
+              - justify-self: start
+              - white-space: nowrap
+              - text-shadow: 0 1px 8px rgba(0,0,0,0.55)
+          style:
+            top: 12px
+            left: 14px
+            transform: none
+            overflow: visible
+        - type: custom:button-card
+          tap_action:
+            action: none
+          hold_action:
+            action: none
+          show_icon: false
+          show_name: true
+          show_label: true
+          name: |
+            [[[
+              const soc = parseFloat(String(states['sensor.vehicle_battery_level']?.state || '0'));
+              return isNaN(soc) ? '–%' : `${soc.toFixed(0)}%`;
+            ]]]
+          label: |
+            [[[
+              const shift = String(states['sensor.vehicle_shift_state']?.state || '').toUpperCase();
+              const map = { P: 'Parked', D: 'Driving', R: 'Reverse', N: 'Neutral' };
+              const car = states['input_text.tesla_car_name']?.state || 'tesla';
+              const locked = states['lock.' + car + '_lock']?.state === 'locked';
+              const status = map[shift] || (states['binary_sensor.vehicle_status']?.state === 'on' ? 'Awake' : 'Asleep');
+              return `${status} · ${locked ? 'Locked' : 'Unlocked'}`;
+            ]]]
+          styles:
+            card:
+              - background: none
+              - background-color: transparent
+              - box-shadow: none
+              - padding: 0
+              - width: max-content
+              - overflow: visible
+              - --ha-card-border-width: 0px
+            name:
+              - font-size: 28px
+              - font-weight: 600
+              - letter-spacing: -0.04em
+              - justify-self: end
+              - white-space: nowrap
+              - text-shadow: 0 1px 8px rgba(0,0,0,0.55)
+              - color: |
+                  [[[
+                    const soc = parseFloat(String(states['sensor.vehicle_battery_level']?.state || '0'));
+                    if (isNaN(soc)) return '#f4f4f5';
+                    if (soc >= 70) return '#6ee7b7';
+                    if (soc >= 25) return '#fbbf24';
+                    return '#f87171';
+                  ]]]
+            label:
+              - color: rgba(244,244,245,0.62)
+              - font-size: 11px
+              - font-weight: 500
+              - justify-self: end
+              - margin-top: 2px
+              - white-space: nowrap
+              - text-shadow: 0 1px 8px rgba(0,0,0,0.55)
+          style:
+            top: 10px
+            left: auto
+            right: 14px
+            width: auto
+            transform: none
+            overflow: visible
+
+  mid: |
+    [[[
+      const unitSys = states['input_select.tesla_unit_system']?.state || 'Metric (km, °C, bar)';
+      const isMi = unitSys !== 'Metric (km, °C, bar)';
+      const unit = isMi ? 'mi' : 'km';
+      const conv = (km) => isMi ? km * 0.621371 : km;
+      const soc = parseFloat(String(states['sensor.vehicle_battery_level']?.state || '0'));
+      const rawRange = String(states['sensor.vehicle_battery_range']?.state || '');
+      const rangeKm = (!rawRange || rawRange === 'unknown' || rawRange === 'unavailable')
+        ? soc * 4.1 : parseFloat(rawRange);
+      const adjPct = parseFloat(states['input_number.tesla_wheel_range_adjustment_pct']?.state || '0');
+      const range = Math.round(conv(rangeKm));
+      const calc = Math.round(conv(rangeKm * (1 - adjPct / 100)));
+      const odoRaw = String(states['sensor.vehicle_odometer']?.state || '');
+      const odoKm = parseFloat(odoRaw);
+      const odo = (!odoRaw || odoRaw === 'unknown' || isNaN(odoKm))
+        ? '–' : Math.round(conv(odoKm)).toLocaleString('hu-HU');
+      const car = states['input_text.tesla_car_name']?.state || 'tesla';
+      const doors = ['front_driver_door','front_passenger_door','rear_driver_door','rear_passenger_door'];
+      const anyOpen = doors.some(d => states[`binary_sensor.${car}_${d}`]?.state === 'on');
+      const cover = (suffix, fallback) => {
+        const v = states[`cover.${car}_${suffix}`]?.state;
+        return (!v || v === 'unknown' || v === 'unavailable') ? fallback : v;
+      };
+      const trunk = cover('trunk', cover('boot', '–'));
+      const frunk = cover('froot', '–');
+      const windows = cover('windows', '–');
+      const port = cover('charge_port_door', '–');
+      const socSafe = isNaN(soc) ? 0 : Math.min(100, Math.max(0, soc));
+      const color = socSafe >= 70 ? '#6ee7b7' : socSafe >= 25 ? '#fbbf24' : '#f87171';
+      const pill = (k, v) => `<div style="flex:1 1 90px;min-width:90px">
+        <div style="color:rgba(244,244,245,0.45);font-size:10px;font-weight:500;letter-spacing:0.08em;text-transform:uppercase">${k}</div>
+        <div style="color:#f4f4f5;font-size:15px;font-weight:600;margin-top:2px">${v}</div>
+      </div>`;
+      return `<div>
+        <div style="height:6px;background:rgba(255,255,255,0.08);border-radius:99px;overflow:hidden;margin:0 0 12px">
+          <div style="width:${socSafe}%;height:100%;background:${color};border-radius:99px"></div>
+        </div>
+        <div style="display:flex;flex-wrap:wrap;gap:10px 12px">
+          ${pill('Range', isNaN(range) ? `– ${unit}` : `${range} (${calc}) ${unit}`)}
+          ${pill('Odometer', `${odo} ${unit}`)}
+          ${pill('Doors', anyOpen ? 'Open' : 'Closed')}
+          ${pill('Trunk', trunk)}
+          ${pill('Frunk', frunk)}
+          ${pill('Windows', windows)}
+          ${pill('Charge port', port)}
+        </div>
+      </div>`;
+    ]]]
+
+  body:
+    card:
+      type: custom:button-card
+      show_icon: false
+      show_name: false
+      show_state: false
+      tap_action:
+        action: none
+      card_mod:
+        style: |
+          ha-card {
+            background: transparent;
+            border: none;
+            box-shadow: none;
+          }
+          @media (max-width: 450px) {
+            #container {
+              grid-template-areas: "info" "map" !important;
+              grid-template-columns: 1fr !important;
+            }
+          }
+      styles:
+        card:
+          - background: transparent
+          - box-shadow: none
+          - padding: 0
+          - --ha-card-border-width: 0px
+        grid:
+          - grid-template-areas: '"info map"'
+          - grid-template-columns: minmax(0, 1.05fr) minmax(0, 0.95fr)
+          - column-gap: 8px
+          - align-items: start
+        custom_fields:
+          info:
+            - grid-area: info
+            - padding: 0
+          map:
+            - grid-area: map
+            - padding: 0
+      custom_fields:
+        info: |
+          [[[
+            const unitSys = states['input_select.tesla_unit_system']?.state || 'Metric (km, °C, bar)';
+            const isMi = unitSys !== 'Metric (km, °C, bar)';
+            const isF = (unitSys || '').includes('°F');
+            const speedUnit = isMi ? 'mph' : 'km/h';
+            const tempUnit = isF ? '°' : '°';
+            const toTemp = (c) => {
+              const n = parseFloat(c);
+              if (isNaN(n)) return '–';
+              return (isF ? n * 9/5 + 32 : n).toFixed(1) + (isF ? '°F' : '°C');
+            };
+            const toSpeed = (kmh) => {
+              const n = parseFloat(kmh);
+              if (isNaN(n)) return `0 ${speedUnit}`;
+              return `${Math.round(isMi ? n * 0.621371 : n)} ${speedUnit}`;
+            };
+            const car = states['input_text.tesla_car_name']?.state || 'tesla';
+            const rate = toSpeed(states['sensor.vehicle_charge_rate']?.state);
+            const pwrRaw = parseFloat(String(states['sensor.vehicle_charger_power']?.state || '0'));
+            const pwr = isNaN(pwrRaw) ? '0 kW' : `${pwrRaw} kW`;
+            const out = toTemp(states['sensor.vehicle_outside_temperature']?.state);
+            const inn = toTemp(states['sensor.vehicle_inside_temperature']?.state);
+            const energy = states['sensor.vehicle_charge_energy_added']?.state;
+            const energyTxt = (!energy || energy === 'unknown' || energy === 'unavailable') ? '–' : `${energy} kWh`;
+            const charging = String(states['sensor.vehicle_charging']?.state || '–');
+            const locRaw = String(states['device_tracker.' + car + '_location']?.state || '');
+            const loc = !locRaw || locRaw === 'unknown' || locRaw === 'unavailable'
+              ? '–'
+              : locRaw === 'not_home' ? 'Away'
+              : locRaw === 'home' ? 'Home'
+              : locRaw.replace(/_/g, ' ');
+            const sentry = states['switch.' + car + '_sentry_mode']?.state === 'on' ? 'On' : 'Off';
+            const plugged = states['binary_sensor.vehicle_charge_cable']?.state === 'on' ? 'Plugged in' : 'Unplugged';
+            const upd = states['update.' + car + '_update'];
+            const ver = upd?.attributes?.installed_version || '–';
+            const ttf = String(states['sensor.vehicle_time_to_full_charge']?.state || '');
+            const ttfNum = parseFloat(ttf);
+            const ttfTxt = (!ttf || ttf === 'unknown' || ttf === 'unavailable' || isNaN(ttfNum) || ttfNum <= 0)
+              ? '–'
+              : (ttfNum >= 1 ? `${Math.floor(ttfNum)}h ${Math.round((ttfNum % 1) * 60)}m` : `${Math.round(ttfNum * 60)}m`);
+            const row = (k, v) => `<div style="display:flex;justify-content:space-between;gap:8px;padding:6px 0;border-bottom:1px solid rgba(255,255,255,0.06)">
+              <span style="color:rgba(244,244,245,0.45);font-size:11px">${k}</span>
+              <span style="color:#f4f4f5;font-size:13px;font-weight:600;text-align:right">${v}</span>
+            </div>`;
+            return `<div style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:14px;padding:10px 12px">
+              ${row('Location', loc)}
+              ${row('Sentry', sentry)}
+              ${row('Cable', plugged)}
+              ${row('Charge rate', rate)}
+              ${row('Charge power', pwr)}
+              ${row('To full', ttfTxt)}
+              ${row('Outdoor', out)}
+              ${row('Cabin', inn)}
+              ${row('Software', ver)}
+              <div style="margin-top:10px;color:rgba(244,244,245,0.45);font-size:10px;letter-spacing:0.08em;text-transform:uppercase">Last charge</div>
+              <div style="color:#f4f4f5;font-size:16px;font-weight:600;margin-top:4px">${energyTxt}</div>
+              <div style="color:rgba(244,244,245,0.55);font-size:12px;margin-top:2px">${charging}</div>
+            </div>`;
+          ]]]
+        map:
+          card:
+            type: picture-elements
+            image: media-source://media_source/local/teslaTopDown.png
+            card_mod:
+              style: |
+                ha-card {
+                  background: transparent;
+                  border: none;
+                  box-shadow: none;
+                  overflow: visible;
+                }
+            elements:
+              - type: custom:button-card
+                show_icon: false
+                show_name: false
+                show_label: true
+                tap_action:
+                  action: none
+                label: |
+                  [[[
+                    const unitSys = states['input_select.tesla_unit_system']?.state || 'Metric (km, °C, bar)';
+                    const psi = (unitSys || '').includes('psi');
+                    const raw = parseFloat(String(states['sensor.vehicle_tyre_pressure_front_left']?.state || ''));
+                    if (isNaN(raw)) return '–';
+                    const v = psi ? raw * 14.5038 : raw;
+                    return `${v.toFixed(psi ? 0 : 2)}`;
+                  ]]]
+                styles:
+                  card:
+                    - background: transparent
+                    - box-shadow: none
+                    - padding: 0
+                    - --ha-card-border-width: 0px
+                  label:
+                    - color: "#f4f4f5"
+                    - font-size: 12px
+                    - font-weight: 600
+                    - text-shadow: 0 1px 4px #000
+                    - justify-self: start
+                style:
+                  top: 16%
+                  left: 8%
+                  transform: none
+              - type: custom:button-card
+                show_icon: false
+                show_name: false
+                show_label: true
+                tap_action:
+                  action: none
+                label: |
+                  [[[
+                    const unitSys = states['input_select.tesla_unit_system']?.state || 'Metric (km, °C, bar)';
+                    const psi = (unitSys || '').includes('psi');
+                    const raw = parseFloat(String(states['sensor.vehicle_tyre_pressure_front_right']?.state || ''));
+                    if (isNaN(raw)) return '–';
+                    const v = psi ? raw * 14.5038 : raw;
+                    return `${v.toFixed(psi ? 0 : 2)}`;
+                  ]]]
+                styles:
+                  card:
+                    - background: transparent
+                    - box-shadow: none
+                    - padding: 0
+                    - --ha-card-border-width: 0px
+                  label:
+                    - color: "#f4f4f5"
+                    - font-size: 12px
+                    - font-weight: 600
+                    - text-shadow: 0 1px 4px #000
+                    - justify-self: end
+                style:
+                  top: 16%
+                  left: 78%
+                  transform: none
+              - type: custom:button-card
+                show_icon: false
+                show_name: false
+                show_label: true
+                tap_action:
+                  action: none
+                label: |
+                  [[[
+                    const unitSys = states['input_select.tesla_unit_system']?.state || 'Metric (km, °C, bar)';
+                    const psi = (unitSys || '').includes('psi');
+                    const raw = parseFloat(String(states['sensor.vehicle_tyre_pressure_rear_left']?.state || ''));
+                    if (isNaN(raw)) return '–';
+                    const v = psi ? raw * 14.5038 : raw;
+                    return `${v.toFixed(psi ? 0 : 2)}`;
+                  ]]]
+                styles:
+                  card:
+                    - background: transparent
+                    - box-shadow: none
+                    - padding: 0
+                    - --ha-card-border-width: 0px
+                  label:
+                    - color: "#f4f4f5"
+                    - font-size: 12px
+                    - font-weight: 600
+                    - text-shadow: 0 1px 4px #000
+                    - justify-self: start
+                style:
+                  top: 78%
+                  left: 8%
+                  transform: none
+              - type: custom:button-card
+                show_icon: false
+                show_name: false
+                show_label: true
+                tap_action:
+                  action: none
+                label: |
+                  [[[
+                    const unitSys = states['input_select.tesla_unit_system']?.state || 'Metric (km, °C, bar)';
+                    const psi = (unitSys || '').includes('psi');
+                    const raw = parseFloat(String(states['sensor.vehicle_tyre_pressure_rear_right']?.state || ''));
+                    if (isNaN(raw)) return '–';
+                    const v = psi ? raw * 14.5038 : raw;
+                    return `${v.toFixed(psi ? 0 : 2)}`;
+                  ]]]
+                styles:
+                  card:
+                    - background: transparent
+                    - box-shadow: none
+                    - padding: 0
+                    - --ha-card-border-width: 0px
+                  label:
+                    - color: "#f4f4f5"
+                    - font-size: 12px
+                    - font-weight: 600
+                    - text-shadow: 0 1px 4px #000
+                    - justify-self: end
+                style:
+                  top: 78%
+                  left: 78%
+                  transform: none
+              - type: custom:button-card
+                entity: script.tesla_lock_toggle
+                show_name: false
+                show_state: false
+                size: 18px
+                icon: |
+                  [[[
+                    const car = states['input_text.tesla_car_name']?.state || 'tesla';
+                    return states['lock.' + car + '_lock']?.state === 'locked' ? 'mdi:lock' : 'mdi:lock-open-variant';
+                  ]]]
+                tap_action:
+                  action: call-service
+                  service: script.tesla_lock_toggle
+                styles:
+                  card:
+                    - background: rgba(0,0,0,0.45)
+                    - border: 1px solid rgba(255,255,255,0.18)
+                    - border-radius: 50%
+                    - box-shadow: 0 4px 12px rgba(0,0,0,0.4)
+                    - width: 36px
+                    - height: 36px
+                    - --ha-card-border-width: 0px
+                  icon:
+                    - width: 18px
+                    - color: |
+                        [[[
+                          const car = states['input_text.tesla_car_name']?.state || 'tesla';
+                          return states['lock.' + car + '_lock']?.state === 'locked' ? '#6ee7b7' : '#f87171';
+                        ]]]
+                style:
+                  top: 48%
+                  left: 50%
+                  transform: translate(-50%, -50%)
+
+grid_options:
+  columns: 12
+  rows: auto
