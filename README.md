@@ -308,10 +308,18 @@ Fleet Cloud API directly with your vehicle's real GPS coordinates, via
 `configuration.yaml`).
 
 This workaround needs a Tesla OAuth **access token** in `secrets.yaml`
-(`tesla_fleet_token`). Unlike the official integration (which refreshes its
-own token internally, automatically, forever), this token is a static copy
-and **expires roughly every 8 hours** — after which "Close Windows" starts
-failing with an HTTP 401 error in your logs. When that happens, refresh it:
+(`tesla_fleet_token`). The official integration refreshes its own token
+automatically. This copy does not: it **expires roughly every 8 hours**, and
+then "Close Windows" fails with `Status: 401 … token expired`. This project
+keeps the copy fresh automatically (see below). To refresh it **right now**,
+with no SSH and no restart:
+
+- **Analytics dashboard → Settings → 🔑 Tesla API Token → "Refresh Tesla API
+  token"**, or
+- **Developer Tools → Actions →** `script.tesla_refresh_fleet_token` → Perform action.
+
+You'll get a notification with the result and how long the token is still
+valid. If you prefer the shell, the underlying script also works by hand:
 
 ```bash
 # Copy scripts/refresh_tesla_token.sh onto your HA host first (via the
@@ -324,7 +332,8 @@ bash refresh_tesla_token.sh
 # 2. Apply it (backs up secrets.yaml first, then updates the token):
 bash refresh_tesla_token.sh --apply
 
-# 3. Apply it and restart Home Assistant Core in the same step:
+# 3. Apply it and restart Home Assistant Core in the same step (not needed —
+#    Developer Tools → YAML → "Scripts" reload is enough to apply it):
 bash refresh_tesla_token.sh --apply --restart
 
 # 4. Keep more/fewer old secrets.yaml.bak-<timestamp> backups (default: 2):
@@ -338,12 +347,16 @@ stores its live, already-refreshed token — the file itself isn't exposed via
 any Home Assistant API, so this has to run locally on the HA host), and
 writes it into `secrets.yaml` for you. Requires `python3` or `jq` to be
 available in your SSH/Terminal add-on shell (most images have at least one).
-A full Home Assistant restart is required afterwards for the new token to
-take effect (the script can do this for you with `--restart`, if the `ha`
-CLI is available in your shell).
+After a manual run, apply the new token with **Developer Tools → YAML →
+Scripts** (reload) — `secrets.yaml` is re-read on a scripts reload, so a full
+restart isn't needed. It also prints how long the token is still valid; if
+the integration's own token has already expired (it only refreshes on its
+next poll, every ~10 minutes), `--apply` refuses with exit code 3 instead of
+copying a dead token — run `script.tesla_refresh_fleet_token` instead, which
+makes the integration refresh first.
 
 Each `--apply` run backs up `secrets.yaml` first, to
-`secrets.yaml.bak-<timestamp>`. Since this runs automatically every 6 hours
+`secrets.yaml.bak-<timestamp>`. Since this runs automatically every hour
 (see below), the script automatically prunes old backups down to the 2 most
 recent by default right after each run — no manual cleanup needed, and no
 unbounded pile of `.bak-*` files. Adjust with `--keep-backups N`, or
@@ -355,19 +368,22 @@ unbounded pile of `.bak-*` files. Adjust with `--keep-backups N`, or
 > occasionally fail to close windows if the "too far from vehicle" bug is
 > triggered depending on your Tesla Fleet integration version.
 
-**Automating this refresh:** this project also ships a
-`tesla_refresh_fleet_token` automation (`packages/tesla/automations.yaml`)
-that runs the same script automatically every 6 hours via a `shell_command:`
-entry (`configuration.yaml`). This works with **no separate SSH step** —
-`shell_command` executes inside the Home Assistant Core container itself,
-which shares the same `/config` filesystem the SSH/Terminal add-on sees. It
-does **not** auto-restart Home Assistant (a surprise restart on a timer could
-interrupt whatever you're doing) — instead, it sends a one-time persistent
-notification only when the token actually changed, telling you a restart
-would apply it whenever convenient. The script is idempotent: re-running it
-with an unchanged token makes no backup and no edit, so this schedule can
-run indefinitely with zero manual upkeep beyond occasionally restarting HA
-when notified.
+**How the refresh is automated:** `script.tesla_refresh_fleet_token`
+(`packages/tesla/scripts.yaml`) does the whole job inside Home Assistant:
+it makes the Tesla Fleet integration refresh its own token if it has
+expired, runs the script above through a `shell_command:` entry
+(`configuration.yaml`; it runs inside the HA Core container, which shares
+the same `/config` folder, so no SSH step is needed), and then reloads
+scripts so the new token is used immediately. It runs:
+
+- **every hour** via the `tesla_refresh_fleet_token` automation
+  (`packages/tesla/automations.yaml`), silently unless something fails;
+- **automatically when Close Windows gets a 401**: it refreshes the token and
+  re-sends Close Windows once;
+- **on demand** from the Settings tab button or Developer Tools.
+
+The script is idempotent: an unchanged token causes no write, no backup and
+no reload, so the hourly schedule needs no upkeep.
 
 > ⚠️ **Getting `command not found` or `invalid option name: pipefail` when
 > running the script?** The file picked up Windows-style CRLF line endings
@@ -447,6 +463,8 @@ left alone by default (pass `--include-labels` to rename those too). Run
 | Settings reset to their defaults after every restart (electricity rate, home/work rate names, currency, wheel size, tire pressure, smart-charge window, etc.) | This was a real bug in this project's `configuration.yaml`, fixed as of this commit — see "Why my settings used to reset on restart" below. If you're still seeing it, make sure you've pulled the latest version of this repo. |
 | Log shows `Received invalid sensor state: unknown for entity sensor.vehicle_...` | Harmless and already fixed as of this commit — happened whenever the car went to sleep/offline. Pull the latest version of this repo; no action needed on your end otherwise. |
 | `scripts/refresh_tesla_token.sh` fails with `$'\r': command not found` / `set: pipefail: invalid option name` | The script file has Windows-style CRLF line endings, which break on Linux. See "Fixing CRLF line endings" below. |
+| Notification `Tesla — Close Windows failed. Status: 401. Response: {'error': 'token expired (401)'}`, and restarting Home Assistant doesn't fix it | The token copy in `secrets.yaml` is older than the integration's current token. Restarting doesn't copy the new one over. Run `script.tesla_refresh_fleet_token` (no restart). See "Close Windows: 401 token expired" below. |
+| Notification `Tesla token refresh failed … exited with code 3` | The Tesla Fleet integration's own token was still expired when the copy ran. Wait a minute and run `script.tesla_refresh_fleet_token` again. If it keeps happening, open **Settings → Devices & Services → Tesla Fleet** and re-authenticate if HA asks you to. |
 
 > 🧹 **"Start clean" — wipe and re-create all Tesla entities from scratch:**
 > If you've renamed things, run a cleanup script, or just want a truly fresh
@@ -512,6 +530,30 @@ left alone by default (pass `--include-labels` to rename those too). Run
 > as of this commit, and a `.gitattributes` rule now keeps `*.sh` files
 > normalized to LF automatically — but if you edit or re-upload any shell
 > script from a Windows machine, re-run this fix afterward.
+
+> 🔑 **Close Windows: 401 token expired** (`Status: 401. Response:
+> {'error': 'token expired (401)'}`, sometimes still there after a
+> restart): Close Windows uses a *copy* of the Tesla token kept in
+> `secrets.yaml`. The Tesla Fleet integration refreshes its own token about
+> every 8 hours. Until that newer token is copied into `secrets.yaml`, the
+> copy is dead, and a restart doesn't copy it. Refresh it manually, with no
+> restart:
+> - **Analytics → Settings → 🔑 Tesla API Token → "Refresh Tesla API token"**, or
+> - **Developer Tools → Actions →** `script.tesla_refresh_fleet_token` → **Perform action**.
+>
+> A "Tesla token refreshed" notification confirms it and shows how long the
+> token is valid. Then tap Close Windows again. Without the Settings
+> button (e.g. before updating to this version), do it from the **SSH/Terminal**
+> console instead:
+> ```bash
+> # Copy the integration's current token into secrets.yaml:
+> bash /config/scripts/refresh_tesla_token.sh --apply
+> # If it says "EXPIRED … exit code 3", wait ~10 minutes (the integration
+> # refreshes on its next poll) and run it again.
+> ```
+> …then **Developer Tools → YAML → Scripts** (reload) to apply it. After
+> updating, this is handled automatically: the copy is refreshed hourly, and
+> Close Windows refreshes and retries by itself when it gets a 401.
 
 ---
 

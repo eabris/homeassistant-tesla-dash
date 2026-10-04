@@ -20,6 +20,18 @@
 # entry, as data.token.access_token. That token expires roughly every
 # ~8 hours, so this script needs to be re-run periodically.
 #
+# EASIEST WAY TO RUN IT (no SSH, no restart):
+# Run script.tesla_refresh_fleet_token from Home Assistant (Analytics →
+# Settings → "Refresh Tesla API token", or Developer Tools → Actions). It
+# makes the integration refresh its token first, runs this script with
+# --apply, then reloads scripts so the new token is used immediately. The
+# tesla_refresh_fleet_token automation does the same every hour, and
+# "Close Windows" does it automatically when it gets a 401.
+#
+# EXIT CODES: 0 = OK (updated or unchanged), 1 = setup/usage error,
+# 3 = the integration's own stored token is already expired (nothing fresh
+# to copy yet — see the expiry check below).
+#
 # WHERE TO RUN THIS:
 # This must run *on the Home Assistant host itself* (or wherever /config is
 # mounted) — e.g. via the "Terminal & SSH" add-on's shell, NOT from your
@@ -30,7 +42,7 @@
 # USAGE (run inside the HA host's SSH/Terminal shell):
 #   bash refresh_tesla_token.sh                # dry run: prints masked token, changes nothing
 #   bash refresh_tesla_token.sh --apply         # writes the token into /config/secrets.yaml
-#   bash refresh_tesla_token.sh --apply --restart   # also restarts Home Assistant afterwards
+#   bash refresh_tesla_token.sh --apply --restart   # also restarts Home Assistant afterwards (a scripts reload is enough)
 #   bash refresh_tesla_token.sh --config-path /config --apply   # custom /config path
 #   bash refresh_tesla_token.sh --apply --keep-backups 5   # keep 5 old backups instead of 2
 #   bash refresh_tesla_token.sh --apply --keep-backups 0   # don't create a backup at all
@@ -39,7 +51,7 @@
 # - Dry-run by default; nothing is written unless --apply is passed.
 # - Backs up secrets.yaml to secrets.yaml.bak-<timestamp> before editing.
 #   Since this runs on a schedule (see tesla_refresh_fleet_token automation,
-#   every 6h) these would otherwise pile up forever — only the
+#   every hour) these would otherwise pile up forever — only the
 #   --keep-backups most recent are kept (default: 2), older ones are
 #   deleted automatically right after each successful --apply run. Pass
 #   --keep-backups 0 to skip creating a backup at all (not recommended).
@@ -100,24 +112,33 @@ if [[ ! -f "$ENTRIES_FILE" ]]; then
 fi
 
 TOKEN=""
+EXPIRES_AT=""
 
+# Both parsers print two lines: the access_token, then its expires_at as a
+# whole-number Unix timestamp (0 if missing — the integration also sets it
+# to 0 on purpose when Tesla rejects the token, to force a refresh).
 # Preferred: python3 (robust JSON parsing, handles nested structure safely).
 if command -v python3 >/dev/null 2>&1; then
-  TOKEN="$(python3 - "$ENTRIES_FILE" <<'PYEOF'
+  TOKEN_INFO="$(python3 - "$ENTRIES_FILE" <<'PYEOF'
 import json, sys
 with open(sys.argv[1]) as f:
     data = json.load(f)
 for entry in data.get("data", {}).get("entries", []):
     if entry.get("domain") == "tesla_fleet":
-        token = entry.get("data", {}).get("token", {}).get("access_token")
-        if token:
-            print(token)
+        token = entry.get("data", {}).get("token", {})
+        if token.get("access_token"):
+            print(token["access_token"])
+            print(int(token.get("expires_at") or 0))
             break
 PYEOF
 )"
+  TOKEN="$(printf '%s\n' "$TOKEN_INFO" | sed -n 1p)"
+  EXPIRES_AT="$(printf '%s\n' "$TOKEN_INFO" | sed -n 2p)"
 # Fallback: jq (also handles nested JSON safely).
 elif command -v jq >/dev/null 2>&1; then
-  TOKEN="$(jq -r '.data.entries[] | select(.domain=="tesla_fleet") | .data.token.access_token // empty' "$ENTRIES_FILE" | head -n1)"
+  TOKEN_INFO="$(jq -r '[.data.entries[] | select(.domain=="tesla_fleet") | .data.token | select(.access_token)] | first // empty | .access_token, ((.expires_at // 0) | floor)' "$ENTRIES_FILE")"
+  TOKEN="$(printf '%s\n' "$TOKEN_INFO" | sed -n 1p)"
+  EXPIRES_AT="$(printf '%s\n' "$TOKEN_INFO" | sed -n 2p)"
 else
   echo "ERROR: neither python3 nor jq is available in this shell." >&2
   echo "Install one (e.g. 'apk add python3' or 'apk add jq' on the HAOS SSH/Terminal add-on) and re-run." >&2
@@ -138,10 +159,38 @@ else
   echo "Token found: $MASKED (pass --show to print in full)"
 fi
 
+# Expiry check. The Tesla Fleet integration only refreshes its token when it
+# next talks to the API (it polls every ~10 min), so for a few minutes after
+# the ~8h lifetime ends, the stored token can already be expired. Copying an
+# expired token into secrets.yaml can't help, so --apply refuses (exit 3).
+# script.tesla_refresh_fleet_token avoids this by forcing an integration poll
+# (homeassistant.update_entity) right before it runs this script.
+TOKEN_EXPIRED=0
+if [[ "$EXPIRES_AT" =~ ^[0-9]+$ && "$EXPIRES_AT" -gt 0 ]]; then
+  REMAINING=$(( EXPIRES_AT - $(date +%s) ))
+  if (( REMAINING > 0 )); then
+    echo "Expiry: valid for another $(( REMAINING / 3600 ))h $(( (REMAINING % 3600) / 60 ))m."
+  else
+    AGO=$(( -REMAINING ))
+    echo "Expiry: EXPIRED $(( AGO / 3600 ))h $(( (AGO % 3600) / 60 ))m ago (the Tesla Fleet integration has not refreshed it yet)."
+    TOKEN_EXPIRED=1
+  fi
+else
+  echo "Expiry: EXPIRED (expires_at is 0/missing — the Tesla Fleet integration invalidated it and will refresh on its next API call)."
+  TOKEN_EXPIRED=1
+fi
+
 if [[ "$APPLY" -eq 0 ]]; then
   echo
   echo "Dry run — nothing written. Re-run with --apply to update $SECRETS_FILE."
   exit 0
+fi
+
+if [[ "$TOKEN_EXPIRED" -eq 1 ]]; then
+  echo "ERROR: the Tesla Fleet integration's own token is expired, so there is nothing fresh to copy." >&2
+  echo "Run script.tesla_refresh_fleet_token (it forces the integration to refresh first), or wait ~10 min and retry." >&2
+  echo "If this keeps happening, check Settings → Devices & Services → Tesla Fleet for a 'Reconfigure/re-authenticate' prompt." >&2
+  exit 3
 fi
 
 if [[ ! -f "$SECRETS_FILE" ]]; then
@@ -151,12 +200,11 @@ fi
 
 # Idempotency check: skip the write entirely (no backup, no "Updated" message)
 # if the token in secrets.yaml already matches what we just fetched. This
-# matters for scheduled/unattended runs (see the tesla_refresh_fleet_token
-# automation in packages/tesla/automations.yaml) — that automation greps
-# this script's stdout for the literal string "Updated tesla_fleet_token" to
-# decide whether to notify you that a restart would help; without this
-# check it would fire that notification every single run, even when nothing
-# actually changed.
+# matters for scheduled/unattended runs (see script.tesla_refresh_fleet_token
+# in packages/tesla/scripts.yaml) — that script greps this script's stdout
+# for the literal string "Updated tesla_fleet_token" to decide whether a
+# scripts reload is needed; without this check it would reload scripts (and
+# create a backup) on every single run, even when nothing actually changed.
 ## NOTE: the `|| true` is required here, not cosmetic — under `set -eo
 ## pipefail`, if secrets.yaml has no tesla_fleet_token line yet (e.g. the
 ## very first run on a fresh install), grep exits 1 (no match), pipefail
@@ -187,7 +235,7 @@ else
 fi
 echo "Updated tesla_fleet_token in $SECRETS_FILE."
 
-# Retention: this runs every ~6h via the tesla_refresh_fleet_token
+# Retention: this runs hourly via the tesla_refresh_fleet_token
 # automation, so without pruning, secrets.yaml.bak-<timestamp> files pile
 # up forever. Keep only the $KEEP_BACKUPS most recent (newest-first sort),
 # deleting the rest -- this also cleans up any pile that had already
@@ -204,9 +252,10 @@ if [[ "$RESTART" -eq 1 ]]; then
     echo "Restarting Home Assistant Core via 'ha core restart'..."
     ha core restart
   else
-    echo "WARNING: 'ha' CLI not found in this shell — restart Home Assistant manually" >&2
-    echo "(Settings → System → Restart) for the new token to take effect." >&2
+    echo "WARNING: 'ha' CLI not found in this shell — reload scripts instead" >&2
+    echo "(Developer Tools → YAML → Scripts) for the new token to take effect." >&2
   fi
 else
-  echo "Restart Home Assistant (Settings → System → Restart) for the new token to take effect."
+  echo "Reload scripts (Developer Tools → YAML → Scripts) for the new token to take effect — no restart needed."
+  echo "(script.tesla_refresh_fleet_token does this reload for you automatically.)"
 fi

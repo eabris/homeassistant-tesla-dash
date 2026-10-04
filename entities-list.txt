@@ -367,6 +367,8 @@ input_text.tesla_rate_work_season                      | input_text    | setting
 #   - automation.tesla_smart_charge_start / _stop (off-peak window smart charging)
 #   - automation.tesla_wheel_size_auto_adjust (auto-fills tire pressure + range
 #     adjustment % when input_select.tesla_wheel_size changes)
+#   - automation.tesla_refresh_fleet_token (hourly at :17; runs
+#     script.tesla_refresh_fleet_token quietly -- notifies only on failure)
 #
 # Added local scripts in scripts.yaml (all vehicle-name-agnostic via
 # input_text.tesla_car_name unless noted):
@@ -374,7 +376,12 @@ input_text.tesla_rate_work_season                      | input_text    | setting
 #   - script.tesla_set_departure_now_plus_2h
 #   - script.tesla_lock_toggle / tesla_climate_toggle / tesla_frunk_open / tesla_trunk_open
 #   - script.tesla_flash_lights / tesla_sentry_toggle / tesla_wake
-#   - script.tesla_windows_vent / tesla_windows_close (GPS-workaround, needs secrets.yaml)
+#   - script.tesla_windows_vent / tesla_windows_close (GPS-workaround, needs secrets.yaml;
+#     on a 401 "token expired" reply it hands off to tesla_refresh_fleet_token and retries once)
+#   - script.tesla_refresh_fleet_token (forces the tesla_fleet integration to refresh its
+#     OAuth token, copies it into secrets.yaml via shell_command.refresh_tesla_token, then
+#     script.reload -- no HA restart. Fields: quiet, retry_window_close. Button on
+#     Analytics -> Settings -> "Tesla API Token")
 #   - script.tesla_defrost_toggle / tesla_charge_start / tesla_charge_stop / tesla_unlock_port
 #   - script.tesla_climate_temp_up / tesla_climate_temp_down
 #   - script.tesla_seat_heater_next_fl/fr/rl/rr/3l/3r / tesla_steering_heater_next

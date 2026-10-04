@@ -1401,3 +1401,23 @@ views:
             name: Active days
           - entity: input_text.tesla_rate_work_season
             name: Season
+
+      # Tesla Fleet API token (Close Windows GPS workaround)
+      - type: markdown
+        content: |
+          ## 🔑 Tesla API Token
+
+          **Close Windows** sends its command to Tesla directly, using a copy
+          of the Tesla Fleet token stored in `secrets.yaml`. That copy expires
+          about every 8 hours. It refreshes itself every hour and whenever
+          Close Windows gets a 401 error. Tap below to refresh it now. No
+          restart needed; the result appears in your notifications.
+
+      - type: custom:mushroom-entity-card
+        entity: script.tesla_refresh_fleet_token
+        name: "Refresh Tesla API token"
+        icon: mdi:key-change
+        secondary_info: last-changed
+        tap_action:
+          action: call-service
+          service: script.tesla_refresh_fleet_token

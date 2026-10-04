@@ -1131,6 +1131,13 @@ adding `response_variable: tesla_window_close_response` to the
 reason instead of silent failure, without spamming a notification on every
 successful call.
 
+> **Superseded by Section 20:** the 6-hourly automation +
+> "restart HA when notified" design below left `secrets.yaml` stale for
+> hours and couldn't be fixed by a restart. The automation now runs hourly
+> and calls `script.tesla_refresh_fleet_token`, which forces an integration
+> token refresh, copies the token, and runs `script.reload` (no restart).
+> The paragraphs below are kept as history.
+
 **Automated periodic refresh (`tesla_refresh_fleet_token` automation):**
 rather than relying on the user to notice a 401 and run the script by hand,
 `packages/tesla/automations.yaml` defines a `time_pattern` trigger
@@ -1859,3 +1866,97 @@ when run on the HA host/container, immediately suspect CRLF line endings
 first (`file scripts/<name>.sh` — look for "with CRLF line terminators")
 before investigating actual script logic; fix with `sed -i 's/\r$//'
 <file>`, never by manually rewriting the script's contents.
+
+### 19. Standing Workflow Rule — Document Every Recurring/Returning Error
+
+**User instruction (permanent):** whenever an error from the user's running
+system is diagnosed and fixed (log line, notification, shell-script exit
+code, HA repair, etc.), document it in **both** places, in the same change
+as the fix:
+
+1. **`README.md` → 🛠️ Troubleshooting:** add a table row quoting the exact
+   error text the user sees + a one-line fix. If the user needs commands
+   (SSH console, Developer Tools steps), add a callout below the table with
+   copy-paste-ready commands that use real `/config/...` paths and
+   placeholders only (Section 10).
+2. **`agents.md`:** add a numbered section with the symptom (exact error
+   text), the confirmed root cause (cite HA core/integration source when it
+   was checked), the fix, and a "general rule going forward" so future
+   agents recognize the same failure.
+
+Also update `entities-list.txt` if the fix adds or changes an entity,
+script or automation (Section 1).
+
+### 20. Close Windows `401 token expired` That a Restart Doesn't Fix
+
+**Symptom:** notification `Tesla — Close Windows failed. Status: 401.
+Response: {'error': 'token expired (401)'}`, repeating, and a Home
+Assistant restart only sometimes fixed it.
+
+**Root cause (confirmed against HA core source, `tesla_fleet/__init__.py`,
+`tesla_fleet/coordinator.py`, `helpers/config_entry_oauth2_flow.py`,
+`config.py`, `script/__init__.py`):**
+* The integration passes `access_token=_get_access_token` (a callable) to
+  `TeslaFleetApi`, so every API call runs
+  `OAuth2Session.async_ensure_token_valid()`, which refreshes the token when
+  `expires_at < now + 20 s`. The vehicle coordinator polls every 600 s with
+  the free `api.vehicle()` call (doesn't wake the car). So the integration's
+  own token in `.storage/core.config_entries` is refreshed at most ~10 min
+  after it expires, and saved ~1 s later (`config_entries.SAVE_DELAY = 1`).
+* `script.tesla_windows_close` gets the token from
+  `!secret tesla_fleet_token`. `!secret` is resolved once, when the YAML
+  loads. Copying a newer token into `secrets.yaml` does nothing until that
+  YAML is loaded again.
+* The old design copied the token every **6 h**. The token lives ~8 h, so
+  the copy in `secrets.yaml` could be dead for up to ~6 h. The old design
+  also told the user to restart HA to apply it.
+* **Why a restart didn't reliably help:** a restart re-reads `secrets.yaml`
+  exactly as it is, and nothing copies the integration's newer token into it
+  at startup. It only "worked" when the 6-hourly copy had happened to write a
+  still-valid token since the last load.
+
+**Fix applied:**
+* New `script.tesla_refresh_fleet_token` (`packages/tesla/scripts.yaml`,
+  `mode: queued`, fields `quiet` and `retry_window_close`):
+  1. `homeassistant.update_entity` on the **real** Fleet entity
+     `sensor.<car>_battery_level` (not a `vehicle_*` alias). This forces a
+     coordinator poll, so the integration refreshes its token if needed.
+  2. 5 s delay so the config-entry save reaches the file.
+  3. `shell_command.refresh_tesla_token`.
+  4. `script.reload` if the output says `Updated tesla_fleet_token`.
+     `async_hass_config_yaml` builds a fresh `Secrets` object on every
+     reload, so the new value is picked up. `_async_process_config` only
+     removes and re-creates scripts whose `raw_config` changed. Only
+     `tesla_windows_close` embeds the secret, so only it is reloaded; the
+     refresh script keeps running.
+  5. Notification (`notification_id: tesla_fleet_token`): always on failure,
+     on success only if not `quiet`.
+* `script.tesla_windows_close`: new field `allow_retry` (default true). On
+  HTTP 401 it calls `script.turn_on` (non-blocking) for the refresh script
+  with `retry_window_close: true`. After reloading, the refresh script calls
+  `tesla_windows_close` again once with `allow_retry: false`. **This must be
+  a non-blocking hand-off:** the scripts reload removes and re-creates
+  `tesla_windows_close`, which would cancel it if it were still waiting on a
+  blocking call. `rest_command` returns the response for 4xx (no exception)
+  when `response_variable` is set, so the 401 is detectable.
+* `automation.tesla_refresh_fleet_token`: now runs hourly
+  (`time_pattern minutes: 17`) and calls the script with `quiet: true`. It no
+  longer tells the user to restart.
+* `scripts/refresh_tesla_token.sh`: now also reads `expires_at` and prints
+  `Expiry: valid for another Xh Ym.` or `Expiry: EXPIRED …`. If the
+  integration's own token is already expired (or `expires_at` is 0, which the
+  coordinator sets when Tesla rejects a token), `--apply` refuses with
+  **exit 3** instead of copying a dead token. The script's restart hint now
+  says to reload scripts. Tested on the python3 and jq paths with fake
+  `core.config_entries` files: valid, unchanged, expired, invalidated (0),
+  and first run.
+* Manual button: Analytics → Settings → "🔑 Tesla API Token"
+  (`custom:mushroom-entity-card` on `script.tesla_refresh_fleet_token`).
+
+**General rule going forward:** never tell the user to restart HA to apply
+a `secrets.yaml` change used only by scripts. `script.reload` re-reads
+secrets, and so does each integration's own reload (`rest_command.reload`
+exists too). Never copy the token with a plain refresh-token grant outside
+the integration: Tesla refresh tokens are single-use, so doing that would
+log the integration out. Always let the integration refresh it (force a poll
+with `homeassistant.update_entity`), then copy.

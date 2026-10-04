@@ -168,8 +168,25 @@ tesla_windows_close:
   # the "log is empty, nothing happens" symptom. response_variable below
   # captures the real response body so the notification shows the actual
   # reason instead of silently doing nothing.
+  #
+  # 401 "token expired": the token comes from `!secret tesla_fleet_token`,
+  # which is only read when scripts are loaded. When Tesla returns 401, this
+  # script hands off to script.tesla_refresh_fleet_token (non-blocking), which
+  # copies the integration's live token into secrets.yaml, reloads scripts
+  # (re-creating THIS script with the new token) and then calls it once more
+  # with allow_retry: false. It must be a hand-off, not a blocking call: the
+  # scripts reload removes and re-creates this script, which would cancel it
+  # mid-run.
+  fields:
+    allow_retry:
+      name: Allow automatic retry
+      description: On a 401 "token expired" reply, refresh the token and retry once.
+      default: true
+      selector:
+        boolean:
   sequence:
     - variables:
+        allow_retry: "{{ allow_retry | default(true) | bool }}"
         car: "{{ states('input_text.tesla_car_name') }}"
         lat: "{{ state_attr('device_tracker.' + states('input_text.tesla_car_name') + '_location', 'latitude') | float(0) }}"
         lon: "{{ state_attr('device_tracker.' + states('input_text.tesla_car_name') + '_location', 'longitude') | float(0) }}"
@@ -181,15 +198,117 @@ tesla_windows_close:
         lon: "{{ lon }}"
       response_variable: tesla_window_close_response
     - if: >-
-        {{ tesla_window_close_response.status | default(0) | int != 200
-           or not (tesla_window_close_response.content.response.result | default(false)) }}
+        {{ allow_retry and tesla_window_close_response.status | default(0) | int == 401 }}
+      then:
+        - action: script.turn_on
+          target:
+            entity_id: script.tesla_refresh_fleet_token
+          data:
+            variables:
+              retry_window_close: true
+      else:
+        - if: >-
+            {{ tesla_window_close_response.status | default(0) | int != 200
+               or not (tesla_window_close_response.content.response.result | default(false)) }}
+          then:
+            - action: persistent_notification.create
+              data:
+                title: "Tesla — Close Windows failed"
+                message: >-
+                  Status: {{ tesla_window_close_response.status | default('unknown') }}.
+                  Response: {{ tesla_window_close_response.content | default('No response body captured.') }}
+
+tesla_refresh_fleet_token:
+  alias: "Tesla Refresh Fleet API Token"
+  icon: mdi:key-change
+  mode: queued
+  max: 3
+  # Copies the Tesla Fleet integration's live OAuth token into secrets.yaml
+  # and applies it right away. No Home Assistant restart needed. Used by:
+  #   - the Analytics → Settings "Refresh Tesla API token" button (manual run)
+  #   - automation.tesla_refresh_fleet_token (hourly, quiet: true)
+  #   - script.tesla_windows_close on a 401 reply (retry_window_close: true)
+  # Steps:
+  #   1. homeassistant.update_entity on a REAL tesla_fleet entity (not a
+  #      vehicle_* alias) makes the integration poll now. Its OAuth session
+  #      refreshes the access token first if it has expired. Otherwise that
+  #      only happens on its next 10-minute poll. The poll uses Tesla's free
+  #      "vehicle" call and does not wake the car.
+  #   2. Wait for HA to write the refreshed token to
+  #      .storage/core.config_entries (it saves config entries ~1 s later).
+  #   3. shell_command.refresh_tesla_token copies it into secrets.yaml
+  #      (exit 3 = the integration's own token is still expired).
+  #   4. script.reload re-reads secrets.yaml. HA only re-creates scripts
+  #      whose config changed, so only tesla_windows_close (which embeds the
+  #      secret) is reloaded; this script keeps running.
+  # A plain restart does NOT reliably fix a 401: at startup secrets.yaml is
+  # read as-is, and nothing copies the integration's newer token into it.
+  fields:
+    quiet:
+      name: Quiet
+      description: Only notify on failure (used by the hourly automation).
+      default: false
+      selector:
+        boolean:
+    retry_window_close:
+      name: Retry Close Windows
+      description: Re-send Close Windows once after refreshing (used by its 401 handler).
+      default: false
+      selector:
+        boolean:
+  sequence:
+    - variables:
+        car: "{{ states('input_text.tesla_car_name') }}"
+        quiet: "{{ quiet | default(false) | bool }}"
+        retry_window_close: "{{ retry_window_close | default(false) | bool }}"
+    - action: homeassistant.update_entity
+      target:
+        entity_id: "{{ 'sensor.' + car + '_battery_level' }}"
+      continue_on_error: true
+    - delay:
+        seconds: 5
+    - action: shell_command.refresh_tesla_token
+      response_variable: token_refresh
+    - variables:
+        token_ok: "{{ token_refresh.returncode | default(1) | int == 0 }}"
+        token_changed: "{{ 'Updated tesla_fleet_token' in (token_refresh.stdout | default('')) }}"
+        token_expiry: >-
+          {{ (token_refresh.stdout | default('')).split('\n')
+             | select('search', '^Expiry: ') | map('replace', 'Expiry: ', '')
+             | first | default('unknown.') }}
+    - if: "{{ token_ok and token_changed }}"
+      then:
+        - action: script.reload
+    - if: "{{ not token_ok }}"
       then:
         - action: persistent_notification.create
           data:
-            title: "Tesla — Close Windows failed"
+            notification_id: tesla_fleet_token
+            title: "Tesla token refresh failed"
             message: >-
-              Status: {{ tesla_window_close_response.status | default('unknown') }}.
-              Response: {{ tesla_window_close_response.content | default('No response body captured.') }}
+              scripts/refresh_tesla_token.sh exited with code
+              {{ token_refresh.returncode | default('unknown') }}.
+              Expiry: {{ token_expiry }}
+              {{ token_refresh.stderr | default('') }}
+              {% if retry_window_close %}Close Windows was NOT retried.{% endif %}
+      else:
+        - if: "{{ not quiet or retry_window_close }}"
+          then:
+            - action: persistent_notification.create
+              data:
+                notification_id: tesla_fleet_token
+                title: "Tesla token refreshed"
+                message: >-
+                  {% if token_changed %}New token applied (scripts reloaded, no restart needed).{% else %}Token was already up to date.{% endif %}
+                  Expiry: {{ token_expiry }}
+                  {% if retry_window_close %}Close Windows got a 401, so it was re-sent with the current token. You'll get a separate notification if it fails again.{% endif %}
+        - if: "{{ retry_window_close }}"
+          then:
+            - delay:
+                seconds: 2
+            - action: script.tesla_windows_close
+              data:
+                allow_retry: false
 
 tesla_defrost_toggle:
   alias: "Tesla Defrost Toggle"
