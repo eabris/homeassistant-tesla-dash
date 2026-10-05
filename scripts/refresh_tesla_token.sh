@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+if [ -z "${REFRESH_TESLA_TOKEN_LF:-}" ] && grep -q $'\r' "$0" 2>/dev/null; then tr -d $'\r' < "$0" > "$0.lf.$$" && cat "$0.lf.$$" > "$0"; rm -f "$0.lf.$$"; REFRESH_TESLA_TOKEN_LF=1 exec bash "$0" "$@"; fi # CRLF self-repair: must stay ONE line ending in this comment (see TROUBLESHOOTING below)
 #
 # refresh_tesla_token.sh
 #
@@ -64,13 +65,15 @@
 # TROUBLESHOOTING — "command not found" / "invalid option name: pipefail":
 # This means the file picked up Windows-style CRLF line endings during the
 # copy to your HA host (common if you opened/saved it with a Windows editor,
-# or dragged it over a Samba share that re-saved it). Bash cannot reliably
-# self-repair this from inside the same corrupted script (its own if/case
-# keywords break the same way), so fix it manually first, then re-run:
+# or dragged it over a Samba share that re-saved it). Line 2 of this file
+# repairs that automatically: it is a single line that ends in a comment, so
+# the stray \r lands inside the comment and the line still runs. If it finds
+# \r characters, it strips them from this file in place and re-runs the
+# clean copy (REFRESH_TESLA_TOKEN_LF stops it from looping). Don't split
+# that line or move it below a blank line. A copy made BEFORE that line
+# existed still needs a one-time manual fix:
 #   sed -i 's/\r$//' refresh_tesla_token.sh
-#   bash refresh_tesla_token.sh --apply --restart
-# To avoid this happening again, prefer `scp`/`curl` (raw byte copy) over
-# opening the file in a Windows text editor before transferring it.
+#   bash refresh_tesla_token.sh --apply
 
 set -euo pipefail
 

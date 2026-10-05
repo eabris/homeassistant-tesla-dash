@@ -1867,6 +1867,30 @@ first (`file scripts/<name>.sh` — look for "with CRLF line terminators")
 before investigating actual script logic; fix with `sed -i 's/\r$//'
 <file>`, never by manually rewriting the script's contents.
 
+**Recurrence (same error, now at lines 74/75) and permanent fix:** after
+the Section 20 changes were deployed, the "Tesla token refresh failed"
+notification showed the same error again, at `line 74` / `line 75` (the
+header had grown by 12 lines). The repo copy was LF: `git ls-files --eol`
+showed `i/lf w/lf attr/text eol=lf`, and the committed blob had 0 `\r`.
+So the CRLF is added **while the file is copied onto the HA host**, outside
+git, and `.gitattributes` can't prevent that. **Fix:** line 2 of
+`refresh_tesla_token.sh` is now a self-repair guard:
+```bash
+if [ -z "${REFRESH_TESLA_TOKEN_LF:-}" ] && grep -q $'\r' "$0" 2>/dev/null; then tr -d $'\r' < "$0" > "$0.lf.$$" && cat "$0.lf.$$" > "$0"; rm -f "$0.lf.$$"; REFRESH_TESLA_TOKEN_LF=1 exec bash "$0" "$@"; fi # comment
+```
+It works on a CRLF copy because the whole `if … fi` is on one line that
+ends in a `#` comment, so the trailing `\r` lands inside the comment. It sits
+right under the shebang, before any blank line (a blank CRLF line would
+already print `$'\r': command not found`). `cat >` rewrites the same file
+in place, keeping its permissions. The env var stops a re-exec loop if the
+rewrite fails (e.g. read-only file: you get the original error, once).
+Tested with a CRLF copy (repairs, runs, and the result is byte-identical to
+the repo file), an LF copy, a read-only CRLF copy (no loop), and stdin
+(`$0=bash`, skipped). **Rules for future agents:** keep that guard on one
+line, keep its trailing comment, keep it as line 2, and add the same guard
+to any new `scripts/*.sh` that runs on the HA host. A copy made before the
+guard existed still needs the one-time `sed -i 's/\r$//'`.
+
 ### 19. Standing Workflow Rule — Document Every Recurring/Returning Error
 
 **User instruction (permanent):** whenever an error from the user's running

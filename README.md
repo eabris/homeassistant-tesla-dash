@@ -462,7 +462,7 @@ left alone by default (pass `--include-labels` to rename those too). Run
 | Some sensors show `Entity not available` in dashboard charts, and a full restart didn't fix it | An old, orphaned entity is probably still squatting on the exact entity_id the new sensor wants, so Home Assistant had to create it with a `_2` suffix instead (check **Settings → Devices & Services → Entities**, search the name without a domain filter — if you see two rows, one ending in `_2`, this is it). See the "Start clean" recipe below. |
 | Settings reset to their defaults after every restart (electricity rate, home/work rate names, currency, wheel size, tire pressure, smart-charge window, etc.) | This was a real bug in this project's `configuration.yaml`, fixed as of this commit — see "Why my settings used to reset on restart" below. If you're still seeing it, make sure you've pulled the latest version of this repo. |
 | Log shows `Received invalid sensor state: unknown for entity sensor.vehicle_...` | Harmless and already fixed as of this commit — happened whenever the car went to sleep/offline. Pull the latest version of this repo; no action needed on your end otherwise. |
-| `scripts/refresh_tesla_token.sh` fails with `$'\r': command not found` / `set: pipefail: invalid option name` | The script file has Windows-style CRLF line endings, which break on Linux. See "Fixing CRLF line endings" below. |
+| `scripts/refresh_tesla_token.sh` fails with `$'\r': command not found` / `set: pipefail: invalid option name` (also shown in the "Tesla token refresh failed" notification) | The script file has Windows-style CRLF line endings, which break on Linux. Current versions repair this themselves on the next run. A copy from before that fix needs the one-time command in "Fixing CRLF line endings" below. |
 | Notification `Tesla — Close Windows failed. Status: 401. Response: {'error': 'token expired (401)'}`, and restarting Home Assistant doesn't fix it | The token copy in `secrets.yaml` is older than the integration's current token. Restarting doesn't copy the new one over. Run `script.tesla_refresh_fleet_token` (no restart). See "Close Windows: 401 token expired" below. |
 | Notification `Tesla token refresh failed … exited with code 3` | The Tesla Fleet integration's own token was still expired when the copy ran. Wait a minute and run `script.tesla_refresh_fleet_token` again. If it keeps happening, open **Settings → Devices & Services → Tesla Fleet** and re-authenticate if HA asks you to. |
 
@@ -530,6 +530,12 @@ left alone by default (pass `--include-labels` to rename those too). Run
 > as of this commit, and a `.gitattributes` rule now keeps `*.sh` files
 > normalized to LF automatically — but if you edit or re-upload any shell
 > script from a Windows machine, re-run this fix afterward.
+>
+> **`refresh_tesla_token.sh` now repairs itself:** its second line strips
+> the `\r` characters from the file and re-runs it, so copying it to Home
+> Assistant in a way that adds CRLF no longer breaks it. You only need the
+> `sed` command above once, for a copy made before this change. After you
+> copy the new version over, nothing else is needed.
 
 > 🔑 **Close Windows: 401 token expired** (`Status: 401. Response:
 > {'error': 'token expired (401)'}`, sometimes still there after a
