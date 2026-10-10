@@ -8,7 +8,7 @@
 # Format example:
 # entity_id                                      | type           | category          | friendly_name                        | notes / purpose
 #
-# Last updated: 2026-06-23 (distance/time reliability fixes)
+# Last updated: 2026-10-10 (Hungarian electricity tariffs A/D + Tariff D smart charging)
 # ============================================================
 #
 # NOTE ON THE "vehicle_" PREFIX (Fleet Sensor Aliases):
@@ -145,6 +145,13 @@ input_boolean.tesla_enable_smart_charging       | input_boolean | helper        
 input_datetime.tesla_next_departure             | input_datetime| helper            | Tesla Next Departure            | Helper datetime for departure-based automation planning
 input_datetime.tesla_smart_charge_window_start  | input_datetime| helper            | Smart Charging Window Start     | Time-only (no date). Start of the daily off-peak charging window used by tesla_smart_charge_start. Default 23:00.
 input_datetime.tesla_smart_charge_window_end    | input_datetime| helper            | Smart Charging Window End       | Time-only (no date). End of the daily off-peak charging window used by tesla_smart_charge_stop. Default 06:00. Supports overnight wrap (start > end).
+input_select.tesla_tariff_mode                   | input_select  | settings          | Tesla Electricity Tariff        | Hungarian electricity tariff: "Off" / "Tariff A" / "Tariff D". Drives sensor.tesla_active_charging_price, so it decides the price every charging-cost figure is accumulated at (Off = input_number.tesla_default_electricity_cost). "Tariff D" also switches smart charging from the off-peak window to the price-driven tesla_tariff_d_charge_* automations. No `initial:` (boots "Off" once, then persists). Analytics -> Settings -> Hungarian Electricity Tariff.
+input_boolean.tesla_use_discounted_quota         | input_boolean | settings          | Tesla Use Discounted Quota      | On = the first 2,523 kWh/year (counted per day: ~207/214 kWh per month) of home grid import is billed at the discounted 36.21 Ft/kWh band (rezsicsökkentett sáv). Boots OFF on a fresh install -- turn it on in Settings if your contract has the discount.
+input_text.tesla_grid_import_entity              | input_text    | settings          | Home Grid Import Sensor (entity ID) | Optional entity ID of a LIFETIME (ever-increasing) home grid-import kWh sensor, e.g. a smart meter / P1 reader. Feeds sensor.tesla_monthly_grid_import. Leave empty to use the household estimate instead. No `initial:`.
+input_number.tesla_household_monthly_kwh         | input_number  | settings          | Household Monthly Use (without car) | Household electricity per month WITHOUT the car (kWh, 0-3000). Used only when no grid-import sensor is set: estimated quota usage = this x elapsed share of the month + sensor.tesla_monthly_home_charging_energy. No `initial:`.
+input_number.tesla_d_tariff_charge_threshold     | input_number  | settings          | Tariff D Charge Price Threshold | Highest active charging price (Ft/kWh, -50..200) at which Tariff D smart charging starts; it stops once the price rises above it. Boots at -50 (= never charge) until the user sets a value. No `initial:`.
+input_boolean.tesla_tariff_d_charging            | input_boolean | internal          | Tesla Tariff D Charging Active  | Internal flag: on while a charge started by automation.tesla_tariff_d_charge_start is in progress. tesla_tariff_d_charge_stop only stops charges with this flag set (never a manual charge); tesla_tariff_d_flag_reset clears it when the session ends.
+input_datetime.tesla_tariff_d_last_switch        | input_datetime | internal          | Tesla Tariff D Last Switch      | Internal: date+time of the last Tariff D start/stop. Both automations wait 60 min after it (anti-flapping, at most one switch per hour).
 
 # --- VEHICLE STATS (use Tesla Fleet natively in dashboards) ---
 # sensor.vehicle_battery_level              | sensor        | vehicle_stats     | Usable battery level                 | Tesla Fleet — use directly (replaces battery_level template)
@@ -156,7 +163,7 @@ sensor.tesla_tires_status                        | sensor        | safety       
 # --- EFFICIENCY (Templates) ---
 sensor.tesla_efficiency_kwh_km               | sensor        | efficiency        | Tesla Efficiency kWh/km         | Template: REAL rolling 7-day efficiency (tesla_weekly_drive_energy / tesla_weekly_distance); falls back to 0.228 kWh/km baseline until >5km logged in the last 7 days
 sensor.tesla_efficiency_wh_per_km                | sensor        | efficiency        | Tesla Efficiency Wh/km          | Template: efficiency in Wh/km (kWh/km * 1000)
-sensor.tesla_electric_cost_per_km                | sensor        | cost_tracking     | Tesla Electric Cost Per KM      | Template: efficiency * input_number.tesla_default_electricity_cost (was hardcoded to 60, now honors the configured rate); unit follows selected currency
+sensor.tesla_electric_cost_per_km                | sensor        | cost_tracking     | Tesla Electric Cost Per KM      | Template: efficiency * input_number.tesla_default_electricity_cost (Off mode). In Tariff A/D mode: efficiency * this month's average charging price (sensor.tesla_monthly_tariff_charging_cost / sensor.tesla_monthly_charging_energy, or sensor.tesla_active_charging_price before 5 kWh are charged)
 sensor.tesla_fuel_cost_per_km                    | sensor        | cost_tracking     | Tesla Fuel Cost per km          | Template: ICE equivalent fuel cost per km (comparison_ice_efficiency @ comparison_fuel_price_per_liter); unit follows selected currency
 sensor.tesla_drive_energy_consumed_total         | sensor        | efficiency        | Tesla Drive Energy Consumed Total | Template (device_class energy, state_class total_increasing): wraps input_number.tesla_drive_energy_consumed_total_kwh, an ever-increasing accumulator fed by the tesla_drive_energy_session_start/end automations, which compute REAL energy used per drive from (battery % drop x input_number.tesla_battery_capacity_kwh). Source for the daily/weekly/monthly drive-energy utility meters.
 
@@ -181,11 +188,11 @@ sensor.tesla_unit_distance                       | sensor        | settings     
 sensor.tesla_unit_speed                          | sensor        | settings          | Tesla Unit Speed                | Template: "km/h" or "mph" based on input_select.tesla_unit_system. Label-only helper (same conversion factor as distance).
 sensor.tesla_unit_pressure                       | sensor        | settings          | Tesla Unit Pressure             | Template: "bar" or "psi" based on input_select.tesla_unit_system (psi only for "US Imperial"; "UK" stays bar). Label-only; math is x14.5038 for bar->psi.
 sensor.tesla_unit_temperature                    | sensor        | settings          | Tesla Unit Temperature          | Template: "°C" or "°F" based on input_select.tesla_unit_system (°F only for "US Imperial"; "UK" stays °C). Label-only; math is c*9/5+32 for °C->°F.
-sensor.tesla_daily_electric_cost                 | sensor        | cost_tracking     | Tesla Daily Electric Cost       | Template: daily energy * input_number.tesla_default_electricity_cost (now honors the configured rate instead of a hardcoded 60); unit follows selected currency
-sensor.tesla_weekly_electric_cost                | sensor        | cost_tracking     | Tesla Weekly Electric Cost      | Template: weekly charging energy * input_number.tesla_default_electricity_cost; unit follows selected currency
-sensor.tesla_electric_cost_7d_rolling            | sensor        | cost_tracking     | Tesla Electric Cost 7d Rolling  | Template: tesla_charging_energy_7d_rolling * input_number.tesla_default_electricity_cost; powers the History tab's "Last 7 Days" card (rolling, distinct from the calendar-week THIS WEEK card)
-sensor.tesla_previous_month_electric_cost        | sensor        | cost_tracking     | Tesla Previous Month Electric Cost | Template: tesla_previous_month_charging_energy * input_number.tesla_default_electricity_cost; powers the "Previous Month" card. Populates once tesla_monthly_charging_energy's utility_meter cycle first rolls over.
-sensor.tesla_monthly_electric_cost               | sensor        | cost_tracking     | Tesla Monthly Electric Cost     | Template: monthly energy * input_number.tesla_default_electricity_cost; unit follows selected currency
+sensor.tesla_daily_electric_cost                 | sensor        | cost_tracking     | Tesla Daily Electric Cost       | Template: daily charging energy * input_number.tesla_default_electricity_cost (Off mode). In Tariff A/D mode (input_select.tesla_tariff_mode) it reads the tariff-priced cost accumulator sensor.tesla_daily_tariff_charging_cost instead (see HUNGARIAN ELECTRICITY TARIFFS below).
+sensor.tesla_weekly_electric_cost                | sensor        | cost_tracking     | Tesla Weekly Electric Cost      | Template: weekly charging energy * input_number.tesla_default_electricity_cost (Off mode). In Tariff A/D mode (input_select.tesla_tariff_mode) it reads the tariff-priced cost accumulator sensor.tesla_weekly_tariff_charging_cost instead (see HUNGARIAN ELECTRICITY TARIFFS below).
+sensor.tesla_electric_cost_7d_rolling            | sensor        | cost_tracking     | Tesla Electric Cost 7d Rolling  | Template: tesla_charging_energy_7d_rolling * input_number.tesla_default_electricity_cost (Off mode; Tariff A/D: sensor.tesla_tariff_charging_cost_7d_rolling); powers the History tab's "Last 7 Days" card (rolling, distinct from the calendar-week THIS WEEK card)
+sensor.tesla_previous_month_electric_cost        | sensor        | cost_tracking     | Tesla Previous Month Electric Cost | Template: tesla_previous_month_charging_energy * input_number.tesla_default_electricity_cost (Off mode; Tariff A/D: last_period attribute of sensor.tesla_monthly_tariff_charging_cost); powers the "Previous Month" card. Populates once tesla_monthly_charging_energy's utility_meter cycle first rolls over.
+sensor.tesla_monthly_electric_cost               | sensor        | cost_tracking     | Tesla Monthly Electric Cost     | Template: monthly charging energy * input_number.tesla_default_electricity_cost (Off mode). In Tariff A/D mode (input_select.tesla_tariff_mode) it reads the tariff-priced cost accumulator sensor.tesla_monthly_tariff_charging_cost instead (see HUNGARIAN ELECTRICITY TARIFFS below).
 sensor.tesla_annual_electric_cost                | sensor        | cost_tracking     | Tesla Annual Electric Cost      | Template: monthly electric cost * 12 (projected); unit follows selected currency
 sensor.tesla_5_year_electric_cost                | sensor        | cost_tracking     | Tesla 5 Year Electric Cost      | Template: annual electric cost * 5 (projected); unit follows selected currency; NOTE: real entity_id has an underscore between "5" and "year" (auto-slugified from the friendly name's space) -- do not reference it as tesla_5year_electric_cost anywhere
 sensor.tesla_daily_fuel_cost_equivalent          | sensor        | cost_tracking     | Tesla Daily Fuel Cost Equivalent | Template: daily_distance * fuel_cost_per_km
@@ -195,6 +202,27 @@ sensor.tesla_previous_month_fuel_cost            | sensor        | cost_tracking
 sensor.tesla_monthly_fuel_cost                   | sensor        | cost_tracking     | Tesla Monthly Fuel Cost Equivalent | Template: monthly_distance * fuel_cost_per_km; default_entity_id set for dashboard match
 sensor.tesla_annual_fuel_cost_equivalent         | sensor        | cost_tracking     | Tesla Annual Fuel Cost Equivalent | Template: monthly fuel cost equivalent * 12 (projected); used by the Cost Projections tab's Savings row
 sensor.tesla_5_year_fuel_cost_equivalent         | sensor        | cost_tracking     | Tesla 5 Year Fuel Cost Equivalent | Template: annual fuel cost equivalent * 5 (projected); NOTE: real entity_id has an underscore between "5" and "year" (same slugification gotcha as tesla_5_year_electric_cost) -- do not reference it as tesla_5year_fuel_cost_equivalent
+
+# --- HUNGARIAN ELECTRICITY TARIFFS (agents.md Section 21) ---
+# Prices are gross Ft/kWh (energy + grid fees + VAT). Discounted band 36.21, above-band A1 ~70.10 (live from dnap.hu).
+# Tariff D above-band price: dnap.hu quarter-hour feed (CC BY 4.0; wholesale price: Bundesnetzagentur | SMARD.de).
+sensor.tesla_d_tariff_price                      | sensor        | tariff            | Tesla D Tariff Price            | REST (https://dnap.hu/adatok/most.json, every 5 min): gross Tariff D price for the current quarter hour (Ft/kWh, can be negative). Attributes most / legolcsobb_ora_24h / a1_sav_feletti_brutto_ft_kwh. Unavailable on days dnap.hu has no data (HTTP 404) -- everything then falls back to the above-band A1 rate.
+sensor.tesla_d_tariff_cheapest_hour              | sensor        | tariff            | Tesla D Tariff Cheapest Hour    | REST timestamp: start of the cheapest hour in the next 24 h (dnap.hu legolcsobb_ora_24h.kezdet). Shown on Analytics -> Settings.
+binary_sensor.tesla_d_tariff_cheaper_than_a      | binary_sensor | tariff            | Tesla D Tariff Cheaper Than A   | REST: on when the current Tariff D price is below the above-band A1 rate (dnap.hu most.olcsobb_mint_a1).
+sensor.tesla_discounted_quota_monthly            | sensor        | tariff            | Tesla Discounted Quota Monthly  | Template: 2523/365 x days in the current month (~193.5 Feb, ~207.4 in 30-day, ~214.3 in 31-day months).
+sensor.tesla_monthly_grid_import                 | sensor        | tariff            | Tesla Monthly Grid Import       | Trigger template (every minute + when input_text.tesla_grid_import_entity changes): this month's grid import measured from the configured lifetime meter. Survives meter outages, meter resets and switching meters (attributes baseline_kwh / offset_kwh / month / source_entity). The first month after setup starts from the household estimate. Unknown when no meter is configured.
+sensor.tesla_home_charging_energy_total          | sensor        | tariff            | Tesla Home Charging Energy Total | Trigger template on sensor.vehicle_charge_energy_added: lifetime kWh charged while device_tracker.<car>_location is home (total_increasing). Session restarts and small dips handled via attribute last_energy_kwh.
+sensor.tesla_monthly_home_charging_energy        | sensor        | tariff            | Tesla Monthly Home Charging Energy | Utility meter (monthly) of sensor.tesla_home_charging_energy_total. Part of the quota-usage estimate.
+sensor.tesla_quota_usage_monthly                 | sensor        | tariff            | Tesla Quota Usage Monthly       | Template: sensor.tesla_monthly_grid_import if a meter is configured and reporting, else household estimate + home charging. Attribute source = meter / estimate.
+sensor.tesla_quota_remaining_monthly             | sensor        | tariff            | Tesla Quota Remaining Monthly   | Template: discounted quota - quota usage (never below 0).
+binary_sensor.tesla_discount_band_active         | binary_sensor | tariff            | Tesla Discount Band Active      | Template: on while input_boolean.tesla_use_discounted_quota is on and this month's quota usage is below the quota.
+sensor.tesla_tariff_a_current_price              | sensor        | tariff            | Tesla Tariff A Current Price    | Template: 36.21 while the discount band is active, else the above-band A1 rate. Attributes discounted_rate (36.21) and market_rate (dnap.hu a1_sav_feletti_brutto_ft_kwh, fallback 70.10) -- the single source of both fixed rates.
+sensor.tesla_active_charging_price               | sensor        | tariff            | Tesla Active Charging Price     | Template: price of home charging right now. Off -> default rate; Tariff A -> band/market rate; Tariff D -> band rate inside the quota, else live D price (market rate if no data). Attribute source. Used by the cost accumulator and the Tariff D automations.
+sensor.tesla_tariff_charging_cost_total          | sensor        | tariff            | Tesla Tariff Charging Cost Total | Trigger template on sensor.vehicle_charge_energy_added: lifetime charging cost (Ft, state_class total, can fall with negative D prices). Home kWh x sensor.tesla_active_charging_price at that moment; away kWh x input_number.tesla_default_electricity_cost. Accumulates in every mode, from install onward (no back-fill).
+sensor.tesla_daily_tariff_charging_cost          | sensor        | tariff            | Tesla Daily Tariff Charging Cost | Utility meter (daily, net_consumption) of sensor.tesla_tariff_charging_cost_total. Feeds sensor.tesla_daily_electric_cost in Tariff A/D mode.
+sensor.tesla_weekly_tariff_charging_cost         | sensor        | tariff            | Tesla Weekly Tariff Charging Cost | Utility meter (weekly, net_consumption). Feeds sensor.tesla_weekly_electric_cost in Tariff A/D mode.
+sensor.tesla_monthly_tariff_charging_cost        | sensor        | tariff            | Tesla Monthly Tariff Charging Cost | Utility meter (monthly, net_consumption). Feeds sensor.tesla_monthly_electric_cost (and so annual/5-year projections), previous-month cost (last_period) and cost per km in Tariff A/D mode.
+sensor.tesla_tariff_charging_cost_7d_rolling     | sensor        | tariff            | Tesla Tariff Charging Cost 7d Rolling | platform: statistics, change over 7 days of sensor.tesla_tariff_charging_cost_total. Feeds sensor.tesla_electric_cost_7d_rolling in Tariff A/D mode.
 
 # --- DISTANCE TRACKING (Templates + baseline helpers) ---
 sensor.tesla_daily_distance_raw                  | sensor        | distance          | Tesla Daily Distance Raw        | Utility meter: daily delta from odometer
@@ -291,9 +319,9 @@ input_number.tesla_drive_energy_consumed_total_kwh     | input_number  | interna
 
 # --- Saved Location Rates (editable via Analytics -> Settings tab) ---
 # Informational/manual rate profiles per location. NOTE: cost calculations
-# still use the single flat input_number.tesla_default_electricity_cost —
-# these are for documentation/reference only until location-aware rate
-# switching is implemented.
+# use input_select.tesla_tariff_mode (Off = the single flat
+# input_number.tesla_default_electricity_cost) — these are for
+# documentation/reference only until location-aware rate switching is implemented.
 input_number.tesla_rate_home_per_kwh                   | input_number  | settings          | Home Rate                            | Manual rate for the "Home" saved location card (per kWh, selected currency). Default: 60.0
 input_text.tesla_rate_home_name                        | input_text    | settings          | Home Location Name                   | Display name for the "Home" saved location card. Default: "Home (123 Main St)"
 input_text.tesla_rate_home_hours                       | input_text    | settings          | Home Rate Hours                      | Free-text active hours shown on the "Home" saved location card. Default: "00:00 – 00:00 (24/7)"
@@ -364,7 +392,13 @@ input_text.tesla_rate_work_season                      | input_text    | setting
 #     baseline each 1st -- powers the History tab's "Previous Month" card)
 #   - automation.tesla_precondition_before_departure
 #   - automation.tesla_close_windows_before_rain
-#   - automation.tesla_smart_charge_start / _stop (off-peak window smart charging)
+#   - automation.tesla_smart_charge_start / _stop (off-peak window smart charging;
+#     inactive while input_select.tesla_tariff_mode is "Tariff D")
+#   - automation.tesla_tariff_d_charge_start / _stop (Tariff D price-driven smart charging:
+#     home only, start at price <= input_number.tesla_d_tariff_charge_threshold, stop above
+#     it, >= 60 min between switches, only stops charges it started)
+#   - automation.tesla_tariff_d_flag_reset (clears input_boolean.tesla_tariff_d_charging when
+#     the session ends, the cable is unplugged, or Tariff D / smart charging is turned off)
 #   - automation.tesla_wheel_size_auto_adjust (auto-fills tire pressure + range
 #     adjustment % when input_select.tesla_wheel_size changes)
 #   - automation.tesla_refresh_fleet_token (hourly at :17; runs

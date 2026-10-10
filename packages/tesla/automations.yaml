@@ -254,6 +254,8 @@
     car's onboard charge controller — not this automation — is what actually
     stops charging once the target is reached (defense in depth: charging
     stays capped even if HA is restarted mid-window).
+    Inactive while input_select.tesla_tariff_mode is "Tariff D" (the price-
+    driven tesla_tariff_d_charge_start/_stop automations take over then).
   trigger:
     - trigger: time
       at: input_datetime.tesla_smart_charge_window_start
@@ -264,6 +266,11 @@
     - condition: state
       entity_id: input_boolean.tesla_enable_smart_charging
       state: "on"
+    - condition: not
+      conditions:
+        - condition: state
+          entity_id: input_select.tesla_tariff_mode
+          state: "Tariff D"
     - condition: state
       entity_id: binary_sensor.vehicle_charge_cable
       state: "on"
@@ -310,6 +317,7 @@
     most once per day, at a fixed time — no polling, no repeated toggling.
     If charging already stopped on its own (target reached), this is a
     harmless no-op (gated on binary_sensor.tesla_charging_active being on).
+    Inactive in Tariff D mode, like tesla_smart_charge_start.
   trigger:
     - trigger: time
       at: input_datetime.tesla_smart_charge_window_end
@@ -317,6 +325,11 @@
     - condition: state
       entity_id: input_boolean.tesla_enable_smart_charging
       state: "on"
+    - condition: not
+      conditions:
+        - condition: state
+          entity_id: input_select.tesla_tariff_mode
+          state: "Tariff D"
     - condition: state
       entity_id: binary_sensor.tesla_charging_active
       state: "on"
@@ -369,4 +382,197 @@
         entity_id: input_number.tesla_wheel_range_adjustment_pct
       data:
         value: "{{ adjustment_map.get(size, 0) }}"
+  mode: single
+
+# --- Hungarian Tariff D price-driven smart charging (agents.md Section 21) ---
+# Only active when input_select.tesla_tariff_mode is "Tariff D" AND
+# input_boolean.tesla_enable_smart_charging is on (the off-peak window
+# automations above step aside in that mode). Charges at home whenever the
+# active price (sensor.tesla_active_charging_price: the discounted band rate
+# while quota remains, else the live dnap.hu quarter-hour price) is at or
+# below input_number.tesla_d_tariff_charge_threshold.
+# Anti-flapping (agents.md Section 7): every start/stop records
+# input_datetime.tesla_tariff_d_last_switch, and neither automation acts
+# within 60 minutes of the previous switch — so at most one switch per hour,
+# and a charging session always lasts at least an hour.
+- id: tesla_tariff_d_charge_start
+  alias: "Tesla - Tariff D: Start Charging When Price Is Low"
+  description: >
+    Starts home charging when the active Tariff D price drops to or below
+    the threshold set on the Analytics Settings tab. Syncs the car's charge
+    limit to input_number.tesla_target_charge_limit first, so the car itself
+    stops at the target. Marks the session with input_boolean.tesla_tariff_d_charging
+    so tesla_tariff_d_charge_stop only ever stops charging this automation
+    started (never a charge you started by hand).
+  trigger:
+    - trigger: state
+      entity_id: sensor.tesla_active_charging_price
+    - trigger: state
+      entity_id: binary_sensor.vehicle_charge_cable
+      to: "on"
+    - trigger: state
+      entity_id:
+        - input_select.tesla_tariff_mode
+        - input_boolean.tesla_enable_smart_charging
+        - input_number.tesla_d_tariff_charge_threshold
+    - trigger: time_pattern
+      minutes: "/15"
+  condition:
+    - condition: state
+      entity_id: input_select.tesla_tariff_mode
+      state: "Tariff D"
+    - condition: state
+      entity_id: input_boolean.tesla_enable_smart_charging
+      state: "on"
+    - condition: state
+      entity_id: input_boolean.tesla_tariff_d_charging
+      state: "off"
+    - condition: state
+      entity_id: binary_sensor.vehicle_charge_cable
+      state: "on"
+    - condition: state
+      entity_id: binary_sensor.tesla_charging_active
+      state: "off"
+    - condition: template
+      value_template: >
+        {{ is_state('device_tracker.' ~ states('input_text.tesla_car_name') ~ '_location', 'home') }}
+    - condition: template
+      value_template: >
+        {{ states('sensor.vehicle_battery_level') | float(100) <
+           states('input_number.tesla_target_charge_limit') | float(80) }}
+    - condition: template
+      value_template: >
+        {% set price = states('sensor.tesla_active_charging_price') %}
+        {% set limit = states('input_number.tesla_d_tariff_charge_threshold') %}
+        {{ price | is_number and limit | is_number and price | float <= limit | float }}
+    - condition: template
+      value_template: >
+        {{ now().timestamp()
+           - state_attr('input_datetime.tesla_tariff_d_last_switch', 'timestamp') | float(0) >= 3600 }}
+  action:
+    - action: number.set_value
+      target:
+        entity_id: "{{ 'number.' + states('input_text.tesla_car_name') + '_charge_limit' }}"
+      data:
+        value: "{{ states('input_number.tesla_target_charge_limit') | int(80) }}"
+    - action: script.tesla_charge_start
+    - action: input_boolean.turn_on
+      target:
+        entity_id: input_boolean.tesla_tariff_d_charging
+    - action: input_datetime.set_datetime
+      target:
+        entity_id: input_datetime.tesla_tariff_d_last_switch
+      data:
+        timestamp: "{{ now().timestamp() }}"
+    - action: persistent_notification.create
+      data:
+        notification_id: tesla_tariff_d_charging
+        title: "Tesla Tariff D Charging"
+        message: >
+          Started charging at {{ states('sensor.tesla_active_charging_price') }} Ft/kWh
+          ({{ state_attr('sensor.tesla_active_charging_price', 'source') | trim }};
+          threshold {{ states('input_number.tesla_d_tariff_charge_threshold') }} Ft/kWh,
+          target {{ states('input_number.tesla_target_charge_limit') | int(80) }}%).
+  mode: single
+
+- id: tesla_tariff_d_charge_stop
+  alias: "Tesla - Tariff D: Stop Charging When Price Is High"
+  description: >
+    Stops a charge that tesla_tariff_d_charge_start began, once the active
+    price rises above the threshold — but never within 60 minutes of the
+    last Tariff D start/stop. Charges you started yourself are left alone.
+  trigger:
+    - trigger: state
+      entity_id: sensor.tesla_active_charging_price
+    - trigger: state
+      entity_id: input_number.tesla_d_tariff_charge_threshold
+    - trigger: time_pattern
+      minutes: "/15"
+  condition:
+    - condition: state
+      entity_id: input_select.tesla_tariff_mode
+      state: "Tariff D"
+    - condition: state
+      entity_id: input_boolean.tesla_tariff_d_charging
+      state: "on"
+    - condition: state
+      entity_id: binary_sensor.tesla_charging_active
+      state: "on"
+    - condition: template
+      value_template: >
+        {% set price = states('sensor.tesla_active_charging_price') %}
+        {% set limit = states('input_number.tesla_d_tariff_charge_threshold') %}
+        {{ price | is_number and limit | is_number and price | float > limit | float }}
+    - condition: template
+      value_template: >
+        {{ now().timestamp()
+           - state_attr('input_datetime.tesla_tariff_d_last_switch', 'timestamp') | float(0) >= 3600 }}
+  action:
+    - action: script.tesla_charge_stop
+    - action: input_boolean.turn_off
+      target:
+        entity_id: input_boolean.tesla_tariff_d_charging
+    - action: input_datetime.set_datetime
+      target:
+        entity_id: input_datetime.tesla_tariff_d_last_switch
+      data:
+        timestamp: "{{ now().timestamp() }}"
+    - action: persistent_notification.create
+      data:
+        notification_id: tesla_tariff_d_charging
+        title: "Tesla Tariff D Charging"
+        message: >
+          Paused charging: the price is now {{ states('sensor.tesla_active_charging_price') }} Ft/kWh,
+          above your {{ states('input_number.tesla_d_tariff_charge_threshold') }} Ft/kWh threshold.
+          It resumes automatically when the price drops again (at the earliest in 60 minutes).
+  mode: single
+
+- id: tesla_tariff_d_flag_reset
+  alias: "Tesla - Tariff D: Release Charging Session"
+  description: >
+    Clears input_boolean.tesla_tariff_d_charging (so the Tariff D automations
+    stop managing the charge) when the session is over: charging stopped by
+    itself (e.g. target reached), the cable was unplugged, Tariff D mode or
+    smart charging was switched off, or a start command never resulted in
+    charging within 20 minutes.
+  trigger:
+    - trigger: state
+      entity_id: binary_sensor.tesla_charging_active
+      to: "off"
+      for: "00:05:00"
+    - trigger: state
+      entity_id: binary_sensor.vehicle_charge_cable
+      to: "off"
+    - trigger: state
+      entity_id:
+        - input_select.tesla_tariff_mode
+        - input_boolean.tesla_enable_smart_charging
+    - trigger: time_pattern
+      minutes: "/15"
+  condition:
+    - condition: state
+      entity_id: input_boolean.tesla_tariff_d_charging
+      state: "on"
+    - condition: or
+      conditions:
+        - condition: not
+          conditions:
+            - condition: state
+              entity_id: input_select.tesla_tariff_mode
+              state: "Tariff D"
+        - condition: state
+          entity_id: input_boolean.tesla_enable_smart_charging
+          state: "off"
+        - condition: state
+          entity_id: binary_sensor.vehicle_charge_cable
+          state: "off"
+        - condition: template
+          value_template: >
+            {{ is_state('binary_sensor.tesla_charging_active', 'off')
+               and now().timestamp()
+                   - state_attr('input_datetime.tesla_tariff_d_last_switch', 'timestamp') | float(0) >= 1200 }}
+  action:
+    - action: input_boolean.turn_off
+      target:
+        entity_id: input_boolean.tesla_tariff_d_charging
   mode: single

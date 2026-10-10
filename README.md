@@ -19,7 +19,7 @@ Six tabs covering everyday use of the car:
 - **Climate** — Tesla-app-style 6-seat cabin map (`tesla-cabin-topdown.png`) with tappable heat-wave icons on each seat and the steering wheel, interior/exterior readout, Off / target-temp / Vent dock, Defrost, plus Dog/Camp presets.
 - **Battery** — battery level gauge, detailed telemetry table (range, drain, energy, pack temperature, amperage, voltage, lifetime energy used), a charge-limit slider, and start/stop charging + unlock charge port buttons.
 - **Tires** — real-time pressure readout for all 4 wheels plus a historical pressure graph with color-coded safe/warning zones.
-- **Cost Projections** — monthly/annual/5-year charging cost breakdown by network (home, Supercharger, other).
+- **Cost Projections** — monthly/annual/5-year charging cost breakdown by network (home, Supercharger, other), plus a status card for the selected Hungarian electricity tariff (active price, discounted-quota usage).
 
 ### 📊 Tesla Analytics dashboard
 Four tabs for historical insight and configuration:
@@ -27,10 +27,11 @@ Four tabs for historical insight and configuration:
 - **Driving** — distance, real energy used, electric cost, duration, speed, drive count, and **real energy efficiency (Wh/km)** computed from actual battery-drop telemetry (not a fixed estimate), plus efficiency-vs-speed and efficiency-vs-temperature charts.
 - **Charging** — charging session breakdowns and power/current charts.
 - **Analytics** — a date-range selector (7 days / 30 days / 1 year / all time) driving KPI summary rows and a full suite of charts: cost comparison vs. a gas car, efficiency vs. speed, driving-time heatmaps, charging source breakdown, charging power curves, phantom-drain analysis, and macro vehicle-state (driving/charging/idling/sleeping) breakdowns.
-- **Settings** — pick your **currency** (HUF/EUR/USD/GBP — all cost figures across both dashboards update instantly), your **unit system** (Metric / US Imperial / UK — see below), set your electricity rate, fuel-comparison baseline, and edit your **Saved Location Rates** (Home / Solar-Off-Peak / Work — name, rate, hours, active days, season) directly from the dashboard, no YAML editing required.
+- **Settings** — pick your **currency** (HUF/EUR/USD/GBP — all cost figures across both dashboards update instantly), your **unit system** (Metric / US Imperial / UK — see below), set your electricity rate or **Hungarian electricity tariff** (Tariff A / Tariff D, with the discounted quota), fuel-comparison baseline, and edit your **Saved Location Rates** (Home / Solar-Off-Peak / Work — name, rate, hours, active days, season) directly from the dashboard, no YAML editing required.
 
 ### ⚙️ Plus
 - **Smart Charging** — an optional off-peak charging automation. Turn it on (Overview → Dashboard tab → "Automation" tile) and set your target charge % and off-peak window (Analytics → Settings tab → 🌙 Smart Charging); charging then starts automatically once/day at the window start (if plugged in and below target) and stops if the window ends first. Deliberately fires **at most once per day** — no rapid on/off toggling, which is easier on the car's charging hardware.
+- **Hungarian electricity tariffs** — pick **Tariff A** or **Tariff D** in Analytics → Settings → 🇭🇺 Hungarian Electricity Tariff. Charging costs are then priced at the tariff that was active while the car charged: the discounted 36.21 Ft/kWh band while your monthly quota lasts, then the A1 rate or the live quarter-hour Tariff D price (from [dnap.hu](https://dnap.hu)). With Tariff D, Smart Charging charges at home whenever the price is at or below your threshold, switching at most once per hour. See "Hungarian electricity tariffs" under Maintenance.
 - A currency selector and per-location rate cards (editable straight from the Settings tab) so all cost/savings figures are shown and calculated in your own currency and tariffs — no more hardcoded Forints.
 - Optional integration with **TeslaMate** for long-term trip/charge history and Grafana-powered stats.
 - A **unit system** selector (Analytics → Settings tab → 📏 Unit System) with three presets — **Metric** (km, °C, bar), **US Imperial** (mi, °F, psi), and **UK** (mi, °C, bar, since UK/Ireland drivers commonly use miles but keep Celsius and bar) — matching the independent distance/temperature/pressure options on a real Tesla's own touchscreen. Applies to the Overview dashboard, the Tires tab's pressure chart, and the Analytics History tab's daily/weekly/monthly distance figures. *Known limitation:* the Driving/Charging analytics tabs' long-term history charts currently always plot in km/km-h/Wh-per-km regardless of this setting, and the underlying sensors always store km/bar/°C internally (so Developer Tools → States, Logbook, and any plain history/statistics card will always show metric, regardless of your selection above).
@@ -291,11 +292,60 @@ Go to **Tesla Analytics → Settings** to:
 - Set your **default electricity rate** and **fuel comparison** baseline (ICE efficiency + fuel price) used in the actual cost calculations.
 - Edit the **Saved Location Rates** cards (Home / Solar-Off-Peak / Work) — name, rate, hours, active days, season — directly from entity rows on the dashboard.
 
-> ⚠️ Note: the Saved Location Rate cards are currently **informational/manual**
-> — actual cost math on the dashboards still uses the single flat **Default
-> Electricity Rate**, not automatic time-of-use or per-location rate
-> switching. Use them to document your tariffs for now; smarter rate-aware
-> calculations may come in a future update.
+> ⚠️ Note: the Saved Location Rate cards are **informational/manual** — cost
+> math uses the **Hungarian Electricity Tariff** setting below (or, with the
+> tariff set to **Off**, the single flat **Default Electricity Rate**), not
+> per-location rate switching.
+
+### Hungarian electricity tariffs (Tariff A / Tariff D)
+
+Set this up in **Tesla Analytics → Settings → 🇭🇺 Hungarian Electricity Tariff**.
+All prices are final gross Ft/kWh (energy + grid fees + VAT).
+
+| Tariff | Price of home charging |
+| :--- | :--- |
+| **Off** | Your **Default Electricity Rate** (same as before this feature). |
+| **Tariff A** | 36.21 Ft/kWh while your monthly discounted quota lasts, then the A1 rate above the quota (~70.10 Ft/kWh, read live from dnap.hu). |
+| **Tariff D** | 36.21 Ft/kWh while your monthly discounted quota lasts, then the live quarter-hour Tariff D price from dnap.hu (it can be negative). |
+
+1. Pick your **Tariff**.
+2. If your contract has the discounted band (*rezsicsökkentett sáv*), turn on
+   **Use Discounted Quota**. It is **off** on a fresh install.
+3. Tell the dashboard how much of the quota your home has used this month.
+   Either enter the entity ID of a **lifetime grid-import kWh sensor** (smart
+   meter, P1 reader, …) in **Grid Import Sensor**, or leave it empty and set
+   **Household kWh / Month (without car)**. The estimate is then that value ×
+   the part of the month that has passed + what the car charged at home this
+   month.
+4. Tariff D only: set **Tariff D Charge Threshold**. It starts at **−50
+   Ft/kWh**, which means "never charge".
+
+How the numbers work:
+- The quota is 2,523 kWh a year, counted per day: about 207 kWh in 30-day
+  months, 214 kWh in 31-day months and 193.5 kWh in February.
+- Every kWh the car adds is priced at the price active at that moment. Home
+  charging uses the tariff price; charging away from home uses your Default
+  Electricity Rate.
+- This starts counting when you install this version. Earlier charging is not
+  re-priced, so in Tariff A/D mode the first day, week and month are partial.
+- When you first set a grid-import sensor in the middle of a month, that month
+  starts from the household estimate (the sensor can't tell what was used
+  before you set it).
+
+Tariff D smart charging:
+- Needs Tariff D, **Smart Charging** on (Overview → Dashboard tab →
+  "Automation" tile), the car **at home**, plugged in and below your target %.
+- Starts when the active price is at or below your threshold and stops when
+  it rises above it. While the discounted quota lasts the price is 36.21
+  Ft/kWh, so it charges then if your threshold is 36.21 or higher.
+- Switches **at most once per 60 minutes**, which is easier on the car's
+  charging hardware.
+- Only stops charges it started. A charge you start yourself is never stopped.
+- The off-peak window (🌙 Smart Charging) is paused while Tariff D is selected.
+
+Price data: [dnap.hu](https://dnap.hu) (CC BY 4.0; wholesale price:
+Bundesnetzagentur | SMARD.de). Some days dnap.hu has no data yet; the Tariff D
+price then shows `unavailable` and the A1 rate (70.10 Ft/kWh) is used instead.
 
 ### Refreshing the Tesla Fleet token (window-close workaround)
 
@@ -465,6 +515,9 @@ left alone by default (pass `--include-labels` to rename those too). Run
 | `scripts/refresh_tesla_token.sh` fails with `$'\r': command not found` / `set: pipefail: invalid option name` (also shown in the "Tesla token refresh failed" notification) | The script file has Windows-style CRLF line endings, which break on Linux. Current versions repair this themselves on the next run. A copy from before that fix needs the one-time command in "Fixing CRLF line endings" below. |
 | Notification `Tesla — Close Windows failed. Status: 401. Response: {'error': 'token expired (401)'}`, and restarting Home Assistant doesn't fix it | The token copy in `secrets.yaml` is older than the integration's current token. Restarting doesn't copy the new one over. Run `script.tesla_refresh_fleet_token` (no restart). See "Close Windows: 401 token expired" below. |
 | Notification `Tesla token refresh failed … exited with code 3` | The Tesla Fleet integration's own token was still expired when the copy ran. Wait a minute and run `script.tesla_refresh_fleet_token` again. If it keeps happening, open **Settings → Devices & Services → Tesla Fleet** and re-authenticate if HA asks you to. |
+| Tariff D price (`sensor.tesla_d_tariff_price`) shows `unavailable`, or the Settings status says no data from dnap.hu | Normal on days dnap.hu has not published prices yet (it answers `Ma még nincs áradat.`). Costs and Tariff D charging use the A1 rate (70.10 Ft/kWh) until data is back. If it lasts for days, check that Home Assistant can reach `https://dnap.hu/adatok/most.json`. |
+| Tariff D smart charging never starts | Check, in this order: **Tariff D Charge Threshold** is still at its starting value −50 (= never); Smart Charging is off; the car is not in the `home` zone; it is not plugged in or already at your target %; the price is above your threshold; the last Tariff D start/stop was less than 60 minutes ago. See "Hungarian electricity tariffs" under Maintenance. |
+| After choosing Tariff A/D, the daily/weekly/monthly electric cost dropped to 0 or looks too low | Expected the first time: tariff costs are counted from when you install this version, not re-priced backwards. They fill in as the car charges. Switching back to **Off** shows the old default-rate figures. |
 
 > 🧹 **"Start clean" — wipe and re-create all Tesla entities from scratch:**
 > If you've renamed things, run a cleanup script, or just want a truly fresh

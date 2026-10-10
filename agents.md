@@ -884,6 +884,12 @@ than parsing the existing free-text Saved Location Rate schedule strings
 (e.g. `input_text.tesla_rate_home_hours`), which use human-typed en-dash
 ranges too fragile to parse reliably for automation triggers.
 
+**Tariff D exception (Section 21):** while `input_select.tesla_tariff_mode`
+is "Tariff D", both window automations have a `not` condition and do
+nothing; the price-driven `tesla_tariff_d_charge_start` / `_stop` take over.
+Those are not once-per-day — they use a 60-minute minimum gap between
+switches instead. Same goal: no rapid on/off toggling.
+
 ### 8. Unit System Selector (`input_select.tesla_unit_system`)
 
 **What it is:** a Settings-tab dropdown (Analytics → Settings → 📏 Unit
@@ -1984,3 +1990,159 @@ exists too). Never copy the token with a plain refresh-token grant outside
 the integration: Tesla refresh tokens are single-use, so doing that would
 log the integration out. Always let the integration refresh it (force a poll
 with `homeassistant.update_entity`), then copy.
+
+### 21. Hungarian Electricity Tariffs (Tariff A / Tariff D)
+
+**What it is:** a tariff selector on Analytics → Settings → 🇭🇺 Hungarian
+Electricity Tariff, built from the user's spec
+`docs/home_assistant_tariff_plan.md`. It decides the price every charging
+kWh is costed at, and with Tariff D it also drives price-based smart
+charging. All prices are final gross Ft/kWh (energy + grid fees + VAT).
+User decisions behind the design: (1) costs follow the tariff — each kWh is
+priced at the price active while it was charged, not re-priced later;
+(2) the user can pick a lifetime grid-import kWh sensor in Settings; with
+none set, quota usage is estimated as household kWh/month (without the car)
+× elapsed share of the month + the car's home charging this month.
+
+**Entities** (all in `configuration.yaml`, full list in `entities-list.txt`
+under "HUNGARIAN ELECTRICITY TARIFFS"):
+* Settings helpers (no `initial:`, Section 11): `input_select.tesla_tariff_mode`
+  (Off / Tariff A / Tariff D), `input_boolean.tesla_use_discounted_quota`
+  (boots off), `input_text.tesla_grid_import_entity`,
+  `input_number.tesla_household_monthly_kwh`,
+  `input_number.tesla_d_tariff_charge_threshold` (−50..200, boots at its
+  minimum −50 = "never charge", so a fresh install can't start charging by
+  surprise).
+* Internal: `input_boolean.tesla_tariff_d_charging`,
+  `input_datetime.tesla_tariff_d_last_switch`.
+* Price chain: `sensor.tesla_d_tariff_price` (REST) →
+  `sensor.tesla_tariff_a_current_price` (holds `discounted_rate` 36.21 and
+  `market_rate` = dnap.hu's above-band A1 rate, fallback 70.10, as
+  attributes) → `sensor.tesla_active_charging_price` (attribute `source`).
+* Quota: `sensor.tesla_discounted_quota_monthly` (2523/365 × days in month:
+  193.5 / 207.4 / 214.3), `sensor.tesla_monthly_grid_import`,
+  `sensor.tesla_quota_usage_monthly` (attribute `source` meter/estimate),
+  `sensor.tesla_quota_remaining_monthly`,
+  `binary_sensor.tesla_discount_band_active`.
+* Cost: `sensor.tesla_home_charging_energy_total`,
+  `sensor.tesla_tariff_charging_cost_total`, utility meters
+  `tesla_monthly_home_charging_energy` and
+  `tesla_daily/weekly/monthly_tariff_charging_cost`, statistics sensor
+  `sensor.tesla_tariff_charging_cost_7d_rolling`.
+* Automations: `tesla_tariff_d_charge_start`, `tesla_tariff_d_charge_stop`,
+  `tesla_tariff_d_flag_reset` (`packages/tesla/automations.yaml`).
+* Dashboards: the Settings section (helpers + a Jinja "Live Tariff Status"
+  markdown table) and a status card at the top of Overview → Cost
+  Projections (`custom:button-card`, taps through to
+  `/tesla-analytics/settings`).
+
+**Fixed rates live in a few literals:** 36.21 (discounted band), 70.10
+(A1 fallback) and 2523 (kWh/year quota). The live A1 rate normally comes
+from dnap.hu. When the official rates change, grep `configuration.yaml`
+and both dashboards for `36.21`, `70.10` and `2523` and update them all.
+
+**Cost model — accumulate, don't multiply:** the old cost sensors were
+`energy × one flat rate`. That can't work for a price that changes every
+15 minutes. `sensor.tesla_tariff_charging_cost_total` is a trigger-based
+template on `sensor.vehicle_charge_energy_added` (the per-session kWh
+counter, which restarts at 0 each session). On every change it adds
+`delta × price`, where price is `sensor.tesla_active_charging_price` when
+`device_tracker.<car>_location` is `home`, else
+`input_number.tesla_default_electricity_cost` (Superchargers etc. are not
+on the home tariff). The delta rules, kept identical in both accumulators:
+* first sample ever (no `last_energy_kwh` attribute yet) → 0;
+* value went up → `new − last`;
+* value fell below half of `last` → a new session started → add `new`;
+* small dip (≥ half of `last`) → noise → add 0, and **keep the old
+  `last_energy_kwh`**. Found with a test harness: storing the dipped value
+  meant the recovery back up was counted a second time. The
+  `last_energy_kwh` attribute template must keep `last` on a small dip.
+* `unknown`/`unavailable` (car asleep) are excluded with `not_to:`.
+`state_class: total` (not `total_increasing`) on the cost total, and
+`net_consumption: true` on its utility meters, because negative Tariff D
+prices make the cost go down. `periodically_resetting: false` because the
+source never resets.
+
+**Rewired cost sensors keep their entity_ids** (Section 13: entity_id
+comes from `name:`, so the names were left alone): daily / weekly /
+monthly / 7d-rolling / previous-month electric cost and "Tesla Electric
+Cost Per KM". In Off mode they use the original `energy × default rate`
+formula unchanged. In Tariff A/D mode they read the tariff meters (previous
+month = the monthly meter's `last_period` attribute; per-km = this month's
+average price, or the active price before 5 kWh are charged). Annual and
+5-year projections follow automatically through the monthly sensor. The
+tariff figures include away charging at the default rate, so they match
+the existing Cost Projections "HOME" row, which already used all charging
+energy. There is no back-fill: tariff costs start counting at install.
+
+**Monthly grid import state machine** (`sensor.tesla_monthly_grid_import`,
+trigger template every minute + on `input_text.tesla_grid_import_entity`
+change; attributes `source_entity`, `month`, `baseline_kwh`, `offset_kwh`):
+the month's count is `reading − baseline + offset`.
+* Same month, same meter, reading ≥ baseline → normal count.
+* Meter reading dropped (meter reset/replaced) or the source entity changed
+  → new baseline = current reading, offset = the count so far, so the month
+  keeps counting from where it was.
+* New month → count 0 (baseline re-taken).
+* Very first run, or a meter configured mid-month → offset = the household
+  estimate, because the meter can't tell what was used earlier this month.
+* Meter unknown → keep the last count (0 on a new month).
+* No/invalid entity ID → unknown, and quota usage uses the estimate.
+All templates in one update see the old `this` (HA reads it lazily from the
+state machine), which is why every attribute template recomputes the same
+conditions instead of reading the new state.
+
+**dnap.hu feed:** the plan's `https://dnap.hu/api/v1/price` does not exist.
+The real public endpoint is `https://dnap.hu/adatok/most.json` (no key,
+CC BY 4.0, wholesale price Bundesnetzagentur | SMARD.de — keep the
+attribution line on the Settings card). Fields used: `most.d_brutto_ft_kwh`
+(current quarter hour, can be negative), `most.olcsobb_mint_a1`,
+`legolcsobb_ora_24h.kezdet` (ISO time with timezone, valid for
+`device_class: timestamp`), `a1_sav_feletti_brutto_ft_kwh`. On days without
+published prices it answers **HTTP 404** `{"hiba":"Ma még nincs áradat."}`
+(seen while building this; `holnap.json` had data that same day). Each REST
+entity therefore has an `availability:` template (`value_json is mapping
+and … is number`): a REST `value_template` always renders to a string, so
+without `availability:` the 404 body would end up as a bogus state.
+Everything downstream falls back to the A1 rate via `| float(70.10)`.
+Polled every 300 s in every mode.
+
+**Tariff D smart charging** (`tesla_tariff_d_charge_start` / `_stop` /
+`_flag_reset`):
+* Start conditions: mode is Tariff D, `tesla_enable_smart_charging` on,
+  flag off, cable in, not charging, car at home, battery below
+  `input_number.tesla_target_charge_limit`, active price and threshold both
+  numeric and price ≤ threshold, ≥ 3600 s since
+  `input_datetime.tesla_tariff_d_last_switch`. It compares the **active**
+  price, so inside the discounted band it charges at 36.21 if the threshold
+  allows. Actions: push the target into `number.<car>_charge_limit` (the
+  car's BMS stops at the target, same as Section 7), `script.tesla_charge_start`,
+  flag on, record the switch time, notify (`notification_id:
+  tesla_tariff_d_charging`).
+* Stop: mode D, flag on, charging, price > threshold, ≥ 3600 s since the
+  last switch → `script.tesla_charge_stop`, flag off, record, notify.
+* The flag means "this charge was started by the automation". Stop only
+  acts with the flag on, so a charge the user started by hand is never
+  stopped. `_flag_reset` clears it when charging is off and ≥ 20 min have
+  passed since the last switch (checked after 5 min off and every 15 min;
+  this also covers a start command that never began charging), the cable
+  is unplugged, the mode leaves D, or smart charging is turned off.
+* Anti-flapping: at most one switch per 60 min. Triggers include a
+  `/15` minute time pattern so a start/stop blocked by the 60-min gap is
+  retried later without a state change.
+* Plan deviations: the plan's `charger.tesla_wallbox` (no such HA domain),
+  `switch.tesla_charger` and `sensor.d_tarifa_current_price` were replaced
+  with the project's car-name-agnostic scripts and `tesla_`-prefixed
+  entities; home-only and smart-charging gates were added.
+
+**Rules for future agents:**
+* Never price charging by multiplying a period's energy by the *current*
+  tariff price — always accumulate per delta at the price active then.
+* Keep the two accumulators' delta logic identical; if you change one,
+  change both and re-test the dip, session-restart and first-sample cases.
+* Never give the threshold or the quota toggle an `initial:`; both must
+  boot to the safe value (−50 / off) once and then persist.
+* Any new Tariff D action must keep the 60-minute last-switch gate and the
+  flag check, so it never fights a manual charge or flaps.
+* If dnap.hu changes its JSON, update the `availability:` templates along
+  with the `value_template`s, and keep the `| float(70.10)` fallbacks.

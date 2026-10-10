@@ -1232,6 +1232,92 @@ views:
         max: 200
         step: 0.5
 
+      # Hungarian electricity tariff (agents.md Section 21)
+      - type: markdown
+        content: |
+          ## 🇭🇺 Hungarian Electricity Tariff
+
+          Pick how your home electricity is billed. The price in force
+          *while the car charges* is added up into every charging-cost
+          figure on both dashboards (changing the tariff later does not
+          rewrite costs already counted).
+
+          - **Off** — every charge is priced at the Default Electricity Rate above.
+          - **Tariff A** — 36.21 Ft/kWh inside your discounted quota
+            (2,523 kWh/year, counted per day: ~207 kWh in 30-day months,
+            ~214 kWh in 31-day months), then the above-quota A1 rate
+            (~70.10 Ft/kWh, read live from dnap.hu).
+          - **Tariff D** — 36.21 Ft/kWh inside the quota, then the live
+            quarter-hour Tariff D price from dnap.hu (it can even be
+            negative). With **Smart Charging** enabled below, the car
+            charges at home whenever the price is at or below your
+            **Tariff D Charge Threshold**.
+
+          Charging away from home (Superchargers etc.) is always priced at
+          the Default Electricity Rate. Tariff prices are in Hungarian
+          Forint — keep the Currency set to HUF when using Tariff A or D.
+
+      - type: custom:mushroom-select-card
+        entity: input_select.tesla_tariff_mode
+        name: "Tariff"
+        icon: mdi:transmission-tower
+
+      - type: custom:mushroom-entity-card
+        entity: input_boolean.tesla_use_discounted_quota
+        name: "Use Discounted Quota (rezsicsökkentett sáv)"
+        icon: mdi:sale
+        tap_action:
+          action: toggle
+
+      - type: markdown
+        content: |
+          **Quota tracking:** to count your real monthly usage, enter the
+          entity ID of a **lifetime** grid-import energy sensor (kWh, only
+          ever goes up — e.g. a smart-meter / P1 reader sensor such as
+          `sensor.your_grid_import_kwh`). Leave it empty to estimate usage
+          instead: *household kWh per month (without the car)* spread
+          evenly over the month, plus the car's home charging.
+
+          **Tariff D Charge Threshold:** the highest price (Ft/kWh) Tariff D
+          smart charging will charge at. It starts at -50, which means
+          *never charge* until you set your own value.
+
+      - type: entities
+        entities:
+          - entity: input_text.tesla_grid_import_entity
+            name: "Grid Import Sensor (entity ID)"
+          - entity: input_number.tesla_household_monthly_kwh
+            name: "Household kWh / Month (without car)"
+          - entity: input_number.tesla_d_tariff_charge_threshold
+            name: "Tariff D Charge Threshold"
+
+      - type: markdown
+        content: |
+          {% set mode = states('input_select.tesla_tariff_mode') %}
+          {% set price = states('sensor.tesla_active_charging_price') %}
+          {% set unit = 'Ft' if mode in ['Tariff A', 'Tariff D'] else states('sensor.tesla_currency_symbol') %}
+          {% set d = states('sensor.tesla_d_tariff_price') %}
+          {% set cheap = states('sensor.tesla_d_tariff_cheapest_hour') %}
+          {% set src = state_attr('sensor.tesla_quota_usage_monthly', 'source') %}
+
+          ### Live Tariff Status
+
+          | | |
+          |---|---|
+          | **Active charging price** | {{ price ~ ' ' ~ unit ~ '/kWh' if price | is_number else '–' }} ({{ state_attr('sensor.tesla_active_charging_price', 'source') | default('–', true) }}) |
+          | **Tariff A price now** | {{ states('sensor.tesla_tariff_a_current_price') }} Ft/kWh |
+          | **Tariff D price now** | {{ d ~ ' Ft/kWh' if d | is_number else 'no data from dnap.hu right now' }} |
+          | **Cheapest D hour (next 24 h)** | {{ as_timestamp(cheap) | timestamp_custom('%a %H:%M') if as_timestamp(cheap, none) is not none else '–' }} |
+          | **Quota used this month** | {{ states('sensor.tesla_quota_usage_monthly') }} / {{ states('sensor.tesla_discounted_quota_monthly') }} kWh ({{ 'grid meter' if src == 'meter' else 'estimate' }}) |
+          | **Quota remaining** | {{ states('sensor.tesla_quota_remaining_monthly') }} kWh |
+          | **Discounted band** | {{ 'Active (36.21 Ft/kWh)' if is_state('binary_sensor.tesla_discount_band_active', 'on') else ('Used up' if is_state('input_boolean.tesla_use_discounted_quota', 'on') else 'Disabled') }} |
+          | **Tariff D smart charging** | {{ 'Managing a charge now' if is_state('input_boolean.tesla_tariff_d_charging', 'on') else ('Waiting for a low price' if mode == 'Tariff D' and is_state('input_boolean.tesla_enable_smart_charging', 'on') else 'Off') }} |
+
+
+          <sub>Tariff D prices: [dnap.hu](https://dnap.hu) (wholesale price:
+          Bundesnetzagentur | SMARD.de), CC BY 4.0. On days dnap.hu has no
+          data yet, Tariff D falls back to the above-quota A1 rate.</sub>
+
       # Smart Charging (off-peak window automation)
       - type: markdown
         content: |
@@ -1243,6 +1329,14 @@ views:
           don't accidentally pay peak rates. This fires **at most once per
           day** (one start, one stop) by design; it will not repeatedly
           toggle charging on/off.
+
+          **Tariff D:** when the tariff above is *Tariff D*, the window
+          times below are ignored and charging follows the live price
+          instead — it starts at home when the price is at or below your
+          Tariff D Charge Threshold and stops when it rises above it, with
+          at least 60 minutes between switches (so charging never flaps).
+          The enable toggle and Target Charge Limit still apply. Charges
+          you start yourself are never stopped by it.
 
       - type: custom:mushroom-entity-card
         entity: input_boolean.tesla_enable_smart_charging
@@ -1319,9 +1413,10 @@ views:
           Edit any value using the entity rows underneath each location.
 
           **Note:** These are informational/manual rate profiles — the actual
-          cost calculations on the Overview/Analytics dashboards currently use
-          `input_number.tesla_default_electricity_cost` as a single flat rate.
-          Automatic time-of-use / location-aware rate switching is not wired
+          cost calculations on the Overview/Analytics dashboards use the
+          **Hungarian Electricity Tariff** selected above (with *Off*, the
+          single flat `input_number.tesla_default_electricity_cost` rate).
+          Location-aware switching between these saved rates is not wired
           up yet; use these cards to document your tariffs for now.
 
       - type: markdown
