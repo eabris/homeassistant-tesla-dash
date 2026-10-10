@@ -17,7 +17,7 @@ Six tabs covering everyday use of the car:
 - **Dashboard** — the main cockpit: header with vehicle name + battery/range readout, a Tesla-app-style vehicle hero (clean side photo with model/status overlay and a Lock / Wake / Port dock under the car), a conditional "Charging" status card (time remaining, amps/volts/kW), a 6-button quick-action row (lock, climate, frunk, trunk, flash lights, more), a tap-to-open location strip, and an info grid (climate, battery, schedule, tires, drives, charges, idles, activity, automation, profiler) plus a vehicle specs footer (model, VIN, plate, firmware, odometer, alerts).
 - **Controls** — window venting, sentry mode toggle, media playback, valet mode & speed limit.
 - **Climate** — Tesla-app-style 6-seat cabin map (`tesla-cabin-topdown.png`) with tappable heat-wave icons on each seat and the steering wheel, interior/exterior readout, Off / target-temp / Vent dock, Defrost, plus Dog/Camp presets.
-- **Battery** — battery level gauge, detailed telemetry table (range, drain, energy, pack temperature, amperage, voltage, lifetime energy used), a charge-limit slider, and start/stop charging + unlock charge port buttons.
+- **Battery** — battery level gauge, detailed telemetry table (range, drain, energy, pack temperature, amperage, voltage, lifetime energy used), a charge-limit slider, a Full auto charging status card (tap to turn it on/off), and start/stop charging (or "Charge now" with Full auto on) + unlock charge port buttons.
 - **Tires** — real-time pressure readout for all 4 wheels plus a historical pressure graph with color-coded safe/warning zones.
 - **Cost Projections** — monthly/annual/5-year charging cost breakdown by network (home, Supercharger, other), plus a status card for the selected Hungarian electricity tariff (active price, discounted-quota usage).
 
@@ -27,11 +27,12 @@ Four tabs for historical insight and configuration:
 - **Driving** — distance, real energy used, electric cost, duration, speed, drive count, and **real energy efficiency (Wh/km)** computed from actual battery-drop telemetry (not a fixed estimate), plus efficiency-vs-speed and efficiency-vs-temperature charts.
 - **Charging** — charging session breakdowns and power/current charts.
 - **Analytics** — a date-range selector (7 days / 30 days / 1 year / all time) driving KPI summary rows and a full suite of charts: cost comparison vs. a gas car, efficiency vs. speed, driving-time heatmaps, charging source breakdown, charging power curves, phantom-drain analysis, and macro vehicle-state (driving/charging/idling/sleeping) breakdowns.
-- **Settings** — pick your **currency** (HUF/EUR/USD/GBP — all cost figures across both dashboards update instantly), your **unit system** (Metric / US Imperial / UK — see below), set your electricity rate or **Hungarian electricity tariff** (Tariff A / Tariff D, with the discounted quota), fuel-comparison baseline, and edit your **Saved Location Rates** (Home / Solar-Off-Peak / Work — name, rate, hours, active days, season) directly from the dashboard, no YAML editing required.
+- **Settings** — pick your **currency** (HUF/EUR/USD/GBP — all cost figures across both dashboards update instantly), your **unit system** (Metric / US Imperial / UK — see below), set your electricity rate or **Hungarian electricity tariff** (Tariff A / Tariff D, with the discounted quota), **Full auto charging**, fuel-comparison baseline, and edit your **Saved Location Rates** (Home / Solar-Off-Peak / Work — name, rate, hours, active days, season) directly from the dashboard, no YAML editing required.
 
 ### ⚙️ Plus
-- **Smart Charging** — an optional off-peak charging automation. Turn it on (Overview → Dashboard tab → "Automation" tile) and set your target charge % and off-peak window (Analytics → Settings tab → 🌙 Smart Charging); charging then starts automatically once/day at the window start (if plugged in and below target) and stops if the window ends first. Deliberately fires **at most once per day** — no rapid on/off toggling, which is easier on the car's charging hardware.
-- **Hungarian electricity tariffs** — pick **Tariff A** or **Tariff D** in Analytics → Settings → 🇭🇺 Hungarian Electricity Tariff. Charging costs are then priced at the tariff that was active while the car charged: the discounted 36.21 Ft/kWh band while your monthly quota lasts, then the A1 rate or the live quarter-hour Tariff D price (from [dnap.hu](https://dnap.hu)). With Tariff D, Smart Charging charges at home whenever the price is at or below your threshold, switching at most once per hour. See "Hungarian electricity tariffs" under Maintenance.
+- **Smart Charging** — an optional off-peak charging automation. Turn it on (Overview → Dashboard tab → "Automation" tile) and set your target charge % and off-peak window (Analytics → Settings tab → 🌙 Smart Charging); charging then starts automatically once/day at the window start (if plugged in and below target) and stops if the window ends first. Deliberately fires **at most once per day** — no rapid on/off toggling, which is easier on the car's charging hardware. Not used while Full auto charging (below) is on.
+- **Hungarian electricity tariffs** — pick **Tariff A** or **Tariff D** in Analytics → Settings → 🇭🇺 Hungarian Electricity Tariff. Charging costs are then priced at the tariff that was active while the car charged: the discounted 36.21 Ft/kWh band while your monthly quota lasts, then the A1 rate or the live quarter-hour Tariff D price (from [dnap.hu](https://dnap.hu)). See "Hungarian electricity tariffs" under Maintenance.
+- **Full auto charging** — optional: Home Assistant decides by itself when the car charges at home. It weighs your solar forecast and live solar output, the price of every quarter hour (live Tariff D prices, Tariff A or your flat rate), the battery level and your daily "ready by" time. It charges on solar when the sun is strong enough (the current follows the sun), and in the cheapest grid block before the deadline otherwise, e.g. at night on a cloudy day. It never flaps (at most one start/stop per 30 minutes), and has "Charge now" and "Stop" overrides. Works with every tariff. See "Full auto charging" under Maintenance.
 - A currency selector and per-location rate cards (editable straight from the Settings tab) so all cost/savings figures are shown and calculated in your own currency and tariffs — no more hardcoded Forints.
 - Optional integration with **TeslaMate** for long-term trip/charge history and Grafana-powered stats.
 - A **unit system** selector (Analytics → Settings tab → 📏 Unit System) with three presets — **Metric** (km, °C, bar), **US Imperial** (mi, °F, psi), and **UK** (mi, °C, bar, since UK/Ireland drivers commonly use miles but keep Celsius and bar) — matching the independent distance/temperature/pressure options on a real Tesla's own touchscreen. Applies to the Overview dashboard, the Tires tab's pressure chart, and the Analytics History tab's daily/weekly/monthly distance figures. *Known limitation:* the Driving/Charging analytics tabs' long-term history charts currently always plot in km/km-h/Wh-per-km regardless of this setting, and the underlying sensors always store km/bar/°C internally (so Developer Tools → States, Logbook, and any plain history/statistics card will always show metric, regardless of your selection above).
@@ -317,8 +318,6 @@ All prices are final gross Ft/kWh (energy + grid fees + VAT).
    **Household kWh / Month (without car)**. The estimate is then that value ×
    the part of the month that has passed + what the car charged at home this
    month.
-4. Tariff D only: set **Tariff D Charge Threshold**. It starts at **−50
-   Ft/kWh**, which means "never charge".
 
 How the numbers work:
 - The quota is 2,523 kWh a year, counted per day: about 207 kWh in 30-day
@@ -332,20 +331,89 @@ How the numbers work:
   starts from the household estimate (the sensor can't tell what was used
   before you set it).
 
-Tariff D smart charging:
-- Needs Tariff D, **Smart Charging** on (Overview → Dashboard tab →
-  "Automation" tile), the car **at home**, plugged in and below your target %.
-- Starts when the active price is at or below your threshold and stops when
-  it rises above it. While the discounted quota lasts the price is 36.21
-  Ft/kWh, so it charges then if your threshold is 36.21 or higher.
-- Switches **at most once per 60 minutes**, which is easier on the car's
-  charging hardware.
-- Only stops charges it started. A charge you start yourself is never stopped.
-- The off-peak window (🌙 Smart Charging) is paused while Tariff D is selected.
+To charge when Tariff D is cheapest, turn on **Full auto charging** (next
+section). The 🌙 Smart Charging off-peak window works with every tariff, but
+only uses fixed clock times.
 
 Price data: [dnap.hu](https://dnap.hu) (CC BY 4.0; wholesale price:
 Bundesnetzagentur | SMARD.de). Some days dnap.hu has no data yet; the Tariff D
 price then shows `unavailable` and the A1 rate (70.10 Ft/kWh) is used instead.
+
+### Full auto charging
+
+Optional. When it's on, Home Assistant decides by itself when the car charges
+at home, with every tariff (Off, A or D). Set it up in **Tesla Analytics →
+Settings → 🤖 Full Auto Charging**. The Overview → Battery tab shows what it
+is doing (tap the card to turn it on or off; hold it for all the details).
+
+One-time setup:
+1. In the Tesla app, turn off **Scheduled Charging**. Otherwise the car
+   starts charging on its own schedule and fights Full auto.
+2. Set the **Target Charge Limit** (🌙 Smart Charging section) and **Ready
+   By** (e.g. 07:00): the car should be at the target by then every day. An
+   earlier **Next Departure** wins.
+3. Set **Home Charger Max Current** (e.g. 16 A) and **Home Charger Phases**.
+   On a fresh install the current starts at 5 A.
+4. Optional safety nets: **Always Charge Below Battery Level** (e.g. 20 %)
+   and **Always Charge Below Price** (−50 = never; e.g. 0 to always charge
+   at negative Tariff D prices).
+5. Solar (optional): install the **Forecast.Solar** integration, then enter
+   three entity IDs: **Grid Power Sensor** (positive while importing, negative
+   while exporting, e.g. `sensor.inverter_grid_power`), **Solar Power Sensor**
+   (e.g. `sensor.inverter_pv_power`) and **Solar Forecast Sensor**
+   (`sensor.power_production_now`). Set **Solar Feed-in Price** to what an
+   exported kWh earns you (about 5 Ft/kWh on Hungarian gross billing).
+6. Turn on **Full Auto Charging**.
+
+How it decides (every 5 minutes, `sensor.tesla_auto_charge_plan`):
+- It works out how much energy the car needs to reach the target by the
+  deadline.
+- It prices every quarter hour until then. Tariff D: the dnap.hu
+  quarter-hour prices for today and tomorrow (tomorrow's appear around
+  13:00–14:00; quarters not published yet use the same time yesterday).
+  Tariff A: the above-quota rate. Off: the Default Electricity Rate. Inside
+  the discounted quota it still plans with the above-quota price, because
+  the car only uses up quota the house would otherwise use.
+- **Solar first.** Forecast.Solar (which already includes the weather) is
+  spread over the day, minus your home's base load, and corrected with what
+  your panels make right now. Charging follows the sun at **at least 5 A**
+  (3.45 kW on 3-phase). With only part of that from the sun, the rest comes
+  from the grid. It only does that while the mix is at least 5 % cheaper
+  than charging from the grid alone.
+- **The rest from the grid**, in the cheapest continuous full-power block
+  before the deadline. If prices are equal, it picks the later block (the
+  last quarter before the deadline is kept spare).
+- If time runs short, it charges straight away at full power.
+
+Example: a cloudy day on Tariff D. The forecast shows only 1–2 kWh of
+surplus, so following the sun wouldn't be cheaper than the night block. The
+status says *Waiting* and plans e.g. 02:15–06:45. If the sun comes out after
+all, the live correction notices it and the car charges on solar. Whatever
+the sun covers comes off the night block.
+
+Rules that keep it safe:
+- It starts or stops charging at most once per 30 minutes. It changes the
+  amps at most every 5 minutes, and only by 2 A or more.
+- Once a grid block has started, it keeps charging until the block ends.
+- It only acts at home with the cable plugged in, and only stops charging
+  sessions it started or took over. It sets the car's charge limit to the
+  Target Charge Limit when it starts.
+- If the car starts charging by itself when you plug in, Full auto takes the
+  session over. It may stop it within a few minutes to wait for the cheap
+  block.
+- **Charge now** (Battery tab or Settings) charges at full power to the car's
+  own charge limit, whatever the price, until you unplug.
+- **Stop charging** on the Battery tab pauses Full auto until you unplug (or
+  tap Charge now, or turn Full auto off). If you stop charging in the Tesla
+  app instead, Full auto may start again about 30 minutes later.
+- While Full auto is on, the 🌙 Smart Charging window isn't used.
+
+The solar kWh, block price and cost figures are estimates.
+
+This replaced the old "Tariff D Charge Threshold" automation. Its helpers
+were renamed (the threshold is now **Always Charge Below Price**), so set
+that value again. The old entities show as `unavailable` until you delete
+them (see Troubleshooting).
 
 ### Refreshing the Tesla Fleet token (window-close workaround)
 
@@ -515,8 +583,13 @@ left alone by default (pass `--include-labels` to rename those too). Run
 | `scripts/refresh_tesla_token.sh` fails with `$'\r': command not found` / `set: pipefail: invalid option name` (also shown in the "Tesla token refresh failed" notification) | The script file has Windows-style CRLF line endings, which break on Linux. Current versions repair this themselves on the next run. A copy from before that fix needs the one-time command in "Fixing CRLF line endings" below. |
 | Notification `Tesla — Close Windows failed. Status: 401. Response: {'error': 'token expired (401)'}`, and restarting Home Assistant doesn't fix it | The token copy in `secrets.yaml` is older than the integration's current token. Restarting doesn't copy the new one over. Run `script.tesla_refresh_fleet_token` (no restart). See "Close Windows: 401 token expired" below. |
 | Notification `Tesla token refresh failed … exited with code 3` | The Tesla Fleet integration's own token was still expired when the copy ran. Wait a minute and run `script.tesla_refresh_fleet_token` again. If it keeps happening, open **Settings → Devices & Services → Tesla Fleet** and re-authenticate if HA asks you to. |
-| Tariff D price (`sensor.tesla_d_tariff_price`) shows `unavailable`, or the Settings status says no data from dnap.hu | Normal on days dnap.hu has not published prices yet (it answers `Ma még nincs áradat.`). Costs and Tariff D charging use the A1 rate (70.10 Ft/kWh) until data is back. If it lasts for days, check that Home Assistant can reach `https://dnap.hu/adatok/most.json`. |
-| Tariff D smart charging never starts | Check, in this order: **Tariff D Charge Threshold** is still at its starting value −50 (= never); Smart Charging is off; the car is not in the `home` zone; it is not plugged in or already at your target %; the price is above your threshold; the last Tariff D start/stop was less than 60 minutes ago. See "Hungarian electricity tariffs" under Maintenance. |
+| Tariff D price (`sensor.tesla_d_tariff_price`) shows `unavailable`, or the Settings status says no data from dnap.hu | Normal on days dnap.hu has not published prices yet (it answers `Ma még nincs áradat.`). Costs use the A1 rate (70.10 Ft/kWh) until data is back. If it lasts for days, check that Home Assistant can reach `https://dnap.hu/adatok/most.json`. |
+| Full auto charging never starts | Read its status (Overview → Battery tab, or `sensor.tesla_auto_charge_plan`): it says why. *Waiting* is normal until the planned block or enough sun. Also check: **Ready By** is still 00:00 (fresh install); **Home Charger Max Current** is still 5 A; the car is not in the `home` zone; it is already at the Target Charge Limit; you tapped Stop charging (*Paused* until you unplug); its last start/stop was less than 30 minutes ago. See "Full auto charging" under Maintenance. |
+| Log warning `Error. Url: https://dnap.hu/adatok/holnap.json. Status code 404` (or `ma.json`) | Harmless. From 13:00 the dashboard checks every 30 minutes (after 16:00 hourly) for tomorrow's Tariff D prices, which dnap.hu usually publishes by 14:00. Until then the server answers 404. A few of these a day are expected. |
+| The car charges for a few minutes after plugging in, then stops (Full auto on) | Expected: the car starts charging by itself when plugged in. Full auto takes that session over and pauses it until the cheapest block. Use **Charge now** if you need to charge straight away. |
+| Charging starts at a time Full auto didn't plan | The car's own **Scheduled Charging** is on. Turn it off in the Tesla app. |
+| Charging starts again by itself after I stopped it | Full auto is on. Stop with the **Stop charging** button on the Battery tab (it pauses Full auto until you unplug), or turn Full auto off. Stopping in the Tesla app doesn't pause it. |
+| `input_number.tesla_d_tariff_charge_threshold`, `input_boolean.tesla_tariff_d_charging`, `input_datetime.tesla_tariff_d_last_switch` or `automation.tesla_tariff_d_charge_*` show `unavailable` | Replaced by Full auto charging (the threshold is now **Always Charge Below Price** — set it again). Delete the old entities in **Settings → Devices & Services → Entities**. |
 | After choosing Tariff A/D, the daily/weekly/monthly electric cost dropped to 0 or looks too low | Expected the first time: tariff costs are counted from when you install this version, not re-priced backwards. They fill in as the car charges. Switching back to **Off** shows the old default-rate figures. |
 
 > 🧹 **"Start clean" — wipe and re-create all Tesla entities from scratch:**

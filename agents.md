@@ -884,11 +884,14 @@ than parsing the existing free-text Saved Location Rate schedule strings
 (e.g. `input_text.tesla_rate_home_hours`), which use human-typed en-dash
 ranges too fragile to parse reliably for automation triggers.
 
-**Tariff D exception (Section 21):** while `input_select.tesla_tariff_mode`
-is "Tariff D", both window automations have a `not` condition and do
-nothing; the price-driven `tesla_tariff_d_charge_start` / `_stop` take over.
-Those are not once-per-day — they use a 60-minute minimum gap between
-switches instead. Same goal: no rapid on/off toggling.
+**Full auto exception (Section 22):** while
+`input_boolean.tesla_full_auto_charging` is on, both window automations have
+a `not` condition and do nothing; the planner-driven `tesla_auto_charge_*`
+automations take over. Those are not once-per-day: they keep at least 30
+minutes between their own starts/stops, commit to a whole charging block,
+and change the amps at most every 5 minutes by 2 A or more. Same goal: no
+rapid on/off toggling. (Before Section 22 the gate was "Tariff D mode", for
+the old threshold automations described in Section 21.)
 
 ### 8. Unit System Selector (`input_select.tesla_unit_system`)
 
@@ -1996,8 +1999,8 @@ with `homeassistant.update_entity`), then copy.
 **What it is:** a tariff selector on Analytics → Settings → 🇭🇺 Hungarian
 Electricity Tariff, built from the user's spec
 `docs/home_assistant_tariff_plan.md`. It decides the price every charging
-kWh is costed at, and with Tariff D it also drives price-based smart
-charging. All prices are final gross Ft/kWh (energy + grid fees + VAT).
+kWh is costed at. Price-based charging is Full auto (Section 22), which
+replaced this section's first Tariff D threshold automations. All prices are final gross Ft/kWh (energy + grid fees + VAT).
 User decisions behind the design: (1) costs follow the tariff — each kWh is
 priced at the price active while it was charged, not re-priced later;
 (2) the user can pick a lifetime grid-import kWh sensor in Settings; with
@@ -2009,12 +2012,7 @@ under "HUNGARIAN ELECTRICITY TARIFFS"):
 * Settings helpers (no `initial:`, Section 11): `input_select.tesla_tariff_mode`
   (Off / Tariff A / Tariff D), `input_boolean.tesla_use_discounted_quota`
   (boots off), `input_text.tesla_grid_import_entity`,
-  `input_number.tesla_household_monthly_kwh`,
-  `input_number.tesla_d_tariff_charge_threshold` (−50..200, boots at its
-  minimum −50 = "never charge", so a fresh install can't start charging by
-  surprise).
-* Internal: `input_boolean.tesla_tariff_d_charging`,
-  `input_datetime.tesla_tariff_d_last_switch`.
+  `input_number.tesla_household_monthly_kwh` (also Full auto's base load).
 * Price chain: `sensor.tesla_d_tariff_price` (REST) →
   `sensor.tesla_tariff_a_current_price` (holds `discounted_rate` 36.21 and
   `market_rate` = dnap.hu's above-band A1 rate, fallback 70.10, as
@@ -2029,8 +2027,8 @@ under "HUNGARIAN ELECTRICITY TARIFFS"):
   `tesla_monthly_home_charging_energy` and
   `tesla_daily/weekly/monthly_tariff_charging_cost`, statistics sensor
   `sensor.tesla_tariff_charging_cost_7d_rolling`.
-* Automations: `tesla_tariff_d_charge_start`, `tesla_tariff_d_charge_stop`,
-  `tesla_tariff_d_flag_reset` (`packages/tesla/automations.yaml`).
+* Automations: none of its own any more (see "Tariff D smart charging
+  (removed)" below).
 * Dashboards: the Settings section (helpers + a Jinja "Live Tariff Status"
   markdown table) and a status card at the top of Overview → Cost
   Projections (`custom:button-card`, taps through to
@@ -2107,8 +2105,22 @@ without `availability:` the 404 body would end up as a bogus state.
 Everything downstream falls back to the A1 rate via `| float(70.10)`.
 Polled every 300 s in every mode.
 
-**Tariff D smart charging** (`tesla_tariff_d_charge_start` / `_stop` /
-`_flag_reset`):
+**Tariff D smart charging (removed, superseded by Section 22).** Kept as
+history. The first version had three automations,
+`tesla_tariff_d_charge_start` / `_stop` / `_flag_reset`. They charged
+whenever the active price was at or below a threshold. They were replaced
+because a single threshold can't weigh solar, the deadline or tomorrow's
+prices. With a high threshold it charged in the first acceptable quarter
+even when a much cheaper night or sunny midday was coming. With a low one
+the car might not reach its target by morning. Helper renames (the old
+entities become `unavailable` orphans; README Troubleshooting tells users
+to delete them):
+`input_number.tesla_d_tariff_charge_threshold` →
+`input_number.tesla_auto_charge_cheap_price` (now "always charge below this
+price"), `input_boolean.tesla_tariff_d_charging` →
+`input_boolean.tesla_auto_charge_owned`,
+`input_datetime.tesla_tariff_d_last_switch` →
+`input_datetime.tesla_auto_charge_last_switch`. How the old version worked:
 * Start conditions: mode is Tariff D, `tesla_enable_smart_charging` on,
   flag off, cable in, not charging, car at home, battery below
   `input_number.tesla_target_charge_limit`, active price and threshold both
@@ -2140,9 +2152,229 @@ Polled every 300 s in every mode.
   tariff price — always accumulate per delta at the price active then.
 * Keep the two accumulators' delta logic identical; if you change one,
   change both and re-test the dip, session-restart and first-sample cases.
-* Never give the threshold or the quota toggle an `initial:`; both must
-  boot to the safe value (−50 / off) once and then persist.
-* Any new Tariff D action must keep the 60-minute last-switch gate and the
-  flag check, so it never fights a manual charge or flaps.
+* Never give the quota toggle or `input_number.tesla_auto_charge_cheap_price`
+  an `initial:`; both must boot to the safe value (off / −50) once and then
+  persist.
+* Price-based charging belongs in Full auto (Section 22). Don't add a
+  separate Tariff D charging automation: it would fight Full auto's
+  ownership flag and 30-minute gate.
 * If dnap.hu changes its JSON, update the `availability:` templates along
   with the `value_template`s, and keep the `| float(70.10)` fallbacks.
+
+### 22. Full Auto Charging (solar- and price-aware charge planner)
+
+**What it is:** an optional mode (`input_boolean.tesla_full_auto_charging`,
+boots off) where Home Assistant decides by itself when the car charges at
+home. It works in every tariff mode (Off / Tariff A / Tariff D). The user
+asked whether Section 21's Tariff D threshold was a sound strategy and
+wanted it "full automatic": weigh current solar production, market prices,
+the battery level and the weather. Their example: on a cloudy day with only
+1–2 kWh of solar (the system peaks at about 5 kW), don't charge during the
+day, charge at night at the best price instead. This replaced the Tariff D
+threshold automations.
+
+**User decisions behind the design:**
+* Solar inputs (all optional, entity IDs typed into `input_text` helpers so
+  nothing private is hardcoded, Section 10):
+  `input_text.tesla_grid_power_entity` (positive = import),
+  `input_text.tesla_pv_power_entity`, `input_text.tesla_solar_forecast_entity`
+  (Forecast.Solar `sensor.power_production_now`). The user's inverter names
+  are `sensor.inverter_grid_power` / `sensor.inverter_pv_power`.
+* Exported solar is worth `input_number.tesla_solar_feed_in_price` (≈5
+  Ft/kWh on Hungarian gross billing), so charging from the sun costs that
+  much, not 0.
+* A daily deadline `input_datetime.tesla_charge_ready_by`; an earlier
+  `input_datetime.tesla_next_departure` wins.
+* It takes over the car's own plug-in auto-start (the car begins charging
+  as soon as it's plugged in).
+* "Charge now" overrides it until unplug. The dashboard's Stop pauses it
+  until unplug.
+* Charger 3-phase 16 A (`input_number.tesla_home_charger_max_amps`,
+  `input_select.tesla_home_charger_phases`). The Tesla minimum is 5 A, so
+  the lowest charging power is 3.45 kW (3-phase) / 1.15 kW (1-phase).
+* Amps change at most every 5 minutes and only by 2 A or more.
+* The old threshold became "always charge below this price"
+  (`input_number.tesla_auto_charge_cheap_price`, −50 = never).
+
+**Entities** (`configuration.yaml`; inventory in `entities-list.txt` under
+"FULL AUTO CHARGING"):
+* Settings: the helpers above plus `input_number.tesla_auto_charge_min_soc`
+  ("always charge below this battery level"). Reused:
+  `tesla_target_charge_limit`, `tesla_battery_capacity_kwh`,
+  `tesla_household_monthly_kwh` (base load = kWh/month ÷ 730 h, 0.3 kW if
+  unset), `tesla_next_departure`, `tesla_tariff_mode`.
+* Internal, automation-managed, no `initial:`:
+  `input_boolean.tesla_auto_charge_owned`,
+  `input_datetime.tesla_auto_charge_last_switch`,
+  `input_datetime.tesla_auto_charge_block_end`,
+  `input_boolean.tesla_charge_now_override`,
+  `input_boolean.tesla_auto_charge_paused`.
+* `rest_command.tesla_dnap_prices` + trigger template
+  `sensor.tesla_d_price_forecast`. It reads dnap.hu `ma.json` /
+  `holnap.json` into a `slots` attribute of compact `[unix time, gross
+  Ft/kWh]` pairs, because the raw files are too big for the 16 KB recorder
+  attribute limit. Today's prices are fetched on start-up and every 3 h
+  while missing. Tomorrow's are fetched every 30 min from 13:00 to 16:00,
+  then hourly, while missing. A miss logs one harmless rest_command 404
+  warning (README Troubleshooting). `rest_command` with `response_variable`
+  returns `{status, content}` for 4xx too (no exception);
+  `continue_on_error: true` is set anyway.
+* `sensor.tesla_solar_surplus_power` (every minute) and the statistics
+  sensor `sensor.tesla_solar_surplus_power_10m` (10-minute mean). Surplus =
+  the car's own draw − grid power. The car's draw (amps setpoint × phases ×
+  230 V, while charging or owned at home) is added back so the car doesn't
+  "see" its own load and throttle itself down. Fallback without a grid
+  sensor: PV − base load.
+* `sensor.tesla_auto_charge_plan`, the planner: a trigger template every 5
+  minutes and on every input change (state triggers list). State = the
+  reason. Attributes: `should_charge`, `amps`, `summary`, `need_kwh`,
+  `solar_kwh`, `deadline`, `block_start` / `block_end` (display strings, with
+  a day prefix when not today) plus `_ts` versions, `commit_until_ts`,
+  `avg_price`, `avg_effective_price`, `grid_only_price`, `est_cost`,
+  `price_now`, `surplus_kw`, `solar_forecast`. The icon follows the reason
+  (`attributes.icon`, which the Battery tab card shows).
+* Automations (`packages/tesla/automations.yaml`):
+  `tesla_auto_charge_control`, `_amps`, `_adopt`, `_reset`. Scripts
+  (`packages/tesla/scripts.yaml`): `tesla_charge_now`,
+  `tesla_charge_stop_manual`.
+* Dashboards:
+  * Analytics → Settings → 🤖 Full Auto Charging: toggle, Charge now, Live
+    Plan table, settings, sensor IDs.
+  * Overview → Battery tab: 4.4 status card (tap = toggle, hold = plan
+    details) and the 4.5 action button. The button is "Stop charging" →
+    `tesla_charge_stop_manual` while charging, "Charge now" when Full auto
+    is on, "Start charging" otherwise.
+  * The info-grid Automation tile and a badge on the Cost Projections
+    tariff card.
+
+**Planner model** (per 15-minute quarter until the deadline):
+1. **Price p.** Tariff D: the forecast slot, else the same quarter
+   yesterday, else the live price (quarter 0), else the average of the known
+   slots. Tariff A: the above-band rate (`market_rate` attribute of
+   `sensor.tesla_tariff_a_current_price`). Off: the Default Electricity
+   Rate. The discounted band is deliberately ignored. Car kWh inside the
+   band push house kWh above the band later in the month, so the marginal
+   cost is the above-band price.
+2. **Solar.** Forecast.Solar `energy_production_today_remaining` /
+   `energy_production_tomorrow` are spread as a sine between `sun.sun`
+   rising and setting, minus the base load, × 0.8 to be safe. These entity
+   IDs are derived from the `power_production_now` ID by string replace (a
+   regex requires that name). Nowcast: kc = measured PV ÷ forecast PV now,
+   clamped to 0.3–2, fading linearly back to 1 over 3 h. Quarter 0 uses the
+   measured 10-minute surplus. The weather is covered because Forecast.Solar
+   already includes it, and the nowcast corrects it when it's wrong.
+3. **Need.** need = (target − SoC) % × capacity ÷ 0.9 (charging losses). A
+   full-power quarter holds eq = max amps × phases × 0.23 kW × 0.25 h.
+   n_full = ceil(need ÷ eq) + 1 (one spare quarter).
+4. **Reference ("grid only").** The average effective price of the cheapest
+   n_full block. The `best_start` sliding-window macro picks it: ties go to
+   the later block, and the last quarter before the deadline stays free.
+   "Effective" values the forecast sun inside a full-power block at the
+   feed-in price.
+5. **Follow the sun.** This applies in a quarter whose surplus is at least
+   30 % of the 5 A power (thr) and where p > feed-in. Charging at max(sun,
+   5 A) has the blended price fb = (sun × feed-in + grid top-up × p) ÷
+   energy. The quarter is followed if fb < 0.95 × reference. Followed energy
+   comes off the need.
+6. **Grid block for the rest.** N = ceil(rest ÷ eq) + 1, the cheapest
+   block. Followed quarters count at their raw price. The block is
+   lengthened by the followed energy it overlaps (capped at n_full).
+7. **Deadline mode.** If n_full ≥ the quarters left, charge now at full
+   power until the deadline.
+
+Why two tiers instead of "the cheapest N quarters": a scattered quarter plan
+would start and stop many times, which is flapping. It also can't see the
+cloudy-day trap: weak sun with a 5 A minimum mostly means buying daytime
+grid power. Comparing the blend against a continuous grid block answers the
+user's real question: "is following the sun cheaper than the night block?"
+
+**Decision order** (first match wins):
+1. off
+2. away (`device_tracker.<car>_location` isn't `home`)
+3. unplugged
+4. no_data (SoC unknown; keeps charging if owned)
+5. override (Charge now, until the car's own charge limit)
+6. paused
+7. full (SoC ≥ target)
+8. min_soc
+9. committed (owned and before `block_end`)
+10. deadline
+11. planned (the block starts now)
+12. cheap (price now ≤ cheap price)
+13. solar
+14. waiting
+
+`should_charge` is true for override, min_soc, committed, deadline,
+planned, cheap and solar, plus no_data while owned. `amps` = the solar amps
+for solar (floor(surplus ÷ phases ÷ 230 V), between 5 and max), else max.
+Solar uses hysteresis:
+* Start: live surplus ≥ the 5 A power, or (≥ thr and blend ≤ 0.95 ×
+  reference).
+* Keep going while owned: down to 0.75 × the 5 A power, or (≥ 0.7 × thr and
+  blend ≤ reference).
+
+**Acting on the plan:**
+* `_control` has three branches. It never acts on off / away / unplugged /
+  no_data.
+  * START (should, not owned, not charging, ≥ 1800 s since the last
+    switch): owned on, last switch = now, `block_end` = `commit_until_ts`
+    (the block end for planned/deadline, now otherwise). Then car charge
+    limit = target (skipped for override), amps, `script.tesla_charge_start`
+    and a notification (`notification_id: tesla_auto_charging`).
+  * STOP (not should, owned, ≥ 1800 s): owned off, last switch, `block_end`
+    = now, `script.tesla_charge_stop`, amps back to max.
+  * HAND-OFF (already owned, e.g. following the sun, when the planned or
+    deadline block begins): raises `block_end` so the block is committed.
+* `_amps`: every 5 min (at :45 s), while owned and charging, if
+  |want − have| ≥ 2 A.
+* `_adopt`: charging goes off → on within 20 min of plugging in. It must
+  have been off for 2+ min, to ignore restart blips. Also required: Full
+  auto on, not owned, no override, at home. Then: owned on, last switch =
+  now − 3600 (so it may stop the session at the next check), `block_end` =
+  now.
+* `_reset`: ownership ends on unplug, on Full auto off, or when not charging
+  ≥ 20 min after the last switch (this also covers a start that never took).
+  Unplug clears override and paused. Full auto off clears paused. When
+  charging ended by itself, the amps go back to max.
+
+**Ownership and pause:** Full auto only stops sessions it owns (it started
+or adopted them). A charge started later by hand isn't stopped. If the user
+stops an owned session in the Tesla app, ownership is released after 20
+minutes, and the planner may start again after the 30-minute gap. That's why
+the dashboard's Stop button calls `script.tesla_charge_stop_manual`, which
+pauses Full auto until unplug. Automations must call plain
+`script.tesla_charge_stop`; the manual script would pause.
+
+**Anti-flapping:** at most 1 start/stop per 30 min, commitment to the whole
+grid block, amps every ≥ 5 min / ≥ 2 A, solar hysteresis, and a plan
+recalculated every 5 min. The fixed window automations (Section 7) are
+gated off while Full auto is on.
+
+**Testing:** the template was run outside HA in a Jinja harness (HA
+filters/globals mocked, a real dnap.hu `holnap.json`) over 43 scenarios:
+cloudy, sunny and partial days; Tariff A/D/Off; flat prices (the later block
+wins); negative prices; deadline mode; nowcast up and down;
+committed/hand-off; override/paused; min_soc; no price data; no solar
+entities. Not yet run in a live HA. The main unknowns are trigger-template
+`this` handling (guarded) and plan jitter from live PV (bounded by the
+hysteresis and the 30-minute gate).
+
+**Rules for future agents:**
+* Keep every decision in the plan sensor. The automations only act on
+  `should_charge` / `amps` / `commit_until_ts`. Don't add another charging
+  automation that bypasses ownership and the 30-minute gate.
+* Every new start/stop path must write
+  `input_datetime.tesla_auto_charge_last_switch` and respect ≥ 1800 s.
+* Never start charging away from home or unplugged.
+* When you add a planner input, also add it to the plan sensor's state
+  triggers.
+* Jinja: loops need a `namespace`. Macro output is a string (`| trim |
+  int`). Keep `slots` compact (16 KB recorder attribute limit).
+* Write through `number.<car>_charge_limit` / `_charge_current` built from
+  `input_text.tesla_car_name`; read through the `vehicle_*` aliases.
+* Settings helpers never get `initial:` (Section 11). Fresh-install values
+  are each helper's minimum (min SoC 0, cheap −50 = never, max amps 5,
+  feed-in 0), the first option (3-phase) and 00:00 (ready by). The README
+  tells users to set them.
+* Don't drive the car's own Scheduled Charging. Tell users to turn it off in
+  the Tesla app; it would fight the planner.

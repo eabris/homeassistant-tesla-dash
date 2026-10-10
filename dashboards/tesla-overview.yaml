@@ -1159,6 +1159,7 @@ views:
                 show_label: true
                 label: |
                   [[[
+                    if (states['input_boolean.tesla_full_auto_charging']?.state === 'on') return 'Full auto';
                     return states['input_boolean.tesla_enable_smart_charging']?.state === 'on' ? 'On' : 'Off';
                   ]]]
                 tap_action:
@@ -2849,15 +2850,85 @@ views:
                   box-shadow: none !important;
                 }
 
-          # 4.4 Action Row (Start/Stop + Unlock Port)
+          # 4.4 Full Auto Charging status (agents.md Section 22). Tap toggles
+          # Full auto; hold opens the plan sensor (all its attributes).
+          - type: custom:button-card
+            entity: input_boolean.tesla_full_auto_charging
+            icon: |
+              [[[
+                return entity?.state === 'on'
+                  ? (states['sensor.tesla_auto_charge_plan']?.attributes?.icon || 'mdi:robot-outline')
+                  : 'mdi:robot-off-outline';
+              ]]]
+            name: |
+              [[[
+                return entity?.state === 'on' ? 'Full auto charging · On' : 'Full auto charging · Off';
+              ]]]
+            size: 18px
+            show_state: false
+            show_label: true
+            label: |
+              [[[
+                if (entity?.state !== 'on') return 'Tap to let Home Assistant pick the cheapest time (solar, prices, deadline).';
+                return states['sensor.tesla_auto_charge_plan']?.attributes?.summary || 'Working out a plan…';
+              ]]]
+            tap_action:
+              action: toggle
+            hold_action:
+              action: more-info
+              entity: sensor.tesla_auto_charge_plan
+            styles:
+              card:
+                - background-color: |
+                    [[[
+                      return entity?.state === 'on' ? 'rgba(110, 231, 183, 0.08)' : 'rgba(255,255,255,0.04)';
+                    ]]]
+                - border: 1px solid rgba(255,255,255,0.08)
+                - border-radius: 16px
+                - box-shadow: none
+                - padding: 14px 16px
+                - --ha-card-border-width: 0px
+              grid:
+                - grid-template-areas: '"i n" "i l"'
+                - grid-template-columns: 40px 1fr
+                - column-gap: 10px
+                - align-items: center
+              icon:
+                - width: 20px
+                - color: |
+                    [[[
+                      return entity?.state === 'on' ? '#6ee7b7' : 'rgba(244,244,245,0.55)';
+                    ]]]
+              img_cell:
+                - width: 40px
+                - height: 40px
+                - border-radius: 50%
+                - background: rgba(255,255,255,0.06)
+              name:
+                - justify-self: start
+                - font-size: 14px
+                - font-weight: 600
+                - color: "#f4f4f5"
+              label:
+                - justify-self: start
+                - text-align: left
+                - white-space: normal
+                - font-size: 12px
+                - margin-top: 2px
+                - color: rgba(244,244,245,0.6)
+
+          # 4.5 Action Row (Start/Stop + Unlock Port). With Full auto on,
+          # "Start" becomes "Charge now" (charges until unplugged, whatever
+          # the price) and "Stop" also pauses Full auto until unplugged.
           - type: horizontal-stack
             cards:
               - type: custom:button-card
-                entity: script.tesla_charge_stop
+                entity: script.tesla_charge_stop_manual
                 icon: mdi:lightning-bolt
                 name: |
                   [[[
-                    return states['binary_sensor.tesla_charging_active']?.state === 'on' ? 'Stop charging' : 'Start charging';
+                    if (states['binary_sensor.tesla_charging_active']?.state === 'on') return 'Stop charging';
+                    return states['input_boolean.tesla_full_auto_charging']?.state === 'on' ? 'Charge now' : 'Start charging';
                   ]]]
                 size: 20px
                 show_state: false
@@ -2865,7 +2936,8 @@ views:
                   action: call-service
                   service: |
                     [[[
-                      return states['binary_sensor.tesla_charging_active']?.state === 'on' ? 'script.tesla_charge_stop' : 'script.tesla_charge_start';
+                      if (states['binary_sensor.tesla_charging_active']?.state === 'on') return 'script.tesla_charge_stop_manual';
+                      return states['input_boolean.tesla_full_auto_charging']?.state === 'on' ? 'script.tesla_charge_now' : 'script.tesla_charge_start';
                     ]]]
                 styles:
                   card:
@@ -3285,7 +3357,9 @@ views:
                   const used = parseFloat(states['sensor.tesla_quota_usage_monthly']?.state);
                   const quota = parseFloat(states['sensor.tesla_discounted_quota_monthly']?.state);
                   const quotaOn = states['input_boolean.tesla_use_discounted_quota']?.state === 'on';
-                  const dCharging = states['input_boolean.tesla_tariff_d_charging']?.state === 'on';
+                  const fullAuto = states['input_boolean.tesla_full_auto_charging']?.state === 'on';
+                  const autoOwned = states['input_boolean.tesla_auto_charge_owned']?.state === 'on';
+                  const autoSummary = states['sensor.tesla_auto_charge_plan']?.attributes?.summary || '';
                   const fmt = (v, digits) => isNaN(v) ? '–' : v.toLocaleString('hu-HU', { maximumFractionDigits: digits });
                   const pct = (!isNaN(used) && quota > 0) ? Math.min(100, used / quota * 100) : 0;
                   const barColor = pct >= 100 ? '#F44336' : (pct >= 80 ? '#FF9800' : '#4CAF50');
@@ -3301,8 +3375,8 @@ views:
                     : '';
                   const hint = tariff ? '' :
                     `<div style="color:#888;font-size:11px;margin-top:6px">Flat default rate — tap to pick Tariff A or D</div>`;
-                  const dBadge = dCharging
-                    ? `<div style="color:#4CAF50;font-size:11px;font-weight:600;margin-top:6px">⚡ Tariff D smart charging active</div>`
+                  const dBadge = fullAuto
+                    ? `<div style="color:${autoOwned ? '#4CAF50' : '#888'};font-size:11px;font-weight:600;margin-top:6px">🤖 Full auto · ${autoSummary}</div>`
                     : '';
                   return `<div style="width:100%;text-align:left">
                     <div style="color:#888;font-size:11px;font-weight:600;letter-spacing:1.5px;padding-bottom:4px">🇭🇺 TARIFF · ${mode.toUpperCase()}</div>

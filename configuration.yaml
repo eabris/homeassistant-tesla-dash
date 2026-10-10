@@ -258,6 +258,19 @@ sensor:
       days: 7
     precision: 2
 
+  # Full auto charging (agents.md Section 22): solar surplus averaged over the
+  # last 10 minutes, so a passing cloud doesn't start/stop charging.
+  - platform: statistics
+    name: "Tesla Solar Surplus Power 10m"
+    unique_id: tesla_solar_surplus_power_10m_v1
+    entity_id: sensor.tesla_solar_surplus_power
+    state_characteristic: average_step
+    max_age:
+      minutes: 10
+    sampling_size: 60
+    keep_last_sample: true
+    precision: 2
+
 input_select:
   tesla_currency:
     name: "Tesla Currency"
@@ -315,6 +328,16 @@ input_select:
       - "Off"
       - "Tariff A"
       - "Tariff D"
+
+  # Full auto charging (agents.md Section 22): how your home charger is wired.
+  # Used to turn charging amps into kW (amps x phases x 230 V). "3-phase" is
+  # first, so it is the default on a fresh install.
+  tesla_home_charger_phases:
+    name: "Tesla Home Charger Phases"
+    icon: mdi:sine-wave
+    options:
+      - "3-phase"
+      - "1-phase"
 
 input_number:
   tesla_odometer_monthly_baseline:
@@ -511,18 +534,54 @@ input_number:
     icon: mdi:home-lightning-bolt-outline
     mode: box
 
-  # Tariff D smart charging starts when the active price is at or below this
-  # (and stops once it goes above it, after at least 60 min of charging).
-  # Allows negative values because Tariff D prices can go below zero. Starts
-  # at the minimum (-50) on a fresh install, so nothing charges until you set
-  # a real threshold (e.g. 45).
-  tesla_d_tariff_charge_threshold:
-    name: "Tariff D Charge Price Threshold"
-    unit_of_measurement: "Ft/kWh"
+  # --- Full auto charging (agents.md Section 22). No `initial:` (Section 11):
+  # each one starts at its minimum on a fresh install, so set them once in
+  # Analytics > Settings > Full Auto Charging. ---
+  # Full auto charges whenever the price right now is at or below this, on
+  # top of its normal plan (handy for negative Tariff D prices). Can be
+  # negative. The minimum (-50, the fresh-install value) means "never".
+  # (Was input_number.tesla_d_tariff_charge_threshold.)
+  tesla_auto_charge_cheap_price:
+    name: "Always Charge Below Price"
+    unit_of_measurement: "/kWh"
     min: -50
     max: 200
     step: 0.5
     icon: mdi:cash-check
+    mode: box
+
+  # Below this battery level Full auto charges straight away at full power,
+  # whatever the price. 0 = off.
+  tesla_auto_charge_min_soc:
+    name: "Always Charge Below Battery Level"
+    unit_of_measurement: "%"
+    min: 0
+    max: 80
+    step: 1
+    icon: mdi:battery-alert-variant-outline
+    mode: slider
+
+  # The highest current your home charger / circuit allows, per phase.
+  # Full auto charges at this, and only lowers it to follow solar surplus.
+  tesla_home_charger_max_amps:
+    name: "Home Charger Max Current"
+    unit_of_measurement: "A"
+    min: 5
+    max: 32
+    step: 1
+    icon: mdi:current-ac
+    mode: box
+
+  # What your utility pays you for 1 kWh fed into the grid (Hungarian bruttó
+  # billing: roughly 5 Ft/kWh). Charging from solar surplus "costs" this much,
+  # because that energy would otherwise have been sold.
+  tesla_solar_feed_in_price:
+    name: "Solar Feed-in Price"
+    unit_of_measurement: "/kWh"
+    min: 0
+    max: 200
+    step: 0.5
+    icon: mdi:solar-power-variant
     mode: box
 
 input_text:
@@ -617,6 +676,26 @@ input_text:
     name: "Home Grid Import Sensor (entity ID)"
     icon: mdi:meter-electric
 
+  # --- Full auto charging sensors (agents.md Section 22). Entity IDs, typed
+  # in Analytics > Settings. All optional: leave empty if you have no solar.
+  # Live grid power (W or kW), POSITIVE while importing from the grid and
+  # negative while exporting, e.g. sensor.inverter_grid_power.
+  tesla_grid_power_entity:
+    name: "Home Grid Power Sensor (entity ID)"
+    icon: mdi:transmission-tower-import
+  # Live solar (PV) production power (W or kW), e.g. sensor.inverter_pv_power.
+  # Compared with the forecast to correct the next few hours ("nowcast"), and
+  # used for the surplus when the grid power sensor above is empty.
+  tesla_pv_power_entity:
+    name: "Solar Power Sensor (entity ID)"
+    icon: mdi:solar-power
+  # Forecast.Solar "Estimated power production - now" entity, e.g.
+  # sensor.power_production_now. Its "energy production today remaining" and
+  # "energy production tomorrow" siblings are found from this name.
+  tesla_solar_forecast_entity:
+    name: "Solar Forecast Sensor (entity ID)"
+    icon: mdi:weather-partly-cloudy
+
 input_boolean:
   tesla_enable_smart_charging:
     name: "Tesla Enable Smart Charging"
@@ -630,12 +709,35 @@ input_boolean:
     name: "Tesla Use Discounted Quota"
     icon: mdi:sale
 
-  # Set by automation tesla_tariff_d_charge_start, cleared by
-  # tesla_tariff_d_charge_stop / tesla_tariff_d_flag_reset. Lets the Tariff D
-  # automation stop only charging it started itself, never a charge you
-  # started by hand. Not meant to be toggled manually.
-  tesla_tariff_d_charging:
-    name: "Tesla Tariff D Charging Active"
+  # Full auto charging (agents.md Section 22): the master switch. While on,
+  # sensor.tesla_auto_charge_plan decides when the car charges at home, and
+  # the fixed Smart Charging window automations step aside.
+  tesla_full_auto_charging:
+    name: "Tesla Full Auto Charging"
+    icon: mdi:robot-outline
+
+  # "Charge now": set by script.tesla_charge_now, cleared automatically when
+  # the cable is unplugged. Full auto then charges straight away up to the
+  # car's own charge limit, whatever the price.
+  tesla_charge_now_override:
+    name: "Tesla Charge Now Override"
+    icon: mdi:flash-alert
+
+  # "Paused": set by script.tesla_charge_stop_manual (the dashboard's Stop
+  # charging button) while Full auto is on, so Full auto doesn't start
+  # charging again by itself. Cleared on unplug, by "Charge now", or by
+  # turning Full auto off.
+  tesla_auto_charge_paused:
+    name: "Tesla Full Auto Paused"
+    icon: mdi:pause-circle-outline
+
+  # On while Full auto is managing the current charging session (it started
+  # it, or adopted the car's own plug-in auto-start). Full auto only ever
+  # stops sessions it owns, never a charge you started by hand later.
+  # Automation-managed; not meant to be toggled manually.
+  # (Was input_boolean.tesla_tariff_d_charging.)
+  tesla_auto_charge_owned:
+    name: "Tesla Auto Charge Session Owned"
     icon: mdi:robot
 
 input_datetime:
@@ -665,15 +767,33 @@ input_datetime:
     has_time: true
     icon: mdi:clock-end
 
-  # When the Tariff D automation last started or stopped charging. Used to
-  # keep at least 60 min of charging and 30 min of pause between its own
-  # switches, so a price hovering around the threshold can't toggle the
-  # charger every 15 minutes. Automation-managed; no `initial:`.
-  tesla_tariff_d_last_switch:
-    name: "Tesla Tariff D Last Switch"
+  # --- Full auto charging (agents.md Section 22) ---
+  # The car should be charged to the Target Charge Limit by this time every
+  # day (an earlier Next Departure above wins). No `initial:`: it starts at
+  # 00:00 on a fresh install, so set it once (e.g. 07:00).
+  tesla_charge_ready_by:
+    name: "Tesla Charge Ready By"
+    has_date: false
+    has_time: true
+    icon: mdi:clock-check-outline
+
+  # When Full auto last started or stopped charging. Keeps at least 30 min
+  # between its own switches, so charging can never flap.
+  # Automation-managed; no `initial:`. (Was tesla_tariff_d_last_switch.)
+  tesla_auto_charge_last_switch:
+    name: "Tesla Auto Charge Last Switch"
     has_date: true
     has_time: true
     icon: mdi:timer-sync-outline
+
+  # End of the charging block Full auto committed to when it started
+  # charging. It keeps charging until then, even if a later price update
+  # would now pick a slightly different block. Automation-managed.
+  tesla_auto_charge_block_end:
+    name: "Tesla Auto Charge Block End"
+    has_date: true
+    has_time: true
+    icon: mdi:timer-check-outline
 
 template:
   # ===== FLEET SENSOR ALIASES ("vehicle_" namespace) =====
@@ -1862,6 +1982,516 @@ template:
              and states('sensor.tesla_quota_usage_monthly') | float(0)
                  < states('sensor.tesla_discounted_quota_monthly') | float(207) }}
 
+  # ===== FULL AUTO CHARGING (agents.md Section 22) =====
+  # Tariff D quarter-hour prices for today and tomorrow (dnap.hu, CC BY 4.0),
+  # kept as compact [unix time, gross Ft/kWh] pairs in the "slots" attribute
+  # (~4 KB; the raw files are too big for a recorder attribute). Tomorrow's
+  # prices appear around 13:00-14:00: checked every 30 min from 13:00 to
+  # 16:00, then hourly, until found. Today's are fetched on start-up and every
+  # 3 h while missing. A check that finds nothing yet logs one harmless
+  # rest_command 404 warning (README Troubleshooting). Runs in every tariff
+  # mode but only fetches while data is missing (a few requests a day).
+  # State: when the known prices end.
+  - triggers:
+      - trigger: homeassistant
+        event: start
+      - trigger: time_pattern
+        minutes: "/30"
+    actions:
+      - variables:
+          dnap_ma: "{{ none }}"
+          dnap_holnap: "{{ none }}"
+          known_days: >
+            {% set slots = state_attr('sensor.tesla_d_price_forecast', 'slots') %}
+            {% set slots = slots if slots is sequence and slots is not string else [] %}
+            {% set t1 = as_timestamp(today_at('00:00')) %}
+            {% set t2 = as_timestamp(today_at('00:00') + timedelta(days=1)) %}
+            {% set t3 = as_timestamp(today_at('00:00') + timedelta(days=2)) %}
+            {% set ts = slots | map(attribute='0') | list %}
+            {{ [ts | select('ge', t1) | select('lt', t2) | list | count > 0,
+                ts | select('ge', t2) | select('lt', t3) | list | count > 0] }}
+          fetch_ma: >
+            {{ not known_days[0]
+               and ((trigger is defined and trigger.platform == 'homeassistant')
+                    or (now().hour % 3 == 0 and now().minute < 30)) }}
+          fetch_holnap: >
+            {{ not known_days[1] and now().hour >= 13
+               and (now().hour < 16 or now().minute < 30) }}
+      - if: "{{ fetch_ma }}"
+        then:
+          - action: rest_command.tesla_dnap_prices
+            data:
+              day: ma
+            response_variable: dnap_ma
+            continue_on_error: true
+      - if: "{{ fetch_holnap }}"
+        then:
+          - action: rest_command.tesla_dnap_prices
+            data:
+              day: holnap
+            response_variable: dnap_holnap
+            continue_on_error: true
+      - variables:
+          # Old slots from today on, replaced by any freshly fetched ones
+          # (matched by start time, never by position: DST days have 92/100).
+          merged: >
+            {% set old = state_attr('sensor.tesla_d_price_forecast', 'slots') %}
+            {% set old = old if old is sequence and old is not string else [] %}
+            {% set t1 = as_timestamp(today_at('00:00')) %}
+            {% set ns = namespace(new=[], keep=[]) %}
+            {% for r in [dnap_ma, dnap_holnap] %}
+              {% if r is mapping and r.get('status') == 200 and r.get('content') is mapping %}
+                {% set qs = r.content.get('negyedorak') %}
+                {% if qs is sequence and qs is not string %}
+                  {% for q in qs %}
+                    {% set s = as_timestamp(q.get('kezdet'), none) if q is mapping else none %}
+                    {% if s is number and q.get('d_brutto_ft_kwh') is number %}
+                      {% set ns.new = ns.new + [[s | int, q.d_brutto_ft_kwh]] %}
+                    {% endif %}
+                  {% endfor %}
+                {% endif %}
+              {% endif %}
+            {% endfor %}
+            {% set new_ts = ns.new | map(attribute='0') | list %}
+            {% for s in old %}
+              {% if s is sequence and s is not string and s | count == 2
+                    and s[0] is number and s[1] is number
+                    and s[0] >= t1 and (s[0] | int) not in new_ts %}
+                {% set ns.keep = ns.keep + [[s[0] | int, s[1]]] %}
+              {% endif %}
+            {% endfor %}
+            {{ (ns.keep + ns.new) | sort(attribute='0') }}
+    sensor:
+      - name: "Tesla D Price Forecast"
+        unique_id: tesla_d_price_forecast_v1
+        device_class: timestamp
+        icon: mdi:chart-timeline-variant-shimmer
+        state: >
+          {% set ts = merged | map(attribute='0') | list %}
+          {{ ((ts | max) + 900) | timestamp_local if ts else none }}
+        attributes:
+          slots: "{{ merged }}"
+          today_available: >
+            {% set t1 = as_timestamp(today_at('00:00')) %}
+            {% set t2 = as_timestamp(today_at('00:00') + timedelta(days=1)) %}
+            {{ merged | map(attribute='0') | select('ge', t1) | select('lt', t2) | list | count > 0 }}
+          tomorrow_available: >
+            {% set t2 = as_timestamp(today_at('00:00') + timedelta(days=1)) %}
+            {% set t3 = as_timestamp(today_at('00:00') + timedelta(days=2)) %}
+            {{ merged | map(attribute='0') | select('ge', t2) | select('lt', t3) | list | count > 0 }}
+          last_fetch: >
+            {% set ns = namespace(p=[]) %}
+            {% if fetch_ma %}{% set ns.p = ns.p + ['today: ' ~ (dnap_ma.status if dnap_ma is mapping else 'error')] %}{% endif %}
+            {% if fetch_holnap %}{% set ns.p = ns.p + ['tomorrow: ' ~ (dnap_holnap.status if dnap_holnap is mapping else 'error')] %}{% endif %}
+            {{ ns.p | join(', ') if ns.p else this.attributes.get('last_fetch', 'none yet') }}
+          attribution: "Tariff D prices: dnap.hu (CC BY 4.0)"
+
+  # Solar power the car could use right now, in kW: what is being exported
+  # plus what the car itself is drawing (so it doesn't "see" its own load and
+  # throttle down). Uses input_text.tesla_grid_power_entity (+ = import); if
+  # that is empty/unavailable, solar power minus the household base load
+  # (input_number.tesla_household_monthly_kwh / 730 h, 0.3 kW if unset). The
+  # car's draw is estimated from its amps setpoint x phases x 230 V, which is
+  # a close approximation. Averaged over 10 min by
+  # sensor.tesla_solar_surplus_power_10m (statistics, above).
+  - triggers:
+      - trigger: time_pattern
+        minutes: "/1"
+    sensor:
+      - name: "Tesla Solar Surplus Power"
+        unique_id: tesla_solar_surplus_power_v1
+        unit_of_measurement: "kW"
+        device_class: power
+        state_class: measurement
+        icon: mdi:solar-power-variant-outline
+        state: >
+          {% set car = states('input_text.tesla_car_name') %}
+          {% set rx = '^[a-z0-9_]+[.][a-z0-9_]+$' %}
+          {% set g_id = states('input_text.tesla_grid_power_entity') | trim | lower %}
+          {% set pv_id = states('input_text.tesla_pv_power_entity') | trim | lower %}
+          {% set g = states(g_id) | float(none) if g_id is match(rx) else none %}
+          {% set pv = states(pv_id) | float(none) if pv_id is match(rx) else none %}
+          {% set g = g / 1000 if g is not none and (state_attr(g_id, 'unit_of_measurement') or '') | lower == 'w' else g %}
+          {% set pv = pv / 1000 if pv is not none and (state_attr(pv_id, 'unit_of_measurement') or '') | lower == 'w' else pv %}
+          {% set phases = 1 if is_state('input_select.tesla_home_charger_phases', '1-phase') else 3 %}
+          {% set drawing = (is_state('binary_sensor.tesla_charging_active', 'on')
+                            or is_state('input_boolean.tesla_auto_charge_owned', 'on'))
+                           and is_state('device_tracker.' ~ car ~ '_location', 'home') %}
+          {% set car_kw = states('number.vehicle_charge_current') | float(0) * phases * 0.23 if drawing else 0 %}
+          {% set base = states('input_number.tesla_household_monthly_kwh') | float(0) / 730 %}
+          {% set base = base if base > 0 else 0.3 %}
+          {% if g is not none %}
+            {{ ([car_kw - g, 0] | max) | round(2) }}
+          {% elif pv is not none %}
+            {{ ([pv - base, 0] | max) | round(2) }}
+          {% else %}
+            {{ none }}
+          {% endif %}
+        attributes:
+          source: >
+            {% set rx = '^[a-z0-9_]+[.][a-z0-9_]+$' %}
+            {% set g_id = states('input_text.tesla_grid_power_entity') | trim | lower %}
+            {% set pv_id = states('input_text.tesla_pv_power_entity') | trim | lower %}
+            {% if g_id is match(rx) and states(g_id) | is_number %}grid
+            {% elif pv_id is match(rx) and states(pv_id) | is_number %}solar
+            {% else %}none{% endif %}
+
+  # The Full auto charge planner. Every 5 min (and whenever an input changes)
+  # it works out how much energy is needed to reach the Target Charge Limit
+  # by the deadline (Charge Ready By, or an earlier Next Departure) and plans
+  # it SOLAR FIRST, GRID FOR THE REST:
+  #  1. Reference ("grid only") price: the cheapest continuous full-power
+  #     block that covers the whole need.
+  #  2. Following the sun = charging at max(surplus, 5 A). Sun is worth only
+  #     the Solar Feed-in Price; whatever 5 A needs on top comes from the
+  #     grid. Every quarter with at least 30% of 5 A in surplus (forecast x
+  #     0.8, to be safe) where that blended price is 5% below the reference
+  #     is followed, and its energy is subtracted from the need.
+  #  3. The rest comes from the cheapest continuous full-power block before
+  #     the deadline (+1 spare quarter, and the last quarter is kept free).
+  #     If the block overlaps followed quarters it is lengthened to make up
+  #     for it. Equal prices -> the LATER block wins, so on a flat tariff
+  #     with no sun the car charges just before the deadline.
+  #  4. If the full-power block no longer fits, it charges now ("deadline").
+  # The plan is redone every 5 min, so if the sun doesn't show up the
+  # missing energy simply moves into a grid block later (e.g. at night).
+  #  - Price per kWh: Tariff D = live dnap.hu quarter-hour price (same time
+  #    yesterday / average when a quarter isn't published yet); Tariff A = the
+  #    above-band rate; Off = Default Electricity Rate. Inside the discounted
+  #    band the car only uses up quota the house would otherwise use, so the
+  #    house pays the above-band rate later: that is the real cost.
+  #  - Solar: Forecast.Solar's remaining-today / tomorrow energy is spread over
+  #    the day as a sine curve, minus the household base load. The next ~3 h
+  #    are scaled by measured / forecast output now ("nowcast", 0.3-2x), and
+  #    the current quarter uses the measured 10-min surplus.
+  # The automations in packages/tesla/automations.yaml act on it. State = the
+  # reason (off/away/unplugged/no_data/override/paused/full/min_soc/
+  # committed/deadline/planned/cheap/solar/waiting); attribute "summary"
+  # explains it.
+  - triggers:
+      - trigger: homeassistant
+        event: start
+      - trigger: time_pattern
+        minutes: "/5"
+      - trigger: state
+        entity_id:
+          - sensor.vehicle_battery_level
+          - binary_sensor.vehicle_charge_cable
+          - binary_sensor.tesla_charging_active
+          - sensor.tesla_d_price_forecast
+          - input_boolean.tesla_full_auto_charging
+          - input_boolean.tesla_charge_now_override
+          - input_boolean.tesla_auto_charge_paused
+          - input_boolean.tesla_auto_charge_owned
+          - input_number.tesla_target_charge_limit
+          - input_number.tesla_auto_charge_min_soc
+          - input_number.tesla_auto_charge_cheap_price
+          - input_number.tesla_home_charger_max_amps
+          - input_number.tesla_solar_feed_in_price
+          - input_select.tesla_home_charger_phases
+          - input_select.tesla_tariff_mode
+          - input_datetime.tesla_charge_ready_by
+          - input_datetime.tesla_next_departure
+    actions:
+      - variables:
+          plan: >
+            {#- Start of the cheapest n-quarter block among the first m quarters.
+                Equal cost -> the LATER block (charge as late as possible), and
+                the last quarter before the deadline is kept free as a buffer. -#}
+            {%- macro best_start(arr, n, m) -%}
+              {%- set w = namespace(win=arr[:n] | sum, best=0, bi=0) -%}
+              {%- set w.best = w.win -%}
+              {%- for i in range(1, m - n) -%}
+                {%- set w.win = w.win - arr[i - 1] + arr[i + n - 1] -%}
+                {%- if w.win <= w.best + 0.01 -%}
+                  {%- set w.best = [w.best, w.win] | min -%}
+                  {%- set w.bi = i -%}
+                {%- endif -%}
+              {%- endfor -%}
+              {{- w.bi -}}
+            {%- endmacro -%}
+            {% set car = states('input_text.tesla_car_name') %}
+            {% set nowts = as_timestamp(now()) %}
+            {% set dstr = now().strftime('%Y-%m-%d') %}
+            {% set enabled = is_state('input_boolean.tesla_full_auto_charging', 'on') %}
+            {% set home = is_state('device_tracker.' ~ car ~ '_location', 'home') %}
+            {% set plugged = is_state('binary_sensor.vehicle_charge_cable', 'on') %}
+            {% set owned = is_state('input_boolean.tesla_auto_charge_owned', 'on') %}
+            {% set override = is_state('input_boolean.tesla_charge_now_override', 'on') %}
+            {% set paused = is_state('input_boolean.tesla_auto_charge_paused', 'on') %}
+            {% set soc = states('sensor.vehicle_battery_level') | float(none) %}
+            {% set target = states('input_number.tesla_target_charge_limit') | float(80) %}
+            {% set car_limit = states('number.vehicle_charge_limit') | float(100) %}
+            {% set min_soc = states('input_number.tesla_auto_charge_min_soc') | float(0) %}
+            {% set cap = states('input_number.tesla_battery_capacity_kwh') | float(75) %}
+            {% set cap = cap if cap > 0 else 75 %}
+            {% set max_a = [states('input_number.tesla_home_charger_max_amps') | int(16), 5] | max %}
+            {% set phases = 1 if is_state('input_select.tesla_home_charger_phases', '1-phase') else 3 %}
+            {% set p_max = max_a * phases * 0.23 %}
+            {% set p_min = 5 * phases * 0.23 %}
+            {% set thr = p_min * 0.3 %}
+            {% set feed_in = states('input_number.tesla_solar_feed_in_price') | float(0) %}
+            {% set cheap = states('input_number.tesla_auto_charge_cheap_price') | float(-50) %}
+            {% set mode = states('input_select.tesla_tariff_mode') %}
+            {% set base = states('input_number.tesla_household_monthly_kwh') | float(0) / 730 %}
+            {% set base = base if base > 0 else 0.3 %}
+            {% set unit = 'Ft' if mode in ['Tariff A', 'Tariff D'] else states('sensor.tesla_currency_symbol') %}
+            {# --- deadline: next "ready by" time, or an earlier departure --- #}
+            {% set rb = states('input_datetime.tesla_charge_ready_by') %}
+            {% set rb = rb[:5] if rb is match('^[0-9]{2}:[0-9]{2}') else '07:00' %}
+            {% set dl_dt = today_at(rb) %}
+            {% set dl_dt = dl_dt if as_timestamp(dl_dt) >= nowts + 1800 else dl_dt + timedelta(days=1) %}
+            {% set dl = as_timestamp(dl_dt) %}
+            {% set dep = state_attr('input_datetime.tesla_next_departure', 'timestamp') %}
+            {% set dl = dep if dep is number and nowts + 900 < dep < dl else dl %}
+            {% set q0 = ((nowts // 900) * 900) | int %}
+            {% set M = ((dl - q0) // 900) | int %}
+            {# --- price per quarter --- #}
+            {% set default_price = states('input_number.tesla_default_electricity_cost') | float(0) %}
+            {% set a_market = state_attr('sensor.tesla_tariff_a_current_price', 'market_rate') | float(70.10) %}
+            {% set d_live = states('sensor.tesla_d_tariff_price') | float(none) %}
+            {% set slots = state_attr('sensor.tesla_d_price_forecast', 'slots') %}
+            {% set slots = slots if slots is sequence and slots is not string else [] %}
+            {% set ns = namespace(d={}, tot=0, n=0) %}
+            {% if mode == 'Tariff D' %}
+              {% for s in slots %}
+                {% if s is sequence and s is not string and s | count == 2 and s[1] is number %}
+                  {% set ns.d = dict(ns.d, **{(s[0] | int | string): s[1]}) %}
+                  {% set ns.tot = ns.tot + s[1] %}
+                  {% set ns.n = ns.n + 1 %}
+                {% endif %}
+              {% endfor %}
+            {% endif %}
+            {% set d_fill = ns.tot / ns.n if ns.n > 0 else (d_live if d_live is not none else a_market) %}
+            {# --- solar forecast (Forecast.Solar) --- #}
+            {% set fc = states('input_text.tesla_solar_forecast_entity') | trim | lower %}
+            {% set has_fc = fc is match('^sensor[.][a-z0-9_]*power_production_now[a-z0-9_]*$') %}
+            {% set rem_id = fc | replace('power_production_now', 'energy_production_today_remaining') %}
+            {% set tom_id = fc | replace('power_production_now', 'energy_production_tomorrow') %}
+            {% set e_rem = states(rem_id) | float(none) if has_fc else none %}
+            {% set e_tom = states(tom_id) | float(none) if has_fc else none %}
+            {% set e_rem = e_rem / 1000 if e_rem is not none and (state_attr(rem_id, 'unit_of_measurement') or '') | lower == 'wh' else e_rem %}
+            {% set e_tom = e_tom / 1000 if e_tom is not none and (state_attr(tom_id, 'unit_of_measurement') or '') | lower == 'wh' else e_tom %}
+            {% set nr = as_timestamp(state_attr('sun.sun', 'next_rising'), none) %}
+            {% set nst = as_timestamp(state_attr('sun.sun', 'next_setting'), none) %}
+            {% if nr is number and nst is number %}
+              {% set r1 = nr if (nr | timestamp_custom('%Y-%m-%d')) == dstr else nr - 86400 %}
+              {% set s1 = nst if (nst | timestamp_custom('%Y-%m-%d')) == dstr else nst - 86400 %}
+            {% else %}
+              {% set r1 = as_timestamp(today_at('06:00')) %}
+              {% set s1 = as_timestamp(today_at('18:00')) %}
+            {% endif %}
+            {% set L = [s1 - r1, 3600] | max %}
+            {% set r2 = r1 + 86400 %}
+            {% set s2 = s1 + 86400 %}
+            {% set xn = pi * ([nowts, r1] | max - r1) / L %}
+            {% set den1 = (L / 3600) / pi * (1 + cos([xn, pi] | min)) %}
+            {% set live = states('sensor.tesla_solar_surplus_power_10m') | float(none) %}
+            {# measured PV output now (for the nowcast): the PV sensor if set, else surplus + base load #}
+            {% set pv_id = states('input_text.tesla_pv_power_entity') | trim | lower %}
+            {% set pv_meas = states(pv_id) | float(none) if pv_id is match('^[a-z0-9_]+[.][a-z0-9_]+$') else none %}
+            {% set pv_meas = pv_meas / 1000 if pv_meas is not none and (state_attr(pv_id, 'unit_of_measurement') or '') | lower == 'w' else pv_meas %}
+            {% set pv_meas = pv_meas if pv_meas is not none else (live + base if live is not none else none) %}
+            {# --- per quarter: grid price, expected solar surplus, running totals --- #}
+            {% set eq = p_max * 0.25 %}
+            {% set ns2 = namespace(raw=[], eff=[], fe=[], fb=[], kc=1) %}
+            {% for i in range([M, 0] | max) %}
+              {% set q = q0 + i * 900 %}
+              {% set t = q + 450 %}
+              {% if mode == 'Tariff D' %}
+                {% set p = ns.d.get(q | string, ns.d.get((q - 86400) | string,
+                     d_live if (i == 0 and d_live is not none) else d_fill)) %}
+              {% elif mode == 'Tariff A' %}
+                {% set p = a_market %}
+              {% else %}
+                {% set p = default_price %}
+              {% endif %}
+              {% if r1 < t < s1 and e_rem is not none and den1 > 0.05 %}
+                {% set pv = e_rem * sin(pi * (t - r1) / L) / den1 %}
+              {% elif r2 < t < s2 and e_tom is not none %}
+                {% set pv = e_tom * pi / (2 * L / 3600) * sin(pi * (t - r2) / L) %}
+              {% else %}
+                {% set pv = 0 %}
+              {% endif %}
+              {# nowcast: scale the next ~3 h of forecast by measured / forecast now #}
+              {% if i == 0 %}
+                {% set ns2.kc = ([[pv_meas / pv, 0.3] | max, 2] | min) if (pv_meas is not none and pv > 0.3) else 1 %}
+              {% endif %}
+              {% set pv = pv * (1 + (ns2.kc - 1) * ([1 - (t - nowts) / 10800, 0] | max)) %}
+              {# forecast quarters count at 80%, to be on the safe side #}
+              {% set sur = live if (i == 0 and live is not none) else (pv - base) * 0.8 %}
+              {% set sur = [sur, 0] | max %}
+              {# Following the sun = charging at max(sun, 5 A): energy f this
+                 quarter at the blended price (sun at feed-in, rest from grid).
+                 A full-power block here gets the sun at feed-in for its part. #}
+              {% set f = ([[sur, p_min] | max, p_max] | min) * 0.25 %}
+              {% set fs = [sur * 0.25, f] | min %}
+              {% set ns2.fe = ns2.fe + [f if (sur >= thr and p > feed_in) else 0] %}
+              {% set ns2.fb = ns2.fb + [(fs * feed_in + (f - fs) * p) / f] %}
+              {% set ns2.eff = ns2.eff + [p - (p - feed_in) * ([sur / p_max, 1] | min)] %}
+              {% set ns2.raw = ns2.raw + [p] %}
+            {% endfor %}
+            {# --- energy needed; plan = follow the sun where it pays, cheapest grid block for the rest --- #}
+            {% set need = (([target - soc, 0] | max) / 100 * cap / 0.9) if soc is not none else 0 %}
+            {% set n_full = ((need / eq) | round(0, 'ceil') | int + 1) if need > 0 else 0 %}
+            {% set deadline_mode = n_full > 0 and n_full >= M %}
+            {% set ns3 = namespace(ref=none, sol=0, scost=0, ff=[], e2=[]) %}
+            {# reference: the whole need from the cheapest full-power block #}
+            {% if n_full > 0 and not deadline_mode %}
+              {% set b0 = best_start(ns2.eff, n_full, M) | trim | int %}
+              {% set ns3.ref = (ns2.eff[b0:b0 + n_full] | sum) / n_full %}
+            {% endif %}
+            {# follow the sun in quarters where the blend beats that by 5% #}
+            {% for i in range(ns2.raw | count) %}
+              {% set use = ns3.ref is not none and ns2.fe[i] > 0 and ns2.fb[i] < ns3.ref * 0.95 %}
+              {% set ns3.ff = ns3.ff + [ns2.fe[i] if use else 0] %}
+              {% set ns3.sol = ns3.sol + (ns2.fe[i] if use else 0) %}
+              {% set ns3.scost = ns3.scost + (ns2.fe[i] * ns2.fb[i] if use else 0) %}
+              {% set ns3.e2 = ns3.e2 + [ns2.raw[i] if use else ns2.eff[i]] %}
+            {% endfor %}
+            {# grid block for the rest; lengthened if it overlaps followed quarters #}
+            {% set grid_need = [need - ns3.sol, 0] | max %}
+            {% set N = ((grid_need / eq) | round(0, 'ceil') | int + 1) if grid_need > 0 else 0 %}
+            {% if deadline_mode %}
+              {% set bi = 0 %}
+              {% set N = M %}
+            {% elif N > 0 %}
+              {% set b1 = best_start(ns3.e2, N, M) | trim | int %}
+              {% set N2 = [N + ((ns3.ff[b1:b1 + N] | sum) / eq) | round(0, 'ceil') | int, n_full] | min %}
+              {% set bi = best_start(ns3.e2, N2, M) | trim | int if N2 > N else b1 %}
+              {% set N = N2 %}
+            {% else %}
+              {% set bi = -1 %}
+            {% endif %}
+            {% set bs = q0 + bi * 900 if bi >= 0 else none %}
+            {% set be = (dl | int if deadline_mode else bs + N * 900) if bi >= 0 else none %}
+            {% set blk = ns2.raw[bi:bi + N] if bi >= 0 else [] %}
+            {% set blk_e = ns3.e2[bi:bi + N] if bi >= 0 else [] %}
+            {% set avg_p = (blk | sum) / (blk | count) if blk | count > 0 else none %}
+            {% set avg_e = (blk_e | sum) / (blk_e | count) if blk_e | count > 0 else none %}
+            {% set solar_part = 0 if deadline_mode else [ns3.sol, need] | min %}
+            {% set grid_part = need - solar_part %}
+            {% set est = (ns3.scost * solar_part / ns3.sol if ns3.sol > 0 else 0)
+                         + (avg_e if avg_e is not none else 0) * grid_part %}
+            {% set price_now = ns2.raw[0] if ns2.raw | count > 0 else default_price %}
+            {% set sur_now = live if live is not none else 0 %}
+            {% set solar_amps = [[(sur_now * 1000 / (phases * 230)) | round(0, 'floor') | int, 5] | max, max_a] | min %}
+            {% set commit_end = state_attr('input_datetime.tesla_auto_charge_block_end', 'timestamp') | float(0) %}
+            {# Solar now: a surplus big enough for 5 A is always followed. A
+               smaller one (at least 30% of 5 A) is followed at 5 A with a grid
+               top-up while that blend beats the reference price (start below
+               95%, keep going up to 100%). #}
+            {% set blend = (([sur_now, p_min] | min) * feed_in + ([p_min - sur_now, 0] | max) * price_now) / p_min %}
+            {% set solar_ok = price_now > feed_in and live is not none
+                              and (live >= (p_min * 0.75 if owned else p_min)
+                                   or (ns3.ref is not none and live >= (thr * 0.7 if owned else thr)
+                                       and blend <= ns3.ref * (1.0 if owned else 0.95))) %}
+            {# --- decision, most important first --- #}
+            {% if not enabled %}{% set r = 'off' %}
+            {% elif not home %}{% set r = 'away' %}
+            {% elif not plugged %}{% set r = 'unplugged' %}
+            {% elif soc is none %}{% set r = 'no_data' %}
+            {% elif override and soc < car_limit %}{% set r = 'override' %}
+            {% elif paused %}{% set r = 'paused' %}
+            {% elif soc >= target %}{% set r = 'full' %}
+            {% elif soc < min_soc %}{% set r = 'min_soc' %}
+            {% elif owned and nowts < commit_end %}{% set r = 'committed' %}
+            {% elif deadline_mode %}{% set r = 'deadline' %}
+            {% elif bi == 0 %}{% set r = 'planned' %}
+            {% elif price_now <= cheap %}{% set r = 'cheap' %}
+            {% elif solar_ok %}{% set r = 'solar' %}
+            {% else %}{% set r = 'waiting' %}{% endif %}
+            {% set should = r in ['override', 'min_soc', 'committed', 'deadline', 'planned', 'cheap', 'solar']
+                            or (r == 'no_data' and owned) %}
+            {% set amps = solar_amps if r == 'solar' else max_a %}
+            {% set commit_until = (be if r in ['planned', 'deadline'] else (commit_end if r == 'committed' else nowts)) | int %}
+            {# --- text --- #}
+            {% set dl_s = dl | timestamp_custom('%H:%M' if (dl | timestamp_custom('%Y-%m-%d')) == dstr else '%a %H:%M') %}
+            {% set bs_s = bs | timestamp_custom('%H:%M' if (bs | timestamp_custom('%Y-%m-%d')) == dstr else '%a %H:%M') if bs is not none else '' %}
+            {% set be_s = be | timestamp_custom('%H:%M') if be is not none else '' %}
+            {% set ce_s = commit_end | timestamp_custom('%H:%M') %}
+            {% set price_s = ('%.1f' | format(avg_e)) ~ ' ' ~ unit ~ '/kWh' if avg_e is not none else '' %}
+            {% set cost_s = ' (~' ~ ('%.0f' | format(est)) ~ ' ' ~ unit ~ ' total)' if need > 0 else '' %}
+            {% set sol_s = '~' ~ ('%.1f' | format(solar_part)) ~ ' kWh from solar, ' if solar_part >= 0.5 else '' %}
+            {% set wait_s = ('Waiting. Plan: ' ~ sol_s ~ 'grid ' ~ bs_s ~ '–' ~ be_s ~ ' at avg ' ~ price_s ~ cost_s ~ ', ready by ' ~ dl_s ~ '.')
+                            if bs is not none else
+                            ('Waiting for solar: ~' ~ ('%.1f' | format(ns3.sol)) ~ ' kWh expected before ' ~ dl_s ~ ' covers the ' ~ ('%.1f' | format(need)) ~ ' kWh needed.') %}
+            {% set texts = {
+                 'off': 'Full auto charging is off.',
+                 'away': 'The car is not at home.',
+                 'unplugged': 'The car is not plugged in.',
+                 'no_data': 'Waiting for battery data from the car.',
+                 'override': "Charge now: charging to the car's own limit (" ~ (car_limit | int) ~ '%) until unplugged.',
+                 'paused': 'Paused (you stopped charging) until the car is unplugged. Tap Charge now to charge anyway.',
+                 'full': 'Target reached (' ~ (soc | int if soc is not none else 0) ~ '% of ' ~ (target | int) ~ '%).',
+                 'min_soc': 'Battery below ' ~ (min_soc | int) ~ '%: charging now at full power.',
+                 'committed': 'Charging in the planned block until ' ~ ce_s ~ '.',
+                 'deadline': 'Charging now at full power to be ready by ' ~ dl_s ~ '.',
+                 'planned': 'Charging now in the cheapest block ' ~ bs_s ~ '–' ~ be_s ~ ', avg ' ~ price_s ~ cost_s ~ '.',
+                 'cheap': 'Price now (' ~ ('%.1f' | format(price_now)) ~ ' ' ~ unit ~ '/kWh) is at or below your Always Charge Below Price.',
+                 'solar': ('Charging from solar surplus (' ~ ('%.1f' | format(sur_now)) ~ ' kW, ' ~ solar_amps ~ ' A).')
+                          if sur_now >= p_min else
+                          ('Charging at 5 A on ' ~ ('%.1f' | format(sur_now)) ~ ' kW sun + grid (~' ~ ('%.0f' | format(blend)) ~ ' ' ~ unit ~ '/kWh, cheaper than ~' ~ ('%.0f' | format(ns3.ref or 0)) ~ ' ' ~ unit ~ '/kWh from the grid alone).'),
+                 'waiting': wait_s
+               } %}
+            {{ {
+                 'reason': r,
+                 'should_charge': should,
+                 'amps': amps,
+                 'summary': texts[r],
+                 'need_kwh': need | round(1),
+                 'solar_kwh': solar_part | round(1),
+                 'quarters_needed': N,
+                 'deadline': dl_s,
+                 'deadline_ts': dl | int,
+                 'block_start': bs_s,
+                 'block_end': be_s,
+                 'block_start_ts': bs,
+                 'block_end_ts': be,
+                 'commit_until_ts': commit_until,
+                 'avg_price': avg_p | round(1) if avg_p is not none else none,
+                 'avg_effective_price': avg_e | round(1) if avg_e is not none else none,
+                 'grid_only_price': ns3.ref | round(1) if ns3.ref is not none else none,
+                 'est_cost': est | round(0) if need > 0 else none,
+                 'price_now': price_now | round(1),
+                 'surplus_kw': sur_now | round(2),
+                 'solar_forecast': has_fc
+               } }}
+    sensor:
+      - name: "Tesla Auto Charge Plan"
+        unique_id: tesla_auto_charge_plan_v1
+        state: "{{ plan.reason }}"
+        icon: >
+          {{ {'off': 'mdi:robot-off-outline', 'away': 'mdi:home-export-outline',
+              'unplugged': 'mdi:power-plug-off-outline', 'no_data': 'mdi:help-circle-outline',
+              'override': 'mdi:flash-alert', 'paused': 'mdi:pause-circle-outline',
+              'full': 'mdi:battery-check',
+              'min_soc': 'mdi:battery-alert-variant-outline', 'committed': 'mdi:battery-charging',
+              'deadline': 'mdi:clock-alert-outline', 'planned': 'mdi:battery-charging',
+              'cheap': 'mdi:cash-fast', 'solar': 'mdi:solar-power',
+              'waiting': 'mdi:timer-sand'}.get(plan.reason, 'mdi:robot-outline') }}
+        attributes:
+          should_charge: "{{ plan.should_charge }}"
+          amps: "{{ plan.amps }}"
+          summary: "{{ plan.summary }}"
+          need_kwh: "{{ plan.need_kwh }}"
+          solar_kwh: "{{ plan.solar_kwh }}"
+          quarters_needed: "{{ plan.quarters_needed }}"
+          deadline: "{{ plan.deadline }}"
+          deadline_ts: "{{ plan.deadline_ts }}"
+          block_start: "{{ plan.block_start }}"
+          block_end: "{{ plan.block_end }}"
+          block_start_ts: "{{ plan.block_start_ts }}"
+          block_end_ts: "{{ plan.block_end_ts }}"
+          commit_until_ts: "{{ plan.commit_until_ts }}"
+          avg_price: "{{ plan.avg_price }}"
+          avg_effective_price: "{{ plan.avg_effective_price }}"
+          grid_only_price: "{{ plan.grid_only_price }}"
+          est_cost: "{{ plan.est_cost }}"
+          price_now: "{{ plan.price_now }}"
+          surplus_kw: "{{ plan.surplus_kw }}"
+          solar_forecast: "{{ plan.solar_forecast }}"
+
 # ---------------------------------------------------------------------------
 # HUNGARIAN TARIFF D PRICE FEED (dnap.hu) — agents.md Section 21
 # ---------------------------------------------------------------------------
@@ -1931,6 +2561,17 @@ rest_command:
       Authorization: "Bearer {{ token }}"
       Content-Type: "application/json"
     payload: '{"command": "close", "lat": {{ lat | float }}, "lon": {{ lon | float }}}'
+
+  # Full auto charging (agents.md Section 22): Tariff D quarter-hour prices for
+  # a whole day from dnap.hu (CC BY 4.0). day = "ma" (today) or "holnap"
+  # (tomorrow). Called by the sensor.tesla_d_price_forecast trigger template.
+  # If the day isn't published yet the server answers 404 and rest_command
+  # logs one warning ("Error. Url: https://dnap.hu/... Status code 404") —
+  # harmless, see README Troubleshooting.
+  tesla_dnap_prices:
+    url: "https://dnap.hu/adatok/{{ day }}.json"
+    method: GET
+    timeout: 20
 
 # Tesla Fleet token refresh (see scripts/refresh_tesla_token.sh,
 # script.tesla_refresh_fleet_token in packages/tesla/scripts.yaml, and the

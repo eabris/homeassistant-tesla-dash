@@ -254,8 +254,8 @@
     car's onboard charge controller — not this automation — is what actually
     stops charging once the target is reached (defense in depth: charging
     stays capped even if HA is restarted mid-window).
-    Inactive while input_select.tesla_tariff_mode is "Tariff D" (the price-
-    driven tesla_tariff_d_charge_start/_stop automations take over then).
+    Inactive while input_boolean.tesla_full_auto_charging is on (the
+    tesla_auto_charge_* planner automations take over then).
   trigger:
     - trigger: time
       at: input_datetime.tesla_smart_charge_window_start
@@ -266,11 +266,9 @@
     - condition: state
       entity_id: input_boolean.tesla_enable_smart_charging
       state: "on"
-    - condition: not
-      conditions:
-        - condition: state
-          entity_id: input_select.tesla_tariff_mode
-          state: "Tariff D"
+    - condition: state
+      entity_id: input_boolean.tesla_full_auto_charging
+      state: "off"
     - condition: state
       entity_id: binary_sensor.vehicle_charge_cable
       state: "on"
@@ -317,7 +315,7 @@
     most once per day, at a fixed time — no polling, no repeated toggling.
     If charging already stopped on its own (target reached), this is a
     harmless no-op (gated on binary_sensor.tesla_charging_active being on).
-    Inactive in Tariff D mode, like tesla_smart_charge_start.
+    Inactive while Full auto charging is on, like tesla_smart_charge_start.
   trigger:
     - trigger: time
       at: input_datetime.tesla_smart_charge_window_end
@@ -325,11 +323,9 @@
     - condition: state
       entity_id: input_boolean.tesla_enable_smart_charging
       state: "on"
-    - condition: not
-      conditions:
-        - condition: state
-          entity_id: input_select.tesla_tariff_mode
-          state: "Tariff D"
+    - condition: state
+      entity_id: input_boolean.tesla_full_auto_charging
+      state: "off"
     - condition: state
       entity_id: binary_sensor.tesla_charging_active
       state: "on"
@@ -384,195 +380,323 @@
         value: "{{ adjustment_map.get(size, 0) }}"
   mode: single
 
-# --- Hungarian Tariff D price-driven smart charging (agents.md Section 21) ---
-# Only active when input_select.tesla_tariff_mode is "Tariff D" AND
-# input_boolean.tesla_enable_smart_charging is on (the off-peak window
-# automations above step aside in that mode). Charges at home whenever the
-# active price (sensor.tesla_active_charging_price: the discounted band rate
-# while quota remains, else the live dnap.hu quarter-hour price) is at or
-# below input_number.tesla_d_tariff_charge_threshold.
+# --- Full auto charging (agents.md Section 22) ---
+# sensor.tesla_auto_charge_plan (configuration.yaml) decides; these act on it.
+# Only active while input_boolean.tesla_full_auto_charging is on (the fixed
+# off-peak window automations above step aside then). Works with every
+# tariff mode.
+# Ownership: input_boolean.tesla_auto_charge_owned is on while Full auto is
+# managing the session (it started it, or adopted the car's own plug-in
+# auto-start). It only ever stops sessions it owns, never a charge you
+# started by hand later.
 # Anti-flapping (agents.md Section 7): every start/stop records
-# input_datetime.tesla_tariff_d_last_switch, and neither automation acts
-# within 60 minutes of the previous switch — so at most one switch per hour,
-# and a charging session always lasts at least an hour.
-- id: tesla_tariff_d_charge_start
-  alias: "Tesla - Tariff D: Start Charging When Price Is Low"
+# input_datetime.tesla_auto_charge_last_switch and nothing switches again
+# within 30 minutes; amps are adjusted at most every 5 min and only by 2 A+.
+- id: tesla_auto_charge_control
+  alias: "Tesla - Full Auto Charging: Start / Stop"
   description: >
-    Starts home charging when the active Tariff D price drops to or below
-    the threshold set on the Analytics Settings tab. Syncs the car's charge
-    limit to input_number.tesla_target_charge_limit first, so the car itself
-    stops at the target. Marks the session with input_boolean.tesla_tariff_d_charging
-    so tesla_tariff_d_charge_stop only ever stops charging this automation
-    started (never a charge you started by hand).
-  trigger:
+    Starts or stops home charging when sensor.tesla_auto_charge_plan says so
+    (attribute should_charge). On start it sets the car's charge limit to the
+    Target Charge Limit (not for "Charge now") and its amps to the plan's
+    amps, and remembers until when it committed to charging. On stop it puts
+    the amps back to the Home Charger Max Current. At least 30 minutes
+    between its own switches.
+  triggers:
     - trigger: state
-      entity_id: sensor.tesla_active_charging_price
-    - trigger: state
-      entity_id: binary_sensor.vehicle_charge_cable
-      to: "on"
-    - trigger: state
-      entity_id:
-        - input_select.tesla_tariff_mode
-        - input_boolean.tesla_enable_smart_charging
-        - input_number.tesla_d_tariff_charge_threshold
+      entity_id: sensor.tesla_auto_charge_plan
     - trigger: time_pattern
-      minutes: "/15"
-  condition:
+      minutes: "/5"
+      seconds: 15
+  conditions:
     - condition: state
-      entity_id: input_select.tesla_tariff_mode
-      state: "Tariff D"
+      entity_id: input_boolean.tesla_full_auto_charging
+      state: "on"
+  actions:
+    - variables:
+        car: "{{ states('input_text.tesla_car_name') }}"
+        reason: "{{ states('sensor.tesla_auto_charge_plan') }}"
+        should: "{{ state_attr('sensor.tesla_auto_charge_plan', 'should_charge') == true }}"
+        amps: "{{ state_attr('sensor.tesla_auto_charge_plan', 'amps') | int(16) }}"
+        max_amps: "{{ [states('input_number.tesla_home_charger_max_amps') | int(16), 5] | max }}"
+        since_switch: >
+          {{ now().timestamp()
+             - state_attr('input_datetime.tesla_auto_charge_last_switch', 'timestamp') | float(0) }}
+        summary: "{{ state_attr('sensor.tesla_auto_charge_plan', 'summary') }}"
+    - choose:
+        - conditions:
+            - "{{ should and reason not in ['off', 'away', 'unplugged', 'no_data'] }}"
+            - condition: state
+              entity_id: input_boolean.tesla_auto_charge_owned
+              state: "off"
+            - condition: state
+              entity_id: binary_sensor.tesla_charging_active
+              state: "off"
+            - "{{ since_switch >= 1800 }}"
+          sequence:
+            - action: input_boolean.turn_on
+              target:
+                entity_id: input_boolean.tesla_auto_charge_owned
+            - action: input_datetime.set_datetime
+              target:
+                entity_id: input_datetime.tesla_auto_charge_last_switch
+              data:
+                timestamp: "{{ now().timestamp() }}"
+            - action: input_datetime.set_datetime
+              target:
+                entity_id: input_datetime.tesla_auto_charge_block_end
+              data:
+                timestamp: >
+                  {{ state_attr('sensor.tesla_auto_charge_plan', 'commit_until_ts') | float(now().timestamp()) }}
+            - if: "{{ reason != 'override' }}"
+              then:
+                - action: number.set_value
+                  target:
+                    entity_id: "number.{{ car }}_charge_limit"
+                  data:
+                    value: "{{ states('input_number.tesla_target_charge_limit') | int(80) }}"
+                  continue_on_error: true
+            - action: number.set_value
+              target:
+                entity_id: "number.{{ car }}_charge_current"
+              data:
+                value: "{{ amps }}"
+              continue_on_error: true
+            - action: script.tesla_charge_start
+              continue_on_error: true
+            - action: persistent_notification.create
+              data:
+                notification_id: tesla_auto_charging
+                title: "Tesla Full Auto Charging"
+                message: "Started charging. {{ summary }}"
+        - conditions:
+            - "{{ not should and reason not in ['off', 'away', 'unplugged', 'no_data'] }}"
+            - condition: state
+              entity_id: input_boolean.tesla_auto_charge_owned
+              state: "on"
+            - "{{ since_switch >= 1800 }}"
+          sequence:
+            - action: input_boolean.turn_off
+              target:
+                entity_id: input_boolean.tesla_auto_charge_owned
+            - action: input_datetime.set_datetime
+              target:
+                entity_id: input_datetime.tesla_auto_charge_last_switch
+              data:
+                timestamp: "{{ now().timestamp() }}"
+            - action: input_datetime.set_datetime
+              target:
+                entity_id: input_datetime.tesla_auto_charge_block_end
+              data:
+                timestamp: "{{ now().timestamp() }}"
+            - action: script.tesla_charge_stop
+              continue_on_error: true
+            - if: "{{ states('number.vehicle_charge_current') | int(max_amps) < max_amps }}"
+              then:
+                - action: number.set_value
+                  target:
+                    entity_id: "number.{{ car }}_charge_current"
+                  data:
+                    value: "{{ max_amps }}"
+                  continue_on_error: true
+            - action: persistent_notification.create
+              data:
+                notification_id: tesla_auto_charging
+                title: "Tesla Full Auto Charging"
+                message: >
+                  {% if reason == 'full' %}Target reached, charging stopped.
+                  {% else %}Paused charging. {{ summary }}{% endif %}
+        # Already charging (e.g. following the sun at 5 A) when the planned
+        # grid block begins: commit to the block from now on. The amps
+        # automation below raises the current to the plan's amps.
+        - conditions:
+            - "{{ should and reason in ['planned', 'deadline'] }}"
+            - condition: state
+              entity_id: input_boolean.tesla_auto_charge_owned
+              state: "on"
+            - >
+              {{ state_attr('sensor.tesla_auto_charge_plan', 'commit_until_ts') | float(0)
+                 > state_attr('input_datetime.tesla_auto_charge_block_end', 'timestamp') | float(0) + 60 }}
+          sequence:
+            - action: input_datetime.set_datetime
+              target:
+                entity_id: input_datetime.tesla_auto_charge_block_end
+              data:
+                timestamp: "{{ state_attr('sensor.tesla_auto_charge_plan', 'commit_until_ts') | float }}"
+  mode: single
+  max_exceeded: silent
+
+- id: tesla_auto_charge_amps
+  alias: "Tesla - Full Auto Charging: Follow Solar (amps)"
+  description: >
+    While Full auto is charging, sets the car's charging current to the
+    plan's amps (lower when following solar surplus, the Home Charger Max
+    Current otherwise). At most every 5 minutes and only for a change of 2 A
+    or more, so the car isn't sent a command for every passing cloud.
+  triggers:
+    - trigger: time_pattern
+      minutes: "/5"
+      seconds: 45
+  conditions:
     - condition: state
-      entity_id: input_boolean.tesla_enable_smart_charging
+      entity_id: input_boolean.tesla_full_auto_charging
       state: "on"
     - condition: state
-      entity_id: input_boolean.tesla_tariff_d_charging
-      state: "off"
-    - condition: state
-      entity_id: binary_sensor.vehicle_charge_cable
+      entity_id: input_boolean.tesla_auto_charge_owned
       state: "on"
     - condition: state
       entity_id: binary_sensor.tesla_charging_active
+      state: "on"
+    - condition: template
+      value_template: >
+        {% set want = state_attr('sensor.tesla_auto_charge_plan', 'amps') | int(0) %}
+        {% set have = states('number.vehicle_charge_current') | int(0) %}
+        {{ want >= 5 and have > 0 and (want - have) | abs >= 2 }}
+  actions:
+    - action: number.set_value
+      target:
+        entity_id: "number.{{ states('input_text.tesla_car_name') }}_charge_current"
+      data:
+        value: "{{ state_attr('sensor.tesla_auto_charge_plan', 'amps') | int }}"
+      continue_on_error: true
+  mode: single
+
+- id: tesla_auto_charge_adopt
+  alias: "Tesla - Full Auto Charging: Take Over Plug-in Auto-start"
+  description: >
+    The car starts charging by itself as soon as it's plugged in. When that
+    happens (charging begins within 20 minutes of plugging in) and Full auto
+    is on, Full auto takes the session over, so it can pause it until the
+    cheapest block if waiting is cheaper. Charges you start later by hand,
+    or with "Charge now", are left alone.
+  triggers:
+    - trigger: state
+      entity_id: binary_sensor.tesla_charging_active
+      from: "off"
+      to: "on"
+  conditions:
+    - condition: state
+      entity_id: input_boolean.tesla_full_auto_charging
+      state: "on"
+    - condition: state
+      entity_id: input_boolean.tesla_auto_charge_owned
       state: "off"
+    - condition: state
+      entity_id: input_boolean.tesla_charge_now_override
+      state: "off"
+    - condition: state
+      entity_id: binary_sensor.vehicle_charge_cable
+      state: "on"
     - condition: template
       value_template: >
         {{ is_state('device_tracker.' ~ states('input_text.tesla_car_name') ~ '_location', 'home') }}
+    # Ignore "off -> on" blips from restarts/reloads: it must really have
+    # been off for 2+ minutes, and the cable plugged in within 20 minutes.
     - condition: template
       value_template: >
-        {{ states('sensor.vehicle_battery_level') | float(100) <
-           states('input_number.tesla_target_charge_limit') | float(80) }}
-    - condition: template
-      value_template: >
-        {% set price = states('sensor.tesla_active_charging_price') %}
-        {% set limit = states('input_number.tesla_d_tariff_charge_threshold') %}
-        {{ price | is_number and limit | is_number and price | float <= limit | float }}
-    - condition: template
-      value_template: >
-        {{ now().timestamp()
-           - state_attr('input_datetime.tesla_tariff_d_last_switch', 'timestamp') | float(0) >= 3600 }}
-  action:
-    - action: number.set_value
+        {{ now() - trigger.from_state.last_changed > timedelta(minutes=2)
+           and now() - states.binary_sensor.vehicle_charge_cable.last_changed < timedelta(minutes=20) }}
+  actions:
+    - action: input_datetime.set_datetime
       target:
-        entity_id: "{{ 'number.' + states('input_text.tesla_car_name') + '_charge_limit' }}"
+        entity_id: input_datetime.tesla_auto_charge_last_switch
       data:
-        value: "{{ states('input_number.tesla_target_charge_limit') | int(80) }}"
-    - action: script.tesla_charge_start
+        timestamp: "{{ now().timestamp() - 3600 }}"
+    - action: input_datetime.set_datetime
+      target:
+        entity_id: input_datetime.tesla_auto_charge_block_end
+      data:
+        timestamp: "{{ now().timestamp() }}"
     - action: input_boolean.turn_on
       target:
-        entity_id: input_boolean.tesla_tariff_d_charging
-    - action: input_datetime.set_datetime
-      target:
-        entity_id: input_datetime.tesla_tariff_d_last_switch
-      data:
-        timestamp: "{{ now().timestamp() }}"
-    - action: persistent_notification.create
-      data:
-        notification_id: tesla_tariff_d_charging
-        title: "Tesla Tariff D Charging"
-        message: >
-          Started charging at {{ states('sensor.tesla_active_charging_price') }} Ft/kWh
-          ({{ state_attr('sensor.tesla_active_charging_price', 'source') | trim }};
-          threshold {{ states('input_number.tesla_d_tariff_charge_threshold') }} Ft/kWh,
-          target {{ states('input_number.tesla_target_charge_limit') | int(80) }}%).
+        entity_id: input_boolean.tesla_auto_charge_owned
   mode: single
 
-- id: tesla_tariff_d_charge_stop
-  alias: "Tesla - Tariff D: Stop Charging When Price Is High"
+- id: tesla_auto_charge_reset
+  alias: "Tesla - Full Auto Charging: Release Session"
   description: >
-    Stops a charge that tesla_tariff_d_charge_start began, once the active
-    price rises above the threshold — but never within 60 minutes of the
-    last Tariff D start/stop. Charges you started yourself are left alone.
-  trigger:
-    - trigger: state
-      entity_id: sensor.tesla_active_charging_price
-    - trigger: state
-      entity_id: input_number.tesla_d_tariff_charge_threshold
-    - trigger: time_pattern
-      minutes: "/15"
-  condition:
-    - condition: state
-      entity_id: input_select.tesla_tariff_mode
-      state: "Tariff D"
-    - condition: state
-      entity_id: input_boolean.tesla_tariff_d_charging
-      state: "on"
-    - condition: state
-      entity_id: binary_sensor.tesla_charging_active
-      state: "on"
-    - condition: template
-      value_template: >
-        {% set price = states('sensor.tesla_active_charging_price') %}
-        {% set limit = states('input_number.tesla_d_tariff_charge_threshold') %}
-        {{ price | is_number and limit | is_number and price | float > limit | float }}
-    - condition: template
-      value_template: >
-        {{ now().timestamp()
-           - state_attr('input_datetime.tesla_tariff_d_last_switch', 'timestamp') | float(0) >= 3600 }}
-  action:
-    - action: script.tesla_charge_stop
-    - action: input_boolean.turn_off
-      target:
-        entity_id: input_boolean.tesla_tariff_d_charging
-    - action: input_datetime.set_datetime
-      target:
-        entity_id: input_datetime.tesla_tariff_d_last_switch
-      data:
-        timestamp: "{{ now().timestamp() }}"
-    - action: persistent_notification.create
-      data:
-        notification_id: tesla_tariff_d_charging
-        title: "Tesla Tariff D Charging"
-        message: >
-          Paused charging: the price is now {{ states('sensor.tesla_active_charging_price') }} Ft/kWh,
-          above your {{ states('input_number.tesla_d_tariff_charge_threshold') }} Ft/kWh threshold.
-          It resumes automatically when the price drops again (at the earliest in 60 minutes).
-  mode: single
-
-- id: tesla_tariff_d_flag_reset
-  alias: "Tesla - Tariff D: Release Charging Session"
-  description: >
-    Clears input_boolean.tesla_tariff_d_charging (so the Tariff D automations
-    stop managing the charge) when the session is over: charging stopped by
-    itself (e.g. target reached), the cable was unplugged, Tariff D mode or
-    smart charging was switched off, or a start command never resulted in
-    charging within 20 minutes.
-  trigger:
+    Ends Full auto's ownership of a session once it's over: charging stopped
+    by itself (e.g. target reached), the cable was unplugged, Full auto was
+    switched off, or a start command never resulted in charging within 20
+    minutes. Unplugging also ends "Charge now" and a "Stop charging" pause;
+    switching Full auto off ends the pause too. When charging finished on its
+    own, puts the amps back to the Home Charger Max Current.
+  triggers:
     - trigger: state
       entity_id: binary_sensor.tesla_charging_active
       to: "off"
       for: "00:05:00"
+      id: charging_off
     - trigger: state
       entity_id: binary_sensor.vehicle_charge_cable
       to: "off"
+      id: unplugged
     - trigger: state
-      entity_id:
-        - input_select.tesla_tariff_mode
-        - input_boolean.tesla_enable_smart_charging
+      entity_id: input_boolean.tesla_full_auto_charging
+      to: "off"
     - trigger: time_pattern
       minutes: "/15"
-  condition:
-    - condition: state
-      entity_id: input_boolean.tesla_tariff_d_charging
-      state: "on"
-    - condition: or
-      conditions:
-        - condition: not
-          conditions:
-            - condition: state
-              entity_id: input_select.tesla_tariff_mode
-              state: "Tariff D"
-        - condition: state
-          entity_id: input_boolean.tesla_enable_smart_charging
-          state: "off"
+  actions:
+    - if:
         - condition: state
           entity_id: binary_sensor.vehicle_charge_cable
           state: "off"
         - condition: template
           value_template: >
-            {{ is_state('binary_sensor.tesla_charging_active', 'off')
-               and now().timestamp()
-                   - state_attr('input_datetime.tesla_tariff_d_last_switch', 'timestamp') | float(0) >= 1200 }}
-  action:
-    - action: input_boolean.turn_off
-      target:
-        entity_id: input_boolean.tesla_tariff_d_charging
-  mode: single
+            {{ is_state('input_boolean.tesla_charge_now_override', 'on')
+               or is_state('input_boolean.tesla_auto_charge_paused', 'on') }}
+      then:
+        - action: input_boolean.turn_off
+          target:
+            entity_id:
+              - input_boolean.tesla_charge_now_override
+              - input_boolean.tesla_auto_charge_paused
+    - if:
+        - condition: state
+          entity_id: input_boolean.tesla_full_auto_charging
+          state: "off"
+        - condition: state
+          entity_id: input_boolean.tesla_auto_charge_paused
+          state: "on"
+      then:
+        - action: input_boolean.turn_off
+          target:
+            entity_id: input_boolean.tesla_auto_charge_paused
+    - if:
+        - condition: state
+          entity_id: input_boolean.tesla_auto_charge_owned
+          state: "on"
+        - condition: or
+          conditions:
+            - condition: state
+              entity_id: binary_sensor.vehicle_charge_cable
+              state: "off"
+            - condition: state
+              entity_id: input_boolean.tesla_full_auto_charging
+              state: "off"
+            - condition: template
+              value_template: >
+                {{ is_state('binary_sensor.tesla_charging_active', 'off')
+                   and now().timestamp()
+                       - state_attr('input_datetime.tesla_auto_charge_last_switch', 'timestamp') | float(0) >= 1200 }}
+      then:
+        - action: input_boolean.turn_off
+          target:
+            entity_id: input_boolean.tesla_auto_charge_owned
+        - if:
+            - condition: trigger
+              id: charging_off
+            - condition: state
+              entity_id: binary_sensor.vehicle_charge_cable
+              state: "on"
+            - condition: template
+              value_template: >
+                {% set max_a = [states('input_number.tesla_home_charger_max_amps') | int(16), 5] | max %}
+                {{ states('number.vehicle_charge_current') | int(max_a) < max_a }}
+          then:
+            - action: number.set_value
+              target:
+                entity_id: "number.{{ states('input_text.tesla_car_name') }}_charge_current"
+              data:
+                value: "{{ [states('input_number.tesla_home_charger_max_amps') | int(16), 5] | max }}"
+              continue_on_error: true
+  mode: queued

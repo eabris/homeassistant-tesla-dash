@@ -8,7 +8,7 @@
 # Format example:
 # entity_id                                      | type           | category          | friendly_name                        | notes / purpose
 #
-# Last updated: 2026-10-10 (Hungarian electricity tariffs A/D + Tariff D smart charging)
+# Last updated: 2026-10-11 (Hungarian electricity tariffs A/D + Full auto charge planner)
 # ============================================================
 #
 # NOTE ON THE "vehicle_" PREFIX (Fleet Sensor Aliases):
@@ -145,13 +145,10 @@ input_boolean.tesla_enable_smart_charging       | input_boolean | helper        
 input_datetime.tesla_next_departure             | input_datetime| helper            | Tesla Next Departure            | Helper datetime for departure-based automation planning
 input_datetime.tesla_smart_charge_window_start  | input_datetime| helper            | Smart Charging Window Start     | Time-only (no date). Start of the daily off-peak charging window used by tesla_smart_charge_start. Default 23:00.
 input_datetime.tesla_smart_charge_window_end    | input_datetime| helper            | Smart Charging Window End       | Time-only (no date). End of the daily off-peak charging window used by tesla_smart_charge_stop. Default 06:00. Supports overnight wrap (start > end).
-input_select.tesla_tariff_mode                   | input_select  | settings          | Tesla Electricity Tariff        | Hungarian electricity tariff: "Off" / "Tariff A" / "Tariff D". Drives sensor.tesla_active_charging_price, so it decides the price every charging-cost figure is accumulated at (Off = input_number.tesla_default_electricity_cost). "Tariff D" also switches smart charging from the off-peak window to the price-driven tesla_tariff_d_charge_* automations. No `initial:` (boots "Off" once, then persists). Analytics -> Settings -> Hungarian Electricity Tariff.
+input_select.tesla_tariff_mode                   | input_select  | settings          | Tesla Electricity Tariff        | Hungarian electricity tariff: "Off" / "Tariff A" / "Tariff D". Drives sensor.tesla_active_charging_price, so it decides the price every charging-cost figure is accumulated at (Off = input_number.tesla_default_electricity_cost). Full auto charging (input_boolean.tesla_full_auto_charging) plans on this mode's prices and works with every mode. No `initial:` (boots "Off" once, then persists). Analytics -> Settings -> Hungarian Electricity Tariff.
 input_boolean.tesla_use_discounted_quota         | input_boolean | settings          | Tesla Use Discounted Quota      | On = the first 2,523 kWh/year (counted per day: ~207/214 kWh per month) of home grid import is billed at the discounted 36.21 Ft/kWh band (rezsicsökkentett sáv). Boots OFF on a fresh install -- turn it on in Settings if your contract has the discount.
 input_text.tesla_grid_import_entity              | input_text    | settings          | Home Grid Import Sensor (entity ID) | Optional entity ID of a LIFETIME (ever-increasing) home grid-import kWh sensor, e.g. a smart meter / P1 reader. Feeds sensor.tesla_monthly_grid_import. Leave empty to use the household estimate instead. No `initial:`.
 input_number.tesla_household_monthly_kwh         | input_number  | settings          | Household Monthly Use (without car) | Household electricity per month WITHOUT the car (kWh, 0-3000). Used only when no grid-import sensor is set: estimated quota usage = this x elapsed share of the month + sensor.tesla_monthly_home_charging_energy. No `initial:`.
-input_number.tesla_d_tariff_charge_threshold     | input_number  | settings          | Tariff D Charge Price Threshold | Highest active charging price (Ft/kWh, -50..200) at which Tariff D smart charging starts; it stops once the price rises above it. Boots at -50 (= never charge) until the user sets a value. No `initial:`.
-input_boolean.tesla_tariff_d_charging            | input_boolean | internal          | Tesla Tariff D Charging Active  | Internal flag: on while a charge started by automation.tesla_tariff_d_charge_start is in progress. tesla_tariff_d_charge_stop only stops charges with this flag set (never a manual charge); tesla_tariff_d_flag_reset clears it when the session ends.
-input_datetime.tesla_tariff_d_last_switch        | input_datetime | internal          | Tesla Tariff D Last Switch      | Internal: date+time of the last Tariff D start/stop. Both automations wait 60 min after it (anti-flapping, at most one switch per hour).
 
 # --- VEHICLE STATS (use Tesla Fleet natively in dashboards) ---
 # sensor.vehicle_battery_level              | sensor        | vehicle_stats     | Usable battery level                 | Tesla Fleet — use directly (replaces battery_level template)
@@ -217,12 +214,39 @@ sensor.tesla_quota_usage_monthly                 | sensor        | tariff       
 sensor.tesla_quota_remaining_monthly             | sensor        | tariff            | Tesla Quota Remaining Monthly   | Template: discounted quota - quota usage (never below 0).
 binary_sensor.tesla_discount_band_active         | binary_sensor | tariff            | Tesla Discount Band Active      | Template: on while input_boolean.tesla_use_discounted_quota is on and this month's quota usage is below the quota.
 sensor.tesla_tariff_a_current_price              | sensor        | tariff            | Tesla Tariff A Current Price    | Template: 36.21 while the discount band is active, else the above-band A1 rate. Attributes discounted_rate (36.21) and market_rate (dnap.hu a1_sav_feletti_brutto_ft_kwh, fallback 70.10) -- the single source of both fixed rates.
-sensor.tesla_active_charging_price               | sensor        | tariff            | Tesla Active Charging Price     | Template: price of home charging right now. Off -> default rate; Tariff A -> band/market rate; Tariff D -> band rate inside the quota, else live D price (market rate if no data). Attribute source. Used by the cost accumulator and the Tariff D automations.
+sensor.tesla_active_charging_price               | sensor        | tariff            | Tesla Active Charging Price     | Template: price of home charging right now. Off -> default rate; Tariff A -> band/market rate; Tariff D -> band rate inside the quota, else live D price (market rate if no data). Attribute source. Used by the cost accumulator and the price-now figure of sensor.tesla_auto_charge_plan.
 sensor.tesla_tariff_charging_cost_total          | sensor        | tariff            | Tesla Tariff Charging Cost Total | Trigger template on sensor.vehicle_charge_energy_added: lifetime charging cost (Ft, state_class total, can fall with negative D prices). Home kWh x sensor.tesla_active_charging_price at that moment; away kWh x input_number.tesla_default_electricity_cost. Accumulates in every mode, from install onward (no back-fill).
 sensor.tesla_daily_tariff_charging_cost          | sensor        | tariff            | Tesla Daily Tariff Charging Cost | Utility meter (daily, net_consumption) of sensor.tesla_tariff_charging_cost_total. Feeds sensor.tesla_daily_electric_cost in Tariff A/D mode.
 sensor.tesla_weekly_tariff_charging_cost         | sensor        | tariff            | Tesla Weekly Tariff Charging Cost | Utility meter (weekly, net_consumption). Feeds sensor.tesla_weekly_electric_cost in Tariff A/D mode.
 sensor.tesla_monthly_tariff_charging_cost        | sensor        | tariff            | Tesla Monthly Tariff Charging Cost | Utility meter (monthly, net_consumption). Feeds sensor.tesla_monthly_electric_cost (and so annual/5-year projections), previous-month cost (last_period) and cost per km in Tariff A/D mode.
 sensor.tesla_tariff_charging_cost_7d_rolling     | sensor        | tariff            | Tesla Tariff Charging Cost 7d Rolling | platform: statistics, change over 7 days of sensor.tesla_tariff_charging_cost_total. Feeds sensor.tesla_electric_cost_7d_rolling in Tariff A/D mode.
+
+# --- FULL AUTO CHARGING (agents.md Section 22) ---
+# Optional planner: decides by itself when to charge at home (solar surplus, quarter-hour prices, SoC, deadline).
+# Works with every tariff mode. Settings: Analytics -> Settings -> Full Auto Charging. Status: Overview -> Battery tab.
+# Replaces the old Tariff D threshold automations (tesla_tariff_d_charge_start/_stop/_flag_reset); renamed helpers:
+# tesla_d_tariff_charge_threshold -> tesla_auto_charge_cheap_price, tesla_tariff_d_charging -> tesla_auto_charge_owned,
+# tesla_tariff_d_last_switch -> tesla_auto_charge_last_switch. Old ones stay in the registry as orphans (scripts/fix_duplicate_entities.py / delete by hand).
+input_boolean.tesla_full_auto_charging           | input_boolean | settings          | Tesla Full Auto Charging        | Master switch. On = the tesla_auto_charge_* automations act on sensor.tesla_auto_charge_plan and the off-peak window automations (tesla_smart_charge_start/_stop) step aside.
+input_datetime.tesla_charge_ready_by             | input_datetime| settings          | Tesla Charge Ready By           | Time-only. The car should reach input_number.tesla_target_charge_limit by this time every day (an earlier input_datetime.tesla_next_departure wins). Boots 00:00 on a fresh install (no `initial:`), so set it once (e.g. 07:00). A late time lets Full auto use next-day solar.
+input_number.tesla_auto_charge_min_soc           | input_number  | settings          | Always Charge Below Battery Level | 0-80 %. Below this, Full auto charges straight away at full power whatever the price (reason min_soc). 0 = off (fresh-install value).
+input_number.tesla_auto_charge_cheap_price       | input_number  | settings          | Always Charge Below Price       | -50..200 /kWh. Full auto also charges whenever the price right now is at or below this (reason cheap), e.g. negative Tariff D prices. -50 (fresh-install value) = never. (Was input_number.tesla_d_tariff_charge_threshold.)
+input_number.tesla_home_charger_max_amps         | input_number  | settings          | Home Charger Max Current        | 5-32 A per phase. Full auto charges at this and only lowers it to follow solar surplus (never below 5 A). Boots 5 on a fresh install -- set it (e.g. 16).
+input_select.tesla_home_charger_phases           | input_select  | settings          | Tesla Home Charger Phases       | "3-phase" (default) / "1-phase". kW = amps x phases x 230 V (3-phase 16 A = 11 kW, 5 A = 3.45 kW).
+input_number.tesla_solar_feed_in_price           | input_number  | settings          | Solar Feed-in Price             | 0-200 /kWh. What exported solar is worth (Hungarian gross billing ~5 Ft/kWh). Charging on surplus "costs" this much.
+input_text.tesla_grid_power_entity               | input_text    | settings          | Home Grid Power Sensor (entity ID) | Optional. Live grid power (W or kW), POSITIVE while importing, negative while exporting, e.g. sensor.inverter_grid_power. Main source of sensor.tesla_solar_surplus_power.
+input_text.tesla_pv_power_entity                 | input_text    | settings          | Solar Power Sensor (entity ID)  | Optional. Live PV production (W or kW), e.g. sensor.inverter_pv_power. Compared with the forecast to correct the next ~3 h ("nowcast"); surplus fallback when no grid sensor is set.
+input_text.tesla_solar_forecast_entity           | input_text    | settings          | Solar Forecast Sensor (entity ID) | Optional. Forecast.Solar "Estimated power production - now", e.g. sensor.power_production_now. Its *_energy_production_today_remaining / *_energy_production_tomorrow siblings are found from this name.
+input_boolean.tesla_charge_now_override          | input_boolean | internal          | Tesla Charge Now Override       | Set by script.tesla_charge_now: charge straight away to the car's own limit, whatever the price, until unplugged (cleared by automation.tesla_auto_charge_reset).
+input_boolean.tesla_auto_charge_paused           | input_boolean | internal          | Tesla Full Auto Paused          | Set by script.tesla_charge_stop_manual (Battery tab "Stop charging") while Full auto is on: Full auto won't start charging again until unplugged, "Charge now", or Full auto off (reason paused).
+input_boolean.tesla_auto_charge_owned            | input_boolean | internal          | Tesla Auto Charge Session Owned | On while Full auto manages the session (started it, or adopted the car's own plug-in auto-start). Full auto only stops sessions it owns. (Was input_boolean.tesla_tariff_d_charging.)
+input_datetime.tesla_auto_charge_last_switch     | input_datetime| internal          | Tesla Auto Charge Last Switch   | Date+time of Full auto's last start/stop. Start/stop wait 30 min after it (anti-flapping). (Was input_datetime.tesla_tariff_d_last_switch.)
+input_datetime.tesla_auto_charge_block_end       | input_datetime| internal          | Tesla Auto Charge Block End     | End of the block Full auto committed to when it started (reason committed keeps charging until then).
+sensor.tesla_d_price_forecast                    | sensor        | full_auto         | Tesla D Price Forecast          | Trigger template (start + every 30 min): today's/tomorrow's Tariff D quarter-hour prices from dnap.hu (rest_command.tesla_dnap_prices, ma.json / holnap.json) as compact [unix time, Ft/kWh] pairs in attribute slots (~4 KB). State = when the known prices end (timestamp). Attributes today_available / tomorrow_available / last_fetch. Fetches only while a day is missing (tomorrow from 13:00).
+sensor.tesla_solar_surplus_power                 | sensor        | full_auto         | Tesla Solar Surplus Power       | Trigger template (every minute), kW: export + the car's own draw (amps x phases x 230 V) from the grid power sensor; fallback PV - household base load. Unknown without sensors. Attribute source = grid / solar / none.
+sensor.tesla_solar_surplus_power_10m             | sensor        | full_auto         | Tesla Solar Surplus Power 10m   | platform: statistics, average_step over 10 min of sensor.tesla_solar_surplus_power (a passing cloud doesn't switch charging).
+sensor.tesla_auto_charge_plan                    | sensor        | full_auto         | Tesla Auto Charge Plan          | Trigger template (every 5 min + input changes): THE planner. State = reason: off / away / unplugged / no_data / override / paused / full / min_soc / committed / deadline / planned / cheap / solar / waiting. Attributes should_charge, amps, summary, need_kwh, solar_kwh, quarters_needed, deadline(_ts), block_start/_end(_ts), commit_until_ts, avg_price, avg_effective_price, grid_only_price, est_cost, price_now, surplus_kw, solar_forecast. Solar first (follows the sun at >= 5 A while the sun+grid blend is 5% cheaper than grid only), the rest in the cheapest continuous grid block before the deadline (later block on ties).
+# rest_command.tesla_dnap_prices -- GET https://dnap.hu/adatok/{{ day }}.json (day = ma / holnap); a 404 before publication logs one harmless warning.
 
 # --- DISTANCE TRACKING (Templates + baseline helpers) ---
 sensor.tesla_daily_distance_raw                  | sensor        | distance          | Tesla Daily Distance Raw        | Utility meter: daily delta from odometer
@@ -392,13 +416,15 @@ input_text.tesla_rate_work_season                      | input_text    | setting
 #     baseline each 1st -- powers the History tab's "Previous Month" card)
 #   - automation.tesla_precondition_before_departure
 #   - automation.tesla_close_windows_before_rain
-#   - automation.tesla_smart_charge_start / _stop (off-peak window smart charging;
-#     inactive while input_select.tesla_tariff_mode is "Tariff D")
-#   - automation.tesla_tariff_d_charge_start / _stop (Tariff D price-driven smart charging:
-#     home only, start at price <= input_number.tesla_d_tariff_charge_threshold, stop above
-#     it, >= 60 min between switches, only stops charges it started)
-#   - automation.tesla_tariff_d_flag_reset (clears input_boolean.tesla_tariff_d_charging when
-#     the session ends, the cable is unplugged, or Tariff D / smart charging is turned off)
+#   - automation.tesla_smart_charge_start / _stop (off-peak window smart charging, every
+#     tariff mode; inactive while input_boolean.tesla_full_auto_charging is on)
+#   - automation.tesla_auto_charge_control (Full auto: start / stop / hand-off to the planned
+#     block per sensor.tesla_auto_charge_plan; >= 30 min between its own switches)
+#   - automation.tesla_auto_charge_amps (Full auto: follow solar -- amps to the plan's value,
+#     every 5 min, only for changes of 2 A or more)
+#   - automation.tesla_auto_charge_adopt (Full auto takes over the car's own plug-in auto-start)
+#   - automation.tesla_auto_charge_reset (releases ownership when the session ends; unplug
+#     clears Charge now + pause; Full auto off clears the pause)
 #   - automation.tesla_wheel_size_auto_adjust (auto-fills tire pressure + range
 #     adjustment % when input_select.tesla_wheel_size changes)
 #   - automation.tesla_refresh_fleet_token (hourly at :17; runs
@@ -417,6 +443,9 @@ input_text.tesla_rate_work_season                      | input_text    | setting
 #     script.reload -- no HA restart. Fields: quiet, retry_window_close. Button on
 #     Analytics -> Settings -> "Tesla API Token")
 #   - script.tesla_defrost_toggle / tesla_charge_start / tesla_charge_stop / tesla_unlock_port
+#   - script.tesla_charge_now (Full auto "Charge now": charge to the car's limit until unplugged)
+#   - script.tesla_charge_stop_manual (Battery tab "Stop charging": stops, ends Charge now,
+#     and with Full auto on pauses it until unplugged; automations use tesla_charge_stop)
 #   - script.tesla_climate_temp_up / tesla_climate_temp_down
 #   - script.tesla_seat_heater_next_fl/fr/rl/rr/3l/3r / tesla_steering_heater_next
 #   - script.tesla_dog_mode / tesla_camp_mode

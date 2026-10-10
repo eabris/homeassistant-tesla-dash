@@ -334,6 +334,96 @@ tesla_charge_stop:
       target:
         entity_id: "{{ 'switch.' + states('input_text.tesla_car_name') + '_charger' }}"
 
+# Full auto charging (agents.md Section 22): "Charge now" override. Charges
+# straight away, whatever the price, up to the car's own charge limit, until
+# the cable is unplugged (automation tesla_auto_charge_reset then clears
+# input_boolean.tesla_charge_now_override). With Full auto on, it also sets
+# the amps to the Home Charger Max Current and marks the session as Full
+# auto's, so it isn't paused by the planner. With Full auto off it only
+# starts charging. Also ends a "Stop charging" pause.
+tesla_charge_now:
+  alias: "Tesla Charge Now"
+  icon: mdi:flash-alert
+  mode: single
+  sequence:
+    - action: input_boolean.turn_off
+      target:
+        entity_id: input_boolean.tesla_auto_charge_paused
+    - action: input_boolean.turn_on
+      target:
+        entity_id: input_boolean.tesla_charge_now_override
+    - if:
+        - condition: state
+          entity_id: input_boolean.tesla_full_auto_charging
+          state: "on"
+      then:
+        - action: input_datetime.set_datetime
+          target:
+            entity_id:
+              - input_datetime.tesla_auto_charge_last_switch
+              - input_datetime.tesla_auto_charge_block_end
+          data:
+            timestamp: "{{ now().timestamp() }}"
+        - action: input_boolean.turn_on
+          target:
+            entity_id: input_boolean.tesla_auto_charge_owned
+        - action: number.set_value
+          target:
+            entity_id: "{{ 'number.' + states('input_text.tesla_car_name') + '_charge_current' }}"
+          data:
+            value: "{{ [states('input_number.tesla_home_charger_max_amps') | int(16), 5] | max }}"
+          continue_on_error: true
+    - action: script.tesla_charge_start
+      continue_on_error: true
+
+# The dashboard's "Stop charging" button. Stops charging and ends "Charge
+# now". With Full auto on, it also pauses Full auto until the cable is
+# unplugged, so the planner doesn't start charging again by itself
+# (input_boolean.tesla_auto_charge_paused). Automations call
+# script.tesla_charge_stop instead, which only stops.
+tesla_charge_stop_manual:
+  alias: "Tesla Stop Charging (manual)"
+  icon: mdi:lightning-bolt-off
+  mode: single
+  sequence:
+    - action: input_boolean.turn_off
+      target:
+        entity_id: input_boolean.tesla_charge_now_override
+    - if:
+        - condition: state
+          entity_id: input_boolean.tesla_full_auto_charging
+          state: "on"
+      then:
+        - action: input_boolean.turn_on
+          target:
+            entity_id: input_boolean.tesla_auto_charge_paused
+        - action: input_boolean.turn_off
+          target:
+            entity_id: input_boolean.tesla_auto_charge_owned
+        - action: input_datetime.set_datetime
+          target:
+            entity_id: input_datetime.tesla_auto_charge_block_end
+          data:
+            timestamp: "{{ now().timestamp() }}"
+    - action: script.tesla_charge_stop
+      continue_on_error: true
+    # Full auto may have lowered the amps to follow the sun: put them back.
+    - if:
+        - condition: state
+          entity_id: input_boolean.tesla_full_auto_charging
+          state: "on"
+        - condition: template
+          value_template: >
+            {% set max_a = [states('input_number.tesla_home_charger_max_amps') | int(16), 5] | max %}
+            {{ states('number.vehicle_charge_current') | int(max_a) < max_a }}
+      then:
+        - action: number.set_value
+          target:
+            entity_id: "{{ 'number.' + states('input_text.tesla_car_name') + '_charge_current' }}"
+          data:
+            value: "{{ [states('input_number.tesla_home_charger_max_amps') | int(16), 5] | max }}"
+          continue_on_error: true
+
 tesla_unlock_port:
   alias: "Tesla Unlock Charge Port"
   icon: mdi:lock-open

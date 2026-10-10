@@ -1249,9 +1249,8 @@ views:
             (~70.10 Ft/kWh, read live from dnap.hu).
           - **Tariff D** — 36.21 Ft/kWh inside the quota, then the live
             quarter-hour Tariff D price from dnap.hu (it can even be
-            negative). With **Smart Charging** enabled below, the car
-            charges at home whenever the price is at or below your
-            **Tariff D Charge Threshold**.
+            negative). Turn on **Full Auto Charging** below to charge in
+            the cheapest quarter hours automatically.
 
           Charging away from home (Superchargers etc.) is always priced at
           the Default Electricity Rate. Tariff prices are in Hungarian
@@ -1278,18 +1277,12 @@ views:
           instead: *household kWh per month (without the car)* spread
           evenly over the month, plus the car's home charging.
 
-          **Tariff D Charge Threshold:** the highest price (Ft/kWh) Tariff D
-          smart charging will charge at. It starts at -50, which means
-          *never charge* until you set your own value.
-
       - type: entities
         entities:
           - entity: input_text.tesla_grid_import_entity
             name: "Grid Import Sensor (entity ID)"
           - entity: input_number.tesla_household_monthly_kwh
             name: "Household kWh / Month (without car)"
-          - entity: input_number.tesla_d_tariff_charge_threshold
-            name: "Tariff D Charge Threshold"
 
       - type: markdown
         content: |
@@ -1311,7 +1304,7 @@ views:
           | **Quota used this month** | {{ states('sensor.tesla_quota_usage_monthly') }} / {{ states('sensor.tesla_discounted_quota_monthly') }} kWh ({{ 'grid meter' if src == 'meter' else 'estimate' }}) |
           | **Quota remaining** | {{ states('sensor.tesla_quota_remaining_monthly') }} kWh |
           | **Discounted band** | {{ 'Active (36.21 Ft/kWh)' if is_state('binary_sensor.tesla_discount_band_active', 'on') else ('Used up' if is_state('input_boolean.tesla_use_discounted_quota', 'on') else 'Disabled') }} |
-          | **Tariff D smart charging** | {{ 'Managing a charge now' if is_state('input_boolean.tesla_tariff_d_charging', 'on') else ('Waiting for a low price' if mode == 'Tariff D' and is_state('input_boolean.tesla_enable_smart_charging', 'on') else 'Off') }} |
+          | **Full auto charging** | {{ state_attr('sensor.tesla_auto_charge_plan', 'summary') | default('–', true) if is_state('input_boolean.tesla_full_auto_charging', 'on') else 'Off' }} |
 
 
           <sub>Tariff D prices: [dnap.hu](https://dnap.hu) (wholesale price:
@@ -1330,13 +1323,9 @@ views:
           day** (one start, one stop) by design; it will not repeatedly
           toggle charging on/off.
 
-          **Tariff D:** when the tariff above is *Tariff D*, the window
-          times below are ignored and charging follows the live price
-          instead — it starts at home when the price is at or below your
-          Tariff D Charge Threshold and stops when it rises above it, with
-          at least 60 minutes between switches (so charging never flaps).
-          The enable toggle and Target Charge Limit still apply. Charges
-          you start yourself are never stopped by it.
+          Works with every tariff. While **Full Auto Charging** (below) is
+          on, this window is not used: Full auto decides when to charge.
+          The Target Charge Limit applies to both.
 
       - type: custom:mushroom-entity-card
         entity: input_boolean.tesla_enable_smart_charging
@@ -1367,6 +1356,130 @@ views:
             icon: mdi:clock-end
             tap_action:
               action: more-info
+
+      # Full Auto Charging (agents.md Section 22)
+      - type: markdown
+        content: |
+          ## 🤖 Full Auto Charging
+
+          When on, Home Assistant decides by itself when the car charges at
+          home, with every tariff. Every 5 minutes it looks at:
+
+          - how much energy the car needs to reach the **Target Charge
+            Limit** (above) by the **Ready By** time (or an earlier *Next
+            Departure*),
+          - the price of every quarter hour until then (live Tariff D
+            prices, the Tariff A rate, or the Default Electricity Rate),
+          - the solar forecast (Forecast.Solar, which already includes the
+            weather), corrected with what your panels produce right now,
+          - what your exported solar is worth (**Solar Feed-in Price**).
+
+          Then it charges the cheapest way: on solar surplus when there is
+          enough (the current follows the sun, at least 5 A, topped up from
+          the grid only while that's still cheaper than charging from the
+          grid alone), and the rest in the cheapest grid block before the
+          deadline. On a cloudy day it simply waits for the cheap block,
+          e.g. at night. If prices are equal it charges as late as
+          possible.
+
+          - Below the **Always Charge Below Battery Level** it charges
+            straight away; at or below the **Always Charge Below Price**
+            too.
+          - It starts or stops at most once per 30 minutes and changes the
+            amps at most every 5 minutes, so charging never flaps.
+          - When the car starts charging by itself after you plug in, Full
+            auto takes that session over (it may pause it until the cheap
+            block).
+          - **Charge now** charges straight away to the car's own limit
+            until you unplug. **Stop charging** (Battery tab) pauses Full
+            auto until you unplug.
+
+          Turn off *Scheduled Charging* in the Tesla app, or it will fight
+          Full auto. Solar and cost figures are estimates.
+
+      - type: horizontal-stack
+        cards:
+          - type: custom:mushroom-entity-card
+            entity: input_boolean.tesla_full_auto_charging
+            name: "Full Auto Charging"
+            icon: mdi:robot-outline
+            tap_action:
+              action: toggle
+          - type: custom:mushroom-entity-card
+            entity: script.tesla_charge_now
+            name: "Charge now"
+            icon: mdi:flash-alert
+            secondary_info: none
+            tap_action:
+              action: call-service
+              service: script.tesla_charge_now
+              confirmation:
+                text: "Charge straight away, whatever the price, until the car is unplugged?"
+
+      - type: markdown
+        content: |
+          {% set p = 'sensor.tesla_auto_charge_plan' %}
+          {% set mode = states('input_select.tesla_tariff_mode') %}
+          {% set unit = 'Ft' if mode in ['Tariff A', 'Tariff D'] else states('sensor.tesla_currency_symbol') %}
+          {% macro num(v, d=1) %}{{ (v | float) | round(d) if v | is_number else '–' }}{% endmacro %}
+          {% set bs = state_attr(p, 'block_start') %}
+          {% set be = state_attr(p, 'block_end') %}
+
+          ### Plan
+
+          {% if is_state('input_boolean.tesla_full_auto_charging', 'on') %}
+          **{{ state_attr(p, 'summary') | default('Working out a plan…', true) }}**
+
+          | | |
+          |---|---|
+          | **Energy needed** | {{ num(state_attr(p, 'need_kwh')) }} kWh (~{{ num(state_attr(p, 'solar_kwh')) }} kWh from solar) |
+          | **Grid block** | {{ bs ~ ' – ' ~ be if bs and be else '–' }} |
+          | **Block price (with solar)** | {{ num(state_attr(p, 'avg_effective_price')) }} {{ unit }}/kWh |
+          | **Grid only would be** | {{ num(state_attr(p, 'grid_only_price')) }} {{ unit }}/kWh |
+          | **Estimated cost** | {{ num(state_attr(p, 'est_cost'), 0) }} {{ unit }} |
+          | **Price now** | {{ num(state_attr(p, 'price_now')) }} {{ unit }}/kWh |
+          | **Solar surplus now** | {{ num(state_attr(p, 'surplus_kw'), 2) }} kW |
+          | **Ready by** | {{ state_attr(p, 'deadline') | default('–', true) }} |
+          | **Session** | {{ 'Charge now (until unplugged)' if is_state('input_boolean.tesla_charge_now_override', 'on') else ('Paused until unplugged' if is_state('input_boolean.tesla_auto_charge_paused', 'on') else ('Managed by Full auto' if is_state('input_boolean.tesla_auto_charge_owned', 'on') else '–')) }} |
+          {% else %}
+          Full auto is off. Charging follows Smart Charging (above) or the
+          car's own settings.
+          {% endif %}
+
+      - type: entities
+        title: Full Auto Settings
+        entities:
+          - entity: input_datetime.tesla_charge_ready_by
+            name: "Ready By (every day)"
+          - entity: input_number.tesla_auto_charge_min_soc
+            name: "Always Charge Below Battery Level"
+          - entity: input_number.tesla_auto_charge_cheap_price
+            name: "Always Charge Below Price (-50 = never)"
+          - entity: input_number.tesla_home_charger_max_amps
+            name: "Home Charger Max Current"
+          - entity: input_select.tesla_home_charger_phases
+            name: "Home Charger Phases"
+          - entity: input_number.tesla_solar_feed_in_price
+            name: "Solar Feed-in Price"
+
+      - type: markdown
+        content: |
+          **Solar (optional):** enter entity IDs from Developer Tools >
+          States. *Grid Power* must be positive while importing and
+          negative while exporting (W or kW). *Solar Power* is your
+          inverter's live PV output. *Solar Forecast* is Forecast.Solar's
+          "Estimated power production - now" sensor (e.g.
+          `sensor.power_production_now`). Leave them empty without solar;
+          Full auto then plans on prices only.
+
+      - type: entities
+        entities:
+          - entity: input_text.tesla_grid_power_entity
+            name: "Grid Power Sensor (entity ID)"
+          - entity: input_text.tesla_pv_power_entity
+            name: "Solar Power Sensor (entity ID)"
+          - entity: input_text.tesla_solar_forecast_entity
+            name: "Solar Forecast Sensor (entity ID)"
 
       # Supercharger Configuration (Placeholder)
       - type: markdown
