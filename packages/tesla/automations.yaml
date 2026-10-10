@@ -380,6 +380,41 @@
         value: "{{ adjustment_map.get(size, 0) }}"
   mode: single
 
+# --- Hungarian tariffs (agents.md Section 21) ---
+- id: tesla_quota_usage_set
+  alias: "Tesla - Quota: Set Used This Month"
+  description: >
+    When you type your home's real grid use so far this month into "Used
+    This Month So Far" (Analytics > Settings), corrects this month's
+    discounted-quota count to that value. It then keeps counting up from
+    there (meter or estimate). The correction ends with the month.
+  triggers:
+    - trigger: state
+      entity_id: input_number.tesla_quota_used_this_month
+  conditions:
+    # Only a value you typed (not a restore after a restart).
+    - condition: template
+      value_template: >
+        {{ trigger.from_state is not none
+           and trigger.from_state.state not in ['unknown', 'unavailable']
+           and trigger.to_state.state | is_number
+           and trigger.to_state.context.user_id is not none }}
+  actions:
+    - variables:
+        raw: >
+          {{ state_attr('sensor.tesla_quota_usage_monthly', 'uncorrected_kwh') | float(0) }}
+    - action: input_number.set_value
+      target:
+        entity_id: input_number.tesla_quota_usage_correction
+      data:
+        value: "{{ ([[trigger.to_state.state | float - raw, -3000] | max, 3000] | min) | round(2) }}"
+    - action: input_datetime.set_datetime
+      target:
+        entity_id: input_datetime.tesla_quota_correction_set
+      data:
+        timestamp: "{{ now().timestamp() }}"
+  mode: queued
+
 # --- Full auto charging (agents.md Section 22) ---
 # sensor.tesla_auto_charge_plan (configuration.yaml) decides; these act on it.
 # Only active while input_boolean.tesla_full_auto_charging is on (the fixed

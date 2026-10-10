@@ -1277,12 +1277,19 @@ views:
           instead: *household kWh per month (without the car)* spread
           evenly over the month, plus the car's home charging.
 
+          **Started mid-month?** Type what your home has already used this
+          month (from your meter or your provider's app) into **Used This
+          Month So Far**. The count is corrected to that value right away
+          and keeps counting up from there. It resets with the next month.
+
       - type: entities
         entities:
           - entity: input_text.tesla_grid_import_entity
             name: "Grid Import Sensor (entity ID)"
           - entity: input_number.tesla_household_monthly_kwh
             name: "Household kWh / Month (without car)"
+          - entity: input_number.tesla_quota_used_this_month
+            name: "Used This Month So Far (corrects the count)"
 
       - type: markdown
         content: |
@@ -1301,7 +1308,7 @@ views:
           | **Tariff A price now** | {{ states('sensor.tesla_tariff_a_current_price') }} Ft/kWh |
           | **Tariff D price now** | {{ d ~ ' Ft/kWh' if d | is_number else 'no data from dnap.hu right now' }} |
           | **Cheapest D hour (next 24 h)** | {{ as_timestamp(cheap) | timestamp_custom('%a %H:%M') if as_timestamp(cheap, none) is not none else '–' }} |
-          | **Quota used this month** | {{ states('sensor.tesla_quota_usage_monthly') }} / {{ states('sensor.tesla_discounted_quota_monthly') }} kWh ({{ 'grid meter' if src == 'meter' else 'estimate' }}) |
+          | **Quota used this month** | {{ states('sensor.tesla_quota_usage_monthly') }} / {{ states('sensor.tesla_discounted_quota_monthly') }} kWh ({{ 'grid meter' if src == 'meter' else 'estimate' }}{{ ', corrected ' ~ ('%+.1f' | format(state_attr('sensor.tesla_quota_usage_monthly', 'correction_kwh') | float(0))) ~ ' kWh' if state_attr('sensor.tesla_quota_usage_monthly', 'correction_kwh') | float(0) != 0 else '' }}) |
           | **Quota remaining** | {{ states('sensor.tesla_quota_remaining_monthly') }} kWh |
           | **Discounted band** | {{ 'Active (36.21 Ft/kWh)' if is_state('binary_sensor.tesla_discount_band_active', 'on') else ('Used up' if is_state('input_boolean.tesla_use_discounted_quota', 'on') else 'Disabled') }} |
           | **Full auto charging** | {{ state_attr('sensor.tesla_auto_charge_plan', 'summary') | default('–', true) if is_state('input_boolean.tesla_full_auto_charging', 'on') else 'Off' }} |

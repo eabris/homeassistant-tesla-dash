@@ -2019,7 +2019,8 @@ under "HUNGARIAN ELECTRICITY TARIFFS"):
   attributes) → `sensor.tesla_active_charging_price` (attribute `source`).
 * Quota: `sensor.tesla_discounted_quota_monthly` (2523/365 × days in month:
   193.5 / 207.4 / 214.3), `sensor.tesla_monthly_grid_import`,
-  `sensor.tesla_quota_usage_monthly` (attribute `source` meter/estimate),
+  `sensor.tesla_quota_usage_monthly` (attributes `source` meter/estimate,
+  `correction_kwh`, `uncorrected_kwh`),
   `sensor.tesla_quota_remaining_monthly`,
   `binary_sensor.tesla_discount_band_active`.
 * Cost: `sensor.tesla_home_charging_energy_total`,
@@ -2147,11 +2148,29 @@ price"), `input_boolean.tesla_tariff_d_charging` →
   with the project's car-name-agnostic scripts and `tesla_`-prefixed
   entities; home-only and smart-charging gates were added.
 
+**Mid-month correction ("Used This Month So Far"):** the meter and the
+estimate can't know what was used before the feature was installed (the
+utility meter starts at 0; the estimate guesses). The user types the real
+kWh into `input_number.tesla_quota_used_this_month`. Automation
+`tesla_quota_usage_set` (only when `trigger.to_state.context.user_id` is
+set, so a restore after a restart never fires it) stores
+`entry − uncorrected_kwh` in `input_number.tesla_quota_usage_correction` and
+stamps `input_datetime.tesla_quota_correction_set` with now.
+`sensor.tesla_quota_usage_monthly` adds the correction only while the stamp's
+month (`timestamp_custom('%Y-%m')`) equals the current month, clamped ≥ 0.
+A month-stamp check was chosen over a reset automation on the 1st, so it
+still ends correctly if HA was down at midnight. The stamp boots at 1970,
+so a fresh install has no correction. Already-accumulated costs are not
+re-priced; quota remaining, the band flag and the active price follow.
+
 **Rules for future agents:**
 * Never price charging by multiplying a period's energy by the *current*
   tariff price — always accumulate per delta at the price active then.
 * Keep the two accumulators' delta logic identical; if you change one,
   change both and re-test the dip, session-restart and first-sample cases.
+* Never give `tesla_quota_used_this_month`, `tesla_quota_usage_correction`
+  or `tesla_quota_correction_set` an `initial:`; and keep the correction
+  automation's `user_id` guard.
 * Never give the quota toggle or `input_number.tesla_auto_charge_cheap_price`
   an `initial:`; both must boot to the safe value (off / −50) once and then
   persist.

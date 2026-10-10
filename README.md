@@ -318,6 +318,11 @@ All prices are final gross Ft/kWh (energy + grid fees + VAT).
    **Household kWh / Month (without car)**. The estimate is then that value ×
    the part of the month that has passed + what the car charged at home this
    month.
+4. **Started in the middle of a month?** Type what your home has already used
+   this month (from your meter or your provider's app) into **Used This Month
+   So Far**. The quota count jumps to that value and keeps counting from
+   there, so if you have already used more than this month's quota, the
+   higher rate applies right away. It only affects the current month.
 
 How the numbers work:
 - The quota is 2,523 kWh a year, counted per day: about 207 kWh in 30-day
@@ -329,7 +334,9 @@ How the numbers work:
   re-priced, so in Tariff A/D mode the first day, week and month are partial.
 - When you first set a grid-import sensor in the middle of a month, that month
   starts from the household estimate (the sensor can't tell what was used
-  before you set it).
+  before you set it). Use **Used This Month So Far** to correct it.
+- Charging that was already counted keeps its price; a correction only changes
+  the price of what comes after it.
 
 To charge when Tariff D is cheapest, turn on **Full auto charging** (next
 section). The 🌙 Smart Charging off-peak window works with every tariff, but
@@ -572,6 +579,7 @@ left alone by default (pass `--include-labels` to rename those too). Run
 
 | Problem | Fix |
 | :--- | :--- |
+| "Quota used this month" is lower than your meter (e.g. you installed mid-month) | Analytics → Settings → 🇭🇺 tariff section: type the real kWh used so far this month into **Used This Month So Far**. The Live Tariff Status row then shows "corrected +X kWh". It resets with the next month. |
 | Dashboard shows "Custom element doesn't exist" | You're missing a HACS card — revisit Step 2 and make sure you restarted Home Assistant after installing. |
 | Entities show as `unavailable` | Check that the Tesla Fleet integration is connected and your car is online (Tesla vehicles sleep to save battery). |
 | YAML errors after restart | Check **Settings → System → Logs**, or validate YAML in the File editor — usually an indentation issue. |

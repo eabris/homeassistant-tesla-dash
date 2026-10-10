@@ -534,6 +534,31 @@ input_number:
     icon: mdi:home-lightning-bolt-outline
     mode: box
 
+  # Your home's real grid use so far this month (kWh, from your meter or the
+  # provider's app). Typing a value corrects this month's quota count, which
+  # then keeps counting up from it (automation tesla_quota_usage_set). For
+  # when tracking started mid-month. Only affects the month it was set in.
+  tesla_quota_used_this_month:
+    name: "Used This Month So Far"
+    unit_of_measurement: "kWh"
+    min: 0
+    max: 3000
+    step: 0.1
+    icon: mdi:counter
+    mode: box
+
+  # Internal: kWh added to this month's quota usage so it matches the value
+  # typed into Used This Month So Far. Only counts in the month of
+  # input_datetime.tesla_quota_correction_set. Automation-managed.
+  tesla_quota_usage_correction:
+    name: "Tesla Quota Usage Correction"
+    unit_of_measurement: "kWh"
+    min: -3000
+    max: 3000
+    step: 0.01
+    icon: mdi:plus-minus-variant
+    mode: box
+
   # --- Full auto charging (agents.md Section 22). No `initial:` (Section 11):
   # each one starts at its minimum on a fresh install, so set them once in
   # Analytics > Settings > Full Auto Charging. ---
@@ -794,6 +819,14 @@ input_datetime:
     has_date: true
     has_time: true
     icon: mdi:timer-check-outline
+
+  # When "Used This Month So Far" was last applied (Section 21). The quota
+  # correction only counts in this month. Boots at 1970 = no correction.
+  tesla_quota_correction_set:
+    name: "Tesla Quota Correction Set"
+    has_date: true
+    has_time: true
+    icon: mdi:calendar-edit
 
 template:
   # ===== FLEET SENSOR ALIASES ("vehicle_" namespace) =====
@@ -1889,6 +1922,7 @@ template:
       # How much of this month's discounted quota the household has used:
       # the real grid import if a meter is configured, otherwise
       # household estimate x elapsed share of the month + home charging.
+      # Plus this month's correction from "Used This Month So Far".
       - name: "Tesla Quota Usage Monthly"
         unique_id: tesla_quota_usage_monthly_v1
         unit_of_measurement: "kWh"
@@ -1897,19 +1931,41 @@ template:
         state: >
           {% set grid = states('sensor.tesla_monthly_grid_import') %}
           {% if states('input_text.tesla_grid_import_entity') | trim != '' and grid | is_number %}
-            {{ grid | float | round(1) }}
+            {% set raw = grid | float %}
           {% else %}
             {% set n = now() %}
             {% set start = n.replace(day=1, hour=0, minute=0, second=0, microsecond=0) %}
             {% set dim = ((start.date() + timedelta(days=32)).replace(day=1) - start.date()).days %}
             {% set frac = [(n - start).total_seconds() / (dim * 86400), 1] | min %}
-            {{ (states('input_number.tesla_household_monthly_kwh') | float(0) * frac
-                + states('sensor.tesla_monthly_home_charging_energy') | float(0)) | round(1) }}
+            {% set raw = states('input_number.tesla_household_monthly_kwh') | float(0) * frac
+                         + states('sensor.tesla_monthly_home_charging_energy') | float(0) %}
           {% endif %}
+          {% set c_ts = state_attr('input_datetime.tesla_quota_correction_set', 'timestamp') | float(0) %}
+          {% set corr = states('input_number.tesla_quota_usage_correction') | float(0)
+                        if c_ts > 0 and (c_ts | timestamp_custom('%Y-%m')) == now().strftime('%Y-%m') else 0 %}
+          {{ ([raw + corr, 0] | max) | round(1) }}
         attributes:
           source: >
             {{ 'meter' if states('input_text.tesla_grid_import_entity') | trim != ''
                and states('sensor.tesla_monthly_grid_import') | is_number else 'estimate' }}
+          # This month's correction (0 when none is set for this month), and
+          # the usage without it (the correction automation needs it).
+          correction_kwh: >
+            {% set c_ts = state_attr('input_datetime.tesla_quota_correction_set', 'timestamp') | float(0) %}
+            {{ (states('input_number.tesla_quota_usage_correction') | float(0)
+                if c_ts > 0 and (c_ts | timestamp_custom('%Y-%m')) == now().strftime('%Y-%m') else 0) | round(2) }}
+          uncorrected_kwh: >
+            {% set grid = states('sensor.tesla_monthly_grid_import') %}
+            {% if states('input_text.tesla_grid_import_entity') | trim != '' and grid | is_number %}
+              {{ grid | float | round(2) }}
+            {% else %}
+              {% set n = now() %}
+              {% set start = n.replace(day=1, hour=0, minute=0, second=0, microsecond=0) %}
+              {% set dim = ((start.date() + timedelta(days=32)).replace(day=1) - start.date()).days %}
+              {% set frac = [(n - start).total_seconds() / (dim * 86400), 1] | min %}
+              {{ (states('input_number.tesla_household_monthly_kwh') | float(0) * frac
+                  + states('sensor.tesla_monthly_home_charging_energy') | float(0)) | round(2) }}
+            {% endif %}
 
       - name: "Tesla Quota Remaining Monthly"
         unique_id: tesla_quota_remaining_monthly_v1
