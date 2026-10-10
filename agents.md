@@ -874,6 +874,13 @@ charging at the target %; the automation doesn't need to poll and manually
 stop charging when the target is reached. `tesla_smart_charge_stop` only
 exists to handle the case where the window closes *before* the target is hit.
 
+**Full power:** the start automation also sets `number.<car>_charge_current`
+to the highest current the car accepts (that entity's `max` attribute,
+usually 16 A), capped at `input_number.tesla_home_charger_max_amps` (the
+circuit limit, never below 5 A), before starting. Without this, a lower
+current left over from Full auto following the sun, or set by hand, would
+slow down the off-peak window. It only writes when the current differs.
+
 **New helpers:** `input_datetime.tesla_smart_charge_window_start` (default
 23:00:00) and `input_datetime.tesla_smart_charge_window_end` (default
 06:00:00), both time-only (no date component). Exposed on the Analytics

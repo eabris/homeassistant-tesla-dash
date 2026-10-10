@@ -254,6 +254,9 @@
     car's onboard charge controller — not this automation — is what actually
     stops charging once the target is reached (defense in depth: charging
     stays capped even if HA is restarted mid-window).
+    Charges at full power: the highest current the car accepts (the max of
+    number.<car>_charge_current, usually 16 A), capped at
+    input_number.tesla_home_charger_max_amps.
     Inactive while input_boolean.tesla_full_auto_charging is on (the
     tesla_auto_charge_* planner automations take over then).
   trigger:
@@ -295,13 +298,27 @@
         entity_id: "{{ 'number.' + states('input_text.tesla_car_name') + '_charge_limit' }}"
       data:
         value: "{{ states('input_number.tesla_target_charge_limit') | int(80) }}"
+    # Full power. A lower current left over from Full auto following the
+    # sun, or set by hand, would slow down the off-peak window.
+    - variables:
+        car_max_amps: >
+          {{ state_attr('number.' ~ states('input_text.tesla_car_name') ~ '_charge_current', 'max') | int(16) }}
+        max_amps: >
+          {{ [[car_max_amps, [states('input_number.tesla_home_charger_max_amps') | int(16), 5] | max] | min, 5] | max }}
+    - if: "{{ states('number.vehicle_charge_current') | int(0) != max_amps }}"
+      then:
+        - action: number.set_value
+          target:
+            entity_id: "{{ 'number.' + states('input_text.tesla_car_name') + '_charge_current' }}"
+          data:
+            value: "{{ max_amps }}"
     - action: script.tesla_charge_start
     - action: persistent_notification.create
       data:
         title: "Tesla Smart Charging"
         message: >
-          Started charging during your off-peak window (target
-          {{ states('input_number.tesla_target_charge_limit') }}%). It will
+          Started charging during your off-peak window at {{ max_amps }} A
+          (target {{ states('input_number.tesla_target_charge_limit') }}%). It will
           stop automatically once the target is reached, or when the window
           ends.
   mode: single
