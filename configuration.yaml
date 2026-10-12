@@ -1401,13 +1401,18 @@ template:
         state: >
           {% set odom_raw = states('sensor.vehicle_odometer') %}
           {% set base_raw = states('input_number.tesla_odometer_monthly_baseline') %}
+          {# A baseline of 0 (not set yet after a restart) would make the whole
+             odometer count as this month's distance (a 200,000+ km spike in
+             the statistics). Keep the previous value until the baseline is
+             set, and never accept more than 20,000 km in a month. #}
+          {% set prev = this.state | float(0) %}
           {% if odom_raw in ['unknown', 'unavailable', 'none'] or base_raw in ['unknown', 'unavailable', 'none'] %}
-            {% set prev = this.state | float(0) %}
             {{ prev | round(2) }}
           {% else %}
             {% set odom = odom_raw | float(0) %}
             {% set base = base_raw | float(0) %}
-            {{ ((odom - base) if odom >= base else 0) | round(2) }}
+            {% set dist = (odom - base) if odom >= base else 0 %}
+            {{ (dist if base > 0 and dist <= 20000 else (prev if prev <= 20000 else 0)) | round(2) }}
           {% endif %}
 
       # === Daily Tracking ===
@@ -1451,8 +1456,9 @@ template:
       - name: "Tesla Monthly Electric Cost"
         unique_id: tesla_monthly_electric_cost_v5
         unit_of_measurement: "Ft"
-        # state_class creates long-term statistics: the "Electric cost ·
-        # Yearly" chart reads them (one bar per month).
+        # state_class gives long-term statistics (kept: removing it again would
+        # raise a recorder repair). The "· Yearly" chart doesn't read them; it
+        # uses the monthly charging energy, which has older history.
         state_class: measurement
         icon: mdi:cash-multiple
         state: >
@@ -1559,7 +1565,7 @@ template:
       - name: "Tesla Monthly Fuel Cost"
         unique_id: tesla_monthly_fuel_cost_v6
         unit_of_measurement: "Ft"
-        # state_class: long-term statistics for the "Fuel cost · Yearly" chart.
+        # state_class: long-term statistics (kept, see Monthly Electric Cost).
         state_class: measurement
         icon: mdi:gas-station
         state: >

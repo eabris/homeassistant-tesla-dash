@@ -856,9 +856,13 @@ views:
           - entity: sensor.tesla_monthly_distance
             name: Distance
             type: column
+            color: '#1E88E5'
             statistics:
               type: max
               period: month
+            # Drops impossible months (> 20,000 km, e.g. the odometer counted
+            # as one month's distance while the baseline was 0).
+            transform: "return x > 20000 ? null : x;"
             show:
               in_header: false
               legend_value: false
@@ -924,6 +928,7 @@ views:
           - entity: sensor.tesla_monthly_energy_consumed
             name: Energy used
             type: column
+            color: '#1E88E5'
             statistics:
               type: state
               period: month
@@ -987,12 +992,29 @@ views:
             show:
               in_chart: false
               legend_value: true
-          - entity: sensor.tesla_monthly_electric_cost
+          # Monthly charged kWh (utility meter, has long-term statistics from
+          # the start) x the rate: this month's average tariff price in
+          # Tariff A/D, otherwise the Default Electricity Rate. Past months use
+          # today's rate, so they are an estimate.
+          - entity: sensor.tesla_monthly_charging_energy
             name: Electric cost
             type: column
+            color: '#FF9F0A'
+            unit: " Ft"
+            float_precision: 0
             statistics:
-              type: max
+              type: state
               period: month
+            transform: >
+              const st = hass.states;
+              const n = (id, d) => { const v = parseFloat(st[id]?.state); return isNaN(v) ? d : v; };
+              let rate = n('input_number.tesla_default_electricity_cost', 60);
+              if (['Tariff A', 'Tariff D'].includes(st['input_select.tesla_tariff_mode']?.state)) {
+                const e = n('sensor.tesla_monthly_charging_energy', 0);
+                const c = n('sensor.tesla_monthly_tariff_charging_cost', 0);
+                rate = e >= 5 ? c / e : n('sensor.tesla_active_charging_price', rate);
+              }
+              return x * rate;
             show:
               in_header: false
               legend_value: false
@@ -1053,12 +1075,21 @@ views:
             show:
               in_chart: false
               legend_value: true
-          - entity: sensor.tesla_monthly_fuel_cost
+          # Monthly distance x today's fuel cost per km (the same formula as
+          # sensor.tesla_monthly_fuel_cost, which has no older statistics).
+          - entity: sensor.tesla_monthly_distance
             name: Fuel cost
             type: column
+            color: '#1E88E5'
+            unit: " Ft"
+            float_precision: 0
             statistics:
               type: max
               period: month
+            transform: >
+              if (x > 20000) return null;
+              const f = parseFloat(hass.states['sensor.tesla_fuel_cost_per_km']?.state);
+              return isNaN(f) ? null : x * f;
             show:
               in_header: false
               legend_value: false

@@ -2449,3 +2449,28 @@ daily cards show TOTAL and DAILY.
 **Rules for future agents:** don't use `group_by` with month durations; never
 point a `statistics:` series at a sensor without `state_class`; keep each
 yearly sensor's formula in step with its monthly twin.
+
+**Follow-up fixes (Section 23):**
+* "Electric cost · Yearly" / "Fuel cost · Yearly" hung on "Loading…" forever:
+  the monthly cost sensors had only just got a `state_class`, so they had no
+  long-term statistics yet, and apexcharts-card never finishes when a
+  `statistics:` series returns nothing (same symptom as the removed
+  efficiency charts). Both charts now read sensors that already have
+  statistics and calculate the cost in `transform:`. Electric cost is
+  `sensor.tesla_monthly_charging_energy` (utility meter, type `state`) ×
+  this month's average tariff price (Tariff A/D) or the default rate. Fuel
+  cost is `sensor.tesla_monthly_distance` (type `max`) ×
+  `sensor.tesla_fuel_cost_per_km`. Past months use today's prices, so they
+  are estimates. The `state_class` stays on the cost sensors, because
+  removing it would raise a recorder repair. Rule: a `statistics:` series
+  must point at an entity that already has long-term statistics.
+* "Distance · Yearly" showed August as 207,590 km. `sensor.tesla_monthly_distance`
+  computes odometer − `input_number.tesla_odometer_monthly_baseline`, and
+  while the baseline was still 0 (before `tesla_odometer_baseline_startup`
+  set it), that made the whole odometer one month's distance. The template now
+  keeps its previous value while the baseline is 0, and never accepts more
+  than 20,000 km in a month. The charts also drop months over 20,000 km.
+  Existing bad rows can only be removed with SQL; HA's Statistics tool only
+  adjusts `sum` statistics. The README has the `DELETE` statements.
+* Per-series `color:` is set on the chart columns, because a `colors:` list
+  in `apex_config` didn't line up with the header-only series.

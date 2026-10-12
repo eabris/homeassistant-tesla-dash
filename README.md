@@ -603,6 +603,7 @@ left alone by default (pass `--include-labels` to rename those too). Run
 | Notification `Tesla token refresh failed … exited with code 3` | The Tesla Fleet integration's own token was still expired when the copy ran. Wait a minute and run `script.tesla_refresh_fleet_token` again. If it keeps happening, open **Settings → Devices & Services → Tesla Fleet** and re-authenticate if HA asks you to. |
 | Tariff D price (`sensor.tesla_d_tariff_price`) shows `unavailable`, or the Settings status says no data from dnap.hu | Normal on days dnap.hu has not published prices yet (it answers `Ma még nincs áradat.`). Costs use the A1 rate (70.10 Ft/kWh) until data is back. If it lasts for days, check that Home Assistant can reach `https://dnap.hu/adatok/most.json`. |
 | Analytics → Driving "· Yearly" charts show only one or two bars | The bars come from Home Assistant's long-term statistics, which only exist from the day tracking began (the two cost charts from when this update was installed). Older months stay empty. |
+| A month in "Distance · Yearly" shows a huge value (e.g. 207,000 km) | The whole odometer was once counted as that month's distance, because the monthly baseline was still 0. This can't happen any more, and the chart hides months over 20,000 km. To get the real value for that month back, delete the bad statistics rows (see below). |
 | Full auto charging never starts | Read its status (Overview → Battery tab, or `sensor.tesla_auto_charge_plan`): it says why. *Waiting* is normal until the planned block or enough sun. Also check: **Ready By** is still 00:00 (fresh install); **Home Charger Max Current** is still 5 A; the car is not in the `home` zone; it is already at the Target Charge Limit; you tapped Stop charging (*Paused* until you unplug); its last start/stop was less than 30 minutes ago. See "Full auto charging" under Maintenance. |
 | Log warning `Error. Url: https://dnap.hu/adatok/holnap.json. Status code 404` (or `ma.json`) | Harmless. From 13:00 the dashboard checks every 30 minutes (after 16:00 hourly) for tomorrow's Tariff D prices, which dnap.hu usually publishes by 14:00. Until then the server answers 404. A few of these a day are expected. |
 | The car charges for a few minutes after plugging in, then stops (Full auto on) | Expected: the car starts charging by itself when plugged in. Full auto takes that session over and pauses it until the cheapest block. Use **Charge now** if you need to charge straight away. |
@@ -610,6 +611,18 @@ left alone by default (pass `--include-labels` to rename those too). Run
 | Charging starts again by itself after I stopped it | Full auto is on. Stop with the **Stop charging** button on the Battery tab (it pauses Full auto until you unplug), or turn Full auto off. Stopping in the Tesla app doesn't pause it. |
 | `input_number.tesla_d_tariff_charge_threshold`, `input_boolean.tesla_tariff_d_charging`, `input_datetime.tesla_tariff_d_last_switch` or `automation.tesla_tariff_d_charge_*` show `unavailable` | Replaced by Full auto charging (the threshold is now **Always Charge Below Price** — set it again). Delete the old entities in **Settings → Devices & Services → Entities**. |
 | After choosing Tariff A/D, the daily/weekly/monthly electric cost dropped to 0 or looks too low | Expected the first time: tariff costs are counted from when you install this version, not re-priced backwards. They fill in as the car charges. Switching back to **Off** shows the old default-rate figures. |
+
+> **Removing a wrong month from "Distance · Yearly":** Home Assistant can't
+> edit this kind of statistic in the UI. Install the **SQLite Web** add-on
+> (default database), back up first (Settings → System → Backups), then run:
+> ```sql
+> DELETE FROM statistics WHERE max > 20000 AND metadata_id =
+>   (SELECT id FROM statistics_meta WHERE statistic_id = 'sensor.tesla_monthly_distance');
+> DELETE FROM statistics_short_term WHERE max > 20000 AND metadata_id =
+>   (SELECT id FROM statistics_meta WHERE statistic_id = 'sensor.tesla_monthly_distance');
+> ```
+> This only removes the bad hours. The month then shows the largest
+> remaining value, which is its real total. Refresh the dashboard.
 
 > 🧹 **"Start clean" — wipe and re-create all Tesla entities from scratch:**
 > If you've renamed things, run a cleanup script, or just want a truly fresh
