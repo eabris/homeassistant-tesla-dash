@@ -364,11 +364,20 @@ One-time setup:
 4. Optional safety nets: **Always Charge Below Battery Level** (e.g. 20 %)
    and **Always Charge Below Price** (−50 = never; e.g. 0 to always charge
    at negative Tariff D prices).
-5. Solar (optional): install the **Forecast.Solar** integration, then enter
-   three entity IDs: **Grid Power Sensor** (positive while importing, negative
-   while exporting, e.g. `sensor.inverter_grid_power`), **Solar Power Sensor**
-   (e.g. `sensor.inverter_pv_power`) and **Solar Forecast Sensor**
-   (`sensor.power_production_now`). Set **Solar Feed-in Price** to what an
+5. Solar (optional): install the **Open-Meteo Solar Forecast** integration
+   (recommended, HACS) or **Forecast.Solar**, then enter three entity IDs:
+   **Grid Power Sensor** (positive while importing, negative while exporting,
+   e.g. `sensor.inverter_grid_power`), **Solar Power Sensor** (e.g.
+   `sensor.inverter_pv_power`) and **Solar Forecast Sensor**: the forecast
+   integration's "Estimated power production - now" sensor (find it under
+   Settings → Entities; e.g. `sensor.power_production_now`). Open-Meteo is
+   better for charge planning: it is built on weather-model sun data, has a
+   15-minute forecast that the planner uses directly, and has no request
+   limit. Forecast.Solar (free plan) only gives hourly values and the planner
+   has to spread its daily total as a smooth curve. In the Open-Meteo setup,
+   set **Inverter capacity** to your inverter's AC limit and check the panel
+   power: if the daily forecast is higher than your system can ever produce, it
+   is set too high. Set **Solar Feed-in Price** to what an
    exported kWh earns you (about 5 Ft/kWh on Hungarian gross billing).
 6. Turn on **Full Auto Charging**.
 
@@ -381,9 +390,10 @@ How it decides (every 5 minutes, `sensor.tesla_auto_charge_plan`):
   Tariff A: the above-quota rate. Off: the Default Electricity Rate. Inside
   the discounted quota it still plans with the above-quota price, because
   the car only uses up quota the house would otherwise use.
-- **Solar first.** Forecast.Solar (which already includes the weather) is
-  spread over the day, minus your home's base load, and corrected with what
-  your panels make right now. Charging follows the sun at **at least 5 A**
+- **Solar first.** The solar forecast (which already includes the weather) is
+  taken per quarter hour from Open-Meteo (or, with Forecast.Solar, spread over
+  the day as a smooth curve), minus your home's base load, and corrected with
+  what your panels make right now. Charging follows the sun at **at least 5 A**
   (3.45 kW on 3-phase). With only part of that from the sun, the rest comes
   from the grid. It only does that while the mix is at least 5 % cheaper
   than charging from the grid alone.

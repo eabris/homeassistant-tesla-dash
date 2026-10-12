@@ -714,9 +714,10 @@ input_text:
   tesla_pv_power_entity:
     name: "Solar Power Sensor (entity ID)"
     icon: mdi:solar-power
-  # Forecast.Solar "Estimated power production - now" entity, e.g.
-  # sensor.power_production_now. Its "energy production today remaining" and
-  # "energy production tomorrow" siblings are found from this name.
+  # "Estimated power production - now" entity of Open-Meteo Solar Forecast
+  # (recommended) or Forecast.Solar, e.g. sensor.power_production_now. Its
+  # "energy production today/tomorrow/today remaining" siblings are found from
+  # this name (same prefix/suffix).
   tesla_solar_forecast_entity:
     name: "Solar Forecast Sensor (entity ID)"
     icon: mdi:weather-partly-cloudy
@@ -2216,8 +2217,10 @@ template:
   #    above-band rate; Off = Default Electricity Rate. Inside the discounted
   #    band the car only uses up quota the house would otherwise use, so the
   #    house pays the above-band rate later: that is the real cost.
-  #  - Solar: Forecast.Solar's remaining-today / tomorrow energy is spread over
-  #    the day as a sine curve, minus the household base load. The next ~3 h
+  #  - Solar: Open-Meteo Solar Forecast's real 15-minute profile
+  #    (wh_period_15m) when the forecast entity has one; otherwise
+  #    Forecast.Solar's remaining-today / tomorrow energy spread over the day
+  #    as a sine curve. Minus the household base load. The next ~3 h
   #    are scaled by measured / forecast output now ("nowcast", 0.3-2x), and
   #    the current quarter uses the measured 10-min surplus.
   # The automations in packages/tesla/automations.yaml act on it. State = the
@@ -2319,7 +2322,7 @@ template:
               {% endfor %}
             {% endif %}
             {% set d_fill = ns.tot / ns.n if ns.n > 0 else (d_live if d_live is not none else a_market) %}
-            {# --- solar forecast (Forecast.Solar) --- #}
+            {# --- solar forecast (Open-Meteo Solar Forecast or Forecast.Solar) --- #}
             {% set fc = states('input_text.tesla_solar_forecast_entity') | trim | lower %}
             {% set has_fc = fc is match('^sensor[.][a-z0-9_]*power_production_now[a-z0-9_]*$') %}
             {% set rem_id = fc | replace('power_production_now', 'energy_production_today_remaining') %}
@@ -2328,6 +2331,25 @@ template:
             {% set e_tom = states(tom_id) | float(none) if has_fc else none %}
             {% set e_rem = e_rem / 1000 if e_rem is not none and (state_attr(rem_id, 'unit_of_measurement') or '') | lower == 'wh' else e_rem %}
             {% set e_tom = e_tom / 1000 if e_tom is not none and (state_attr(tom_id, 'unit_of_measurement') or '') | lower == 'wh' else e_tom %}
+            {# Open-Meteo Solar Forecast also gives a real 15-minute profile
+               (attribute wh_period_15m on energy_production_today / _tomorrow:
+               Wh per quarter, keyed by quarter start). Forecast.Solar has none,
+               so it falls back to the sine curve below. #}
+            {% set np = namespace(d={}) %}
+            {% if has_fc %}
+              {% for pid in [fc | replace('power_production_now', 'energy_production_today'), tom_id] %}
+                {% set prof = state_attr(pid, 'wh_period_15m') %}
+                {% if prof is mapping %}
+                  {% for k, v in prof.items() %}
+                    {% set kt = as_timestamp(k, none) %}
+                    {% if kt is number and v is number %}
+                      {% set np.d = dict(np.d, **{(kt | int | string): v}) %}
+                    {% endif %}
+                  {% endfor %}
+                {% endif %}
+              {% endfor %}
+            {% endif %}
+            {% set has_prof = np.d | length > 0 %}
             {% set nr = as_timestamp(state_attr('sun.sun', 'next_rising'), none) %}
             {% set nst = as_timestamp(state_attr('sun.sun', 'next_setting'), none) %}
             {% if nr is number and nst is number %}
@@ -2362,7 +2384,9 @@ template:
               {% else %}
                 {% set p = default_price %}
               {% endif %}
-              {% if r1 < t < s1 and e_rem is not none and den1 > 0.05 %}
+              {% if has_prof %}
+                {% set pv = np.d.get(q | string, 0) * 4 / 1000 %}
+              {% elif r1 < t < s1 and e_rem is not none and den1 > 0.05 %}
                 {% set pv = e_rem * sin(pi * (t - r1) / L) / den1 %}
               {% elif r2 < t < s2 and e_tom is not none %}
                 {% set pv = e_tom * pi / (2 * L / 3600) * sin(pi * (t - r2) / L) %}
@@ -2511,7 +2535,8 @@ template:
                  'est_cost': est | round(0) if need > 0 else none,
                  'price_now': price_now | round(1),
                  'surplus_kw': sur_now | round(2),
-                 'solar_forecast': has_fc
+                 'solar_forecast': has_fc,
+                 'solar_forecast_shape': 'quarter-hour profile' if has_prof else ('sine curve' if has_fc else none)
                } }}
     sensor:
       - name: "Tesla Auto Charge Plan"
@@ -2547,6 +2572,7 @@ template:
           price_now: "{{ plan.price_now }}"
           surplus_kw: "{{ plan.surplus_kw }}"
           solar_forecast: "{{ plan.solar_forecast }}"
+          solar_forecast_shape: "{{ plan.solar_forecast_shape }}"
 
 # ---------------------------------------------------------------------------
 # HUNGARIAN TARIFF D PRICE FEED (dnap.hu) — agents.md Section 21

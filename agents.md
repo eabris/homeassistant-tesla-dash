@@ -2281,14 +2281,29 @@ threshold automations.
    Rate. The discounted band is deliberately ignored. Car kWh inside the
    band push house kWh above the band later in the month, so the marginal
    cost is the above-band price.
-2. **Solar.** Forecast.Solar `energy_production_today_remaining` /
-   `energy_production_tomorrow` are spread as a sine between `sun.sun`
-   rising and setting, minus the base load, × 0.8 to be safe. These entity
-   IDs are derived from the `power_production_now` ID by string replace (a
-   regex requires that name). Nowcast: kc = measured PV ÷ forecast PV now,
-   clamped to 0.3–2, fading linearly back to 1 over 3 h. Quarter 0 uses the
-   measured 10-minute surplus. The weather is covered because Forecast.Solar
-   already includes it, and the nowcast corrects it when it's wrong.
+2. **Solar.** Per quarter, minus the base load, × 0.8 to be safe. Source
+   (`solar_forecast_shape` attribute): **Open-Meteo Solar Forecast** (the
+   recommended integration) exposes a real 15-minute profile, attribute
+   `wh_period_15m` (Wh per quarter, keyed by the quarter start) on its
+   `energy_production_today` / `_tomorrow` sensors (confirmed in
+   `rany2/ha-open-meteo-solar-forecast` `sensor.py`). The planner uses that
+   (kW = Wh × 4 ÷ 1000) when present: "quarter-hour profile". Without it
+   (**Forecast.Solar**, hourly only, no attribute, 12 requests/hour on the
+   free plan) it spreads `energy_production_today_remaining` /
+   `energy_production_tomorrow` as a sine between `sun.sun` rising and
+   setting: "sine curve". The sibling entity IDs are derived from the
+   `power_production_now` ID by string replace (a regex requires that name;
+   a prefix/suffix such as `_2` is kept). Nowcast: kc = measured PV ÷
+   forecast PV now, clamped to 0.3–2, fading linearly back to 1 over 3 h.
+   Quarter 0 uses the measured 10-minute surplus. The weather is covered
+   because both forecasts include it, and the nowcast corrects it when it's
+   wrong. Open-Meteo is better for this: weather-model irradiance, 15-minute
+   resolution (a cloud front at noon moves the plan to the morning), no
+   request cap. Its numbers depend on the user's setup (kWp, inverter
+   capacity); the user's first numbers (30.8 / 38.9 kWh/day for a ~5 kW
+   system in October) were too high, so remind them to set the inverter
+   capacity. Tested outside HA with a Jinja harness: sunny, cloud front at
+   noon and overcast days, profile vs sine.
 3. **Need.** need = (target − SoC) % × capacity ÷ 0.9 (charging losses). A
    full-power quarter holds eq = max amps × phases × 0.23 kW × 0.25 h.
    n_full = ceil(need ÷ eq) + 1 (one spare quarter).

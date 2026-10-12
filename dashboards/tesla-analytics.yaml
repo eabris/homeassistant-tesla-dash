@@ -1377,8 +1377,8 @@ views:
             Departure*),
           - the price of every quarter hour until then (live Tariff D
             prices, the Tariff A rate, or the Default Electricity Rate),
-          - the solar forecast (Forecast.Solar, which already includes the
-            weather), corrected with what your panels produce right now,
+          - the solar forecast (Open-Meteo or Forecast.Solar, which already
+            include the weather), corrected with what your panels produce right now,
           - what your exported solar is worth (**Solar Feed-in Price**).
 
           Then it charges the cheapest way: on solar surplus when there is
@@ -1474,8 +1474,9 @@ views:
           **Solar (optional):** enter entity IDs from Developer Tools >
           States. *Grid Power* must be positive while importing and
           negative while exporting (W or kW). *Solar Power* is your
-          inverter's live PV output. *Solar Forecast* is Forecast.Solar's
-          "Estimated power production - now" sensor (e.g.
+          inverter's live PV output. *Solar Forecast* is the "Estimated power
+          production - now" sensor of Open-Meteo Solar Forecast (recommended:
+          15-minute forecast) or Forecast.Solar (e.g.
           `sensor.power_production_now`). Leave them empty without solar;
           Full auto then plans on prices only.
 
