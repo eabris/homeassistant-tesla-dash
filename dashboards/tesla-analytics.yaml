@@ -993,9 +993,9 @@ views:
               in_chart: false
               legend_value: true
           # Monthly charged kWh (utility meter, has long-term statistics from
-          # the start) x the rate: this month's average tariff price in
-          # Tariff A/D, otherwise the Default Electricity Rate. Past months use
-          # today's rate, so they are an estimate.
+          # the start) x the rate: this month's average price (Tesla Monthly
+          # Electric Cost / charged kWh) in Tariff A/D, otherwise the Default
+          # Electricity Rate. Past months use today's rate (an estimate).
           - entity: sensor.tesla_monthly_charging_energy
             name: Electric cost
             type: column
@@ -1011,7 +1011,7 @@ views:
               let rate = n('input_number.tesla_default_electricity_cost', 60);
               if (['Tariff A', 'Tariff D'].includes(st['input_select.tesla_tariff_mode']?.state)) {
                 const e = n('sensor.tesla_monthly_charging_energy', 0);
-                const c = n('sensor.tesla_monthly_tariff_charging_cost', 0);
+                const c = n('sensor.tesla_monthly_electric_cost', 0);
                 rate = e >= 5 ? c / e : n('sensor.tesla_active_charging_price', rate);
               }
               return x * rate;

@@ -2081,6 +2081,19 @@ tariff figures include away charging at the default rate, so they match
 the existing Cost Projections "HOME" row, which already used all charging
 energy. There is no back-fill: tariff costs start counting at install.
 
+**Uncovered kWh at the default rate (fix):** the first version showed only
+the tariff meter in Tariff A/D, so the install month was under-counted. It
+also priced per km (and the "Electric cost · Yearly" chart) as tariff cost
+since install ÷ the **whole** month's kWh. That gave ~10 Ft/kWh, e.g. a
+September of ~9,500 Ft instead of ~50k. Now monthly / previous-month / yearly
+cost = tariff cost + max(0, period kWh − covered kWh) × default rate.
+`sensor.tesla_tariff_charging_energy_total` (same delta rules as the other two
+accumulators; keep all three identical) gives the covered kWh through
+monthly/yearly meters. Monthly covered = max(that meter, monthly home charging
+energy): the home meter started with the tariff feature, the new one later.
+Average price = `sensor.tesla_monthly_electric_cost` ÷ monthly charging
+energy. **Rule:** never divide a since-install cost by a whole-period energy.
+
 **Monthly grid import state machine** (`sensor.tesla_monthly_grid_import`,
 trigger template every minute + on `input_text.tesla_grid_import_entity`
 change; attributes `source_entity`, `month`, `baseline_kwh`, `offset_kwh`):
