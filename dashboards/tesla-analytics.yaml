@@ -795,23 +795,25 @@ views:
               func: last
               duration: 1d
 
-      # ── 9. SPEED EFFICIENCY ──
+      # ── 9. DISTANCE · YEARLY ──
       - type: custom:apexcharts-card
-        graph_span: 30d
+        graph_span: 1y
+        span:
+          end: month
         cache: true
         header:
           show: true
-          title: Speed efficiency
+          title: "Distance · Yearly"
           show_states: false
         apex_config:
           subtitle:
-            text: "Daily energy usage (Wh/km) and average driving speed."
+            text: "Distance driven per month, last 12 months."
             offsetY: 0
             style:
               fontSize: "12px"
               color: "#888888"
           chart:
-            height: 280
+            height: 260
             foreColor: '#7F7F7F'
             toolbar:
               show: false
@@ -826,75 +828,44 @@ views:
             type: datetime
             labels:
               datetimeFormatter:
-                day: "MMM d"
-          yaxis:
-            - id: efficiency
-              title:
-                text: "Wh/km"
-              min: 0
-              seriesName: "Wh/km"
-              labels:
-                formatter: "function(val) { return Math.round(val); }"
-            - id: speed
-              opposite: true
-              title:
-                text: "km/h"
-              min: 0
-              seriesName: "km/h"
-              labels:
-                formatter: "function(val) { return Math.round(val); }"
-          stroke:
-            curve: smooth
-            width:
-              - 0
-              - 2
+                year: "yyyy"
+                month: "MMM"
+          tooltip:
+            x:
+              format: "MMMM yyyy"
           dataLabels:
             enabled: false
           colors:
             - '#1E88E5'
-            - '#90CAF9'
-          legend:
-            show: true
-            position: bottom
         series:
-          - entity: sensor.tesla_daily_efficiency_wh_per_km
-            name: "Wh/km"
+          - entity: sensor.tesla_monthly_distance
+            name: "km"
             type: column
-            yaxis_id: efficiency
+            show:
+              legend_value: false
             group_by:
-              func: last
-              duration: 1d
-          - entity: sensor.vehicle_speed
-            name: "km/h"
-            type: line
-            yaxis_id: speed
-            # Reuses the exact same raw-history + group_by pattern as the
-            # working "Speed" chart above (rather than the apexcharts-card
-            # `statistics:` / HA long-term-statistics feature, which was the
-            # only place in either dashboard using it and never returned
-            # data -- see comment on the Duration chart fix for the same
-            # family of issue).
-            group_by:
-              func: avg
-              duration: 1d
+              func: max
+              duration: 1month
 
-      # ── 10. TEMPERATURE EFFICIENCY ──
+      # ── 10. ENERGY USED · YEARLY ──
       - type: custom:apexcharts-card
-        graph_span: 30d
+        graph_span: 1y
+        span:
+          end: month
         cache: true
         header:
           show: true
-          title: Temperature efficiency
+          title: "Energy used · Yearly"
           show_states: false
         apex_config:
           subtitle:
-            text: "Daily energy usage (Wh/km) and average outside temperature."
+            text: "Energy consumed while driving per month, last 12 months."
             offsetY: 0
             style:
               fontSize: "12px"
               color: "#888888"
           chart:
-            height: 280
+            height: 260
             foreColor: '#7F7F7F'
             toolbar:
               show: false
@@ -909,52 +880,128 @@ views:
             type: datetime
             labels:
               datetimeFormatter:
-                day: "MMM d"
-          yaxis:
-            - id: efficiency
-              title:
-                text: "Wh/km"
-              min: 0
-              seriesName: "Wh/km"
-              labels:
-                formatter: "function(val) { return Math.round(val); }"
-            - id: temp
-              opposite: true
-              title:
-                text: "°C"
-              seriesName: "°C"
-              labels:
-                formatter: "function(val) { return Math.round(val); }"
-          stroke:
-            curve: smooth
-            width:
-              - 0
-              - 2
+                year: "yyyy"
+                month: "MMM"
+          tooltip:
+            x:
+              format: "MMMM yyyy"
           dataLabels:
             enabled: false
           colors:
             - '#1E88E5'
-            - '#EF5350'
-          legend:
-            show: true
-            position: bottom
         series:
-          - entity: sensor.tesla_daily_efficiency_wh_per_km
-            name: "Wh/km"
+          - entity: sensor.tesla_monthly_energy_consumed
+            name: "kWh"
             type: column
-            yaxis_id: efficiency
+            show:
+              legend_value: false
             group_by:
-              func: last
-              duration: 1d
-          - entity: sensor.vehicle_outside_temperature
-            name: "°C"
-            type: line
-            yaxis_id: temp
-            # See Speed efficiency chart above: group_by avg replaces the
-            # long-term `statistics:` feature, which never returned data.
+              func: max
+              duration: 1month
+
+      # ── 11. ELECTRIC COST · YEARLY ──
+      - type: custom:apexcharts-card
+        graph_span: 1y
+        span:
+          end: month
+        cache: true
+        header:
+          show: true
+          title: "Electric cost · Yearly"
+          show_states: false
+        apex_config:
+          subtitle:
+            text: "Charging cost per month, last 12 months."
+            offsetY: 0
+            style:
+              fontSize: "12px"
+              color: "#888888"
+          chart:
+            height: 260
+            foreColor: '#7F7F7F'
+            toolbar:
+              show: false
+          plotOptions:
+            bar:
+              columnWidth: 70%
+              borderRadius: 2
+          grid:
+            borderColor: '#2D2D2D'
+            strokeDashArray: 4
+          xaxis:
+            type: datetime
+            labels:
+              datetimeFormatter:
+                year: "yyyy"
+                month: "MMM"
+          tooltip:
+            x:
+              format: "MMMM yyyy"
+          dataLabels:
+            enabled: false
+          colors:
+            - '#FF9F0A'
+        series:
+          - entity: sensor.tesla_monthly_electric_cost
+            name: "Cost"
+            type: column
+            show:
+              legend_value: false
             group_by:
-              func: avg
-              duration: 1d
+              func: max
+              duration: 1month
+
+      # ── 12. FUEL COST · YEARLY ──
+      - type: custom:apexcharts-card
+        graph_span: 1y
+        span:
+          end: month
+        cache: true
+        header:
+          show: true
+          title: "Fuel cost · Yearly"
+          show_states: false
+        apex_config:
+          subtitle:
+            text: "What the same distance would cost with fuel, per month, last 12 months."
+            offsetY: 0
+            style:
+              fontSize: "12px"
+              color: "#888888"
+          chart:
+            height: 260
+            foreColor: '#7F7F7F'
+            toolbar:
+              show: false
+          plotOptions:
+            bar:
+              columnWidth: 70%
+              borderRadius: 2
+          grid:
+            borderColor: '#2D2D2D'
+            strokeDashArray: 4
+          xaxis:
+            type: datetime
+            labels:
+              datetimeFormatter:
+                year: "yyyy"
+                month: "MMM"
+          tooltip:
+            x:
+              format: "MMMM yyyy"
+          dataLabels:
+            enabled: false
+          colors:
+            - '#1E88E5'
+        series:
+          - entity: sensor.tesla_monthly_fuel_cost
+            name: "Fuel"
+            type: column
+            show:
+              legend_value: false
+            group_by:
+              func: max
+              duration: 1month
 
   # ========== VIEW 3: CHARGING ANALYTICS ==========
   - title: Charging

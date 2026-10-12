@@ -510,6 +510,18 @@ sensor.tesla_daily_efficiency_wh_per_km          | sensor        | efficiency   
 # card features they read from, no new architecture.
 
 # ─────────────────────────────────────────────────────────────
+# Analytics → Driving tab: the "Speed efficiency" and "Temperature
+# efficiency" charts were REMOVED (they never rendered reliably; the
+# fix notes above are history). Added 4 "· Yearly" charts (Distance,
+# Energy used, Electric cost, Fuel cost): one column per month for the
+# last 12 months, `group_by: {func: max, duration: 1month}` over the
+# existing monthly sensors (tesla_monthly_distance / _energy_consumed /
+# _electric_cost / _fuel_cost). Those reset each month, so a month's
+# maximum is its total. No new entities. Needs the Recorder to keep
+# 365 days of history (agents.md Technical Appendix 1) and, for the
+# cost charts, only shows past months as they were recorded.
+
+# ─────────────────────────────────────────────────────────────
 # Dashboard layout fix: desktop masonry column-splitting
 # ─────────────────────────────────────────────────────────────
 # No new entities. dashboards/tesla-overview.yaml has no `type:` set on any
