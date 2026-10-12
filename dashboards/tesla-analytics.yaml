@@ -804,7 +804,8 @@ views:
         header:
           show: true
           title: "Distance · Yearly"
-          show_states: false
+          show_states: true
+          colorize_states: true
         apex_config:
           subtitle:
             text: "Distance driven per month, last 12 months."
@@ -836,16 +837,31 @@ views:
           dataLabels:
             enabled: false
           colors:
+            - '#FF9F0A'
+            - '#1E88E5'
             - '#1E88E5'
         series:
-          - entity: sensor.tesla_monthly_distance
-            name: "km"
-            type: column
+          - entity: sensor.tesla_yearly_distance
+            name: YEARLY
+            unit: " km"
             show:
+              in_chart: false
+              legend_value: true
+          - entity: sensor.tesla_monthly_distance
+            name: MONTHLY
+            unit: " km"
+            show:
+              in_chart: false
+              legend_value: true
+          - entity: sensor.tesla_monthly_distance
+            name: Distance
+            type: column
+            statistics:
+              type: max
+              period: month
+            show:
+              in_header: false
               legend_value: false
-            group_by:
-              func: max
-              duration: 1month
 
       # ── 10. ENERGY USED · YEARLY ──
       - type: custom:apexcharts-card
@@ -856,7 +872,8 @@ views:
         header:
           show: true
           title: "Energy used · Yearly"
-          show_states: false
+          show_states: true
+          colorize_states: true
         apex_config:
           subtitle:
             text: "Energy consumed while driving per month, last 12 months."
@@ -888,16 +905,31 @@ views:
           dataLabels:
             enabled: false
           colors:
+            - '#FF9F0A'
+            - '#1E88E5'
             - '#1E88E5'
         series:
-          - entity: sensor.tesla_monthly_energy_consumed
-            name: "kWh"
-            type: column
+          - entity: sensor.tesla_yearly_energy_consumed
+            name: YEARLY
+            unit: " kWh"
             show:
+              in_chart: false
+              legend_value: true
+          - entity: sensor.tesla_monthly_energy_consumed
+            name: MONTHLY
+            unit: " kWh"
+            show:
+              in_chart: false
+              legend_value: true
+          - entity: sensor.tesla_monthly_energy_consumed
+            name: Energy used
+            type: column
+            statistics:
+              type: state
+              period: month
+            show:
+              in_header: false
               legend_value: false
-            group_by:
-              func: max
-              duration: 1month
 
       # ── 11. ELECTRIC COST · YEARLY ──
       - type: custom:apexcharts-card
@@ -908,7 +940,8 @@ views:
         header:
           show: true
           title: "Electric cost · Yearly"
-          show_states: false
+          show_states: true
+          colorize_states: true
         apex_config:
           subtitle:
             text: "Charging cost per month, last 12 months."
@@ -941,15 +974,28 @@ views:
             enabled: false
           colors:
             - '#FF9F0A'
+            - '#1E88E5'
+            - '#FF9F0A'
         series:
-          - entity: sensor.tesla_monthly_electric_cost
-            name: "Cost"
-            type: column
+          - entity: sensor.tesla_yearly_electric_cost
+            name: YEARLY
             show:
+              in_chart: false
+              legend_value: true
+          - entity: sensor.tesla_monthly_electric_cost
+            name: MONTHLY
+            show:
+              in_chart: false
+              legend_value: true
+          - entity: sensor.tesla_monthly_electric_cost
+            name: Electric cost
+            type: column
+            statistics:
+              type: max
+              period: month
+            show:
+              in_header: false
               legend_value: false
-            group_by:
-              func: max
-              duration: 1month
 
       # ── 12. FUEL COST · YEARLY ──
       - type: custom:apexcharts-card
@@ -960,7 +1006,8 @@ views:
         header:
           show: true
           title: "Fuel cost · Yearly"
-          show_states: false
+          show_states: true
+          colorize_states: true
         apex_config:
           subtitle:
             text: "What the same distance would cost with fuel, per month, last 12 months."
@@ -992,16 +1039,29 @@ views:
           dataLabels:
             enabled: false
           colors:
+            - '#FF9F0A'
+            - '#1E88E5'
             - '#1E88E5'
         series:
-          - entity: sensor.tesla_monthly_fuel_cost
-            name: "Fuel"
-            type: column
+          - entity: sensor.tesla_yearly_fuel_cost
+            name: YEARLY
             show:
+              in_chart: false
+              legend_value: true
+          - entity: sensor.tesla_monthly_fuel_cost
+            name: MONTHLY
+            show:
+              in_chart: false
+              legend_value: true
+          - entity: sensor.tesla_monthly_fuel_cost
+            name: Fuel cost
+            type: column
+            statistics:
+              type: max
+              period: month
+            show:
+              in_header: false
               legend_value: false
-            group_by:
-              func: max
-              duration: 1month
 
   # ========== VIEW 3: CHARGING ANALYTICS ==========
   - title: Charging

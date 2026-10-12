@@ -2419,3 +2419,33 @@ hysteresis and the 30-minute gate).
   tells users to set them.
 * Don't drive the car's own Scheduled Charging. Tell users to turn it off in
   the Tesla app; it would fight the planner.
+
+### 23. Analytics Driving Tab — Yearly Charts (and why not `group_by` months)
+
+**What it is:** the Driving tab ends with four "· Yearly" charts (Distance,
+Energy used, Electric cost, Fuel cost), one column per month for the last 12
+months, replacing the removed Speed/Temperature efficiency charts. Each
+header shows YEARLY (this year's total) and MONTHLY (this month), like the
+daily cards show TOTAL and DAILY.
+
+**Confirmed constraints (apexcharts-card README):**
+* `group_by.duration` "doesn't work for months", so a first attempt with
+  `duration: 1month` collapsed everything into one bar. Monthly columns use
+  the series `statistics: {type, period: month}` option instead (long-term
+  statistics).
+* Statistics exist only for entities with a `state_class`. The two monthly
+  cost sensors had none and got `state_class: measurement`. This is also the
+  likely reason the removed speed/temperature charts hung on "Loading":
+  their source had no statistics. Rule: before using `statistics:`, make sure
+  the entity has a `state_class` (the unit is not templated, Section 8).
+* Type per source: `max` for `measurement` sensors (the monthly sensors
+  reset at the month start, so a month's maximum is its total); `state` for
+  the `total_increasing` energy sensor (min/max/mean don't exist for it).
+* No header sum exists in apexcharts-card (the header shows the last
+  value), so the yearly totals are `utility_meter` `cycle: yearly` helpers
+  plus template sensors (`tesla_yearly_*`), mirroring the monthly formulas.
+  They count from creation, not from 1 January of a past year.
+
+**Rules for future agents:** don't use `group_by` with month durations; never
+point a `statistics:` series at a sensor without `state_class`; keep each
+yearly sensor's formula in step with its monthly twin.

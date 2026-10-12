@@ -111,6 +111,31 @@ utility_meter:
     periodically_resetting: false
     name: "Tesla Monthly Tariff Charging Cost"
 
+  # --- Yearly totals for the Analytics → Driving "· Yearly" chart headers ---
+  # They count from the moment they are created (a meter can't know earlier
+  # usage), reset on 1 January, and mirror the monthly sensors' sources.
+  tesla_yearly_distance_raw:
+    source: sensor.vehicle_odometer
+    cycle: yearly
+    name: "Tesla Yearly Distance Raw"
+
+  tesla_yearly_drive_energy:
+    source: sensor.tesla_drive_energy_consumed_total
+    cycle: yearly
+    name: "Tesla Yearly Drive Energy"
+
+  tesla_yearly_charging_energy:
+    source: sensor.vehicle_charge_energy_added
+    cycle: yearly
+    name: "Tesla Yearly Charging Energy"
+
+  tesla_yearly_tariff_charging_cost:
+    source: sensor.tesla_tariff_charging_cost_total
+    cycle: yearly
+    net_consumption: true
+    periodically_resetting: false
+    name: "Tesla Yearly Tariff Charging Cost"
+
 sensor:
   - platform: history_stats
     name: "Tesla Driving Time Today Raw"
@@ -1426,6 +1451,9 @@ template:
       - name: "Tesla Monthly Electric Cost"
         unique_id: tesla_monthly_electric_cost_v5
         unit_of_measurement: "Ft"
+        # state_class creates long-term statistics: the "Electric cost ·
+        # Yearly" chart reads them (one bar per month).
+        state_class: measurement
         icon: mdi:cash-multiple
         state: >
           {% if states('input_select.tesla_tariff_mode') in ['Tariff A', 'Tariff D'] %}
@@ -1531,6 +1559,8 @@ template:
       - name: "Tesla Monthly Fuel Cost"
         unique_id: tesla_monthly_fuel_cost_v6
         unit_of_measurement: "Ft"
+        # state_class: long-term statistics for the "Fuel cost · Yearly" chart.
+        state_class: measurement
         icon: mdi:gas-station
         state: >
           {% set dist = states('sensor.tesla_monthly_distance') | float(0) %}
@@ -1614,6 +1644,50 @@ template:
             {% set eff = states('sensor.tesla_efficiency_kwh_km') | float(0.228) %}
             {{ (dist_km * eff) | round(2) }}
           {% endif %}
+
+      # --- Yearly totals (Analytics → Driving "· Yearly" chart headers) ---
+      - name: "Tesla Yearly Distance"
+        unique_id: tesla_yearly_distance_v1
+        unit_of_measurement: "km"
+        icon: mdi:map-marker-distance
+        state: >
+          {{ states('sensor.tesla_yearly_distance_raw') | float(0) | round(2) }}
+
+      - name: "Tesla Yearly Energy Consumed"
+        unique_id: tesla_yearly_energy_consumed_v1
+        unit_of_measurement: "kWh"
+        icon: mdi:flash
+        state: >
+          {% set real = states('sensor.tesla_yearly_drive_energy') | float(0) %}
+          {% if real > 0 %}
+            {{ real | round(2) }}
+          {% else %}
+            {% set dist_km = states('sensor.tesla_yearly_distance') | float(0) %}
+            {% set eff = states('sensor.tesla_efficiency_kwh_km') | float(0.228) %}
+            {{ (dist_km * eff) | round(2) }}
+          {% endif %}
+
+      - name: "Tesla Yearly Electric Cost"
+        unique_id: tesla_yearly_electric_cost_v1
+        unit_of_measurement: "Ft"
+        icon: mdi:cash-multiple
+        state: >
+          {% if states('input_select.tesla_tariff_mode') in ['Tariff A', 'Tariff D'] %}
+            {{ states('sensor.tesla_yearly_tariff_charging_cost') | float(0) | round(0) }}
+          {% else %}
+            {% set energy = states('sensor.tesla_yearly_charging_energy') | float(0) %}
+            {% set rate = states('input_number.tesla_default_electricity_cost') | float(60) %}
+            {{ (energy * rate) | round(0) }}
+          {% endif %}
+
+      - name: "Tesla Yearly Fuel Cost"
+        unique_id: tesla_yearly_fuel_cost_v1
+        unit_of_measurement: "Ft"
+        icon: mdi:gas-station
+        state: >
+          {% set dist = states('sensor.tesla_yearly_distance') | float(0) %}
+          {% set fuel_per_km = states('sensor.tesla_fuel_cost_per_km') | float(0) %}
+          {{ (dist * fuel_per_km) | round(0) }}
 
       - name: "Tesla Electric Cost Per KM"
         unique_id: tesla_electric_cost_per_km_v5
