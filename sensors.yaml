@@ -1,0 +1,49 @@
+- platform: scrape
+  resource: http://192.168.188.67/index_cn.html
+  authentication: basic
+  username: "admin"
+  password: "admin"
+  name: "Deye EV Charger Power L1"
+  select: "#webdata_power1"
+  value_template: "{{ value | regex_replace('[^0-9.]', '') | float(0) }}"
+  unit_of_measurement: "W"
+  device_class: power
+  state_class: measurement
+  scan_interval: 30
+
+- platform: scrape
+  resource: http://192.168.188.67/index_cn.html
+  authentication: basic
+  username: "admin"
+  password: "admin"
+  name: "Deye EV Charger Power L2"
+  select: "#webdata_power2"
+  value_template: "{{ value | regex_replace('[^0-9.]', '') | float(0) }}"
+  unit_of_measurement: "W"
+  device_class: power
+  state_class: measurement
+  scan_interval: 30
+
+- platform: scrape
+  resource: http://192.168.188.67/index_cn.html
+  authentication: basic
+  username: "admin"
+  password: "admin"
+  name: "Deye EV Charger Power L3"
+  select: "#webdata_power3"
+  value_template: "{{ value | regex_replace('[^0-9.]', '') | float(0) }}"
+  unit_of_measurement: "W"
+  device_class: power
+  state_class: measurement
+  scan_interval: 30
+
+- platform: template
+  sensors:
+    deye_ev_charger_power:
+      friendly_name: "Deye EV Charger Power"
+      unit_of_measurement: "W"
+      device_class: power
+      value_template: >
+        {{ (states('sensor.deye_ev_charger_power_l1') | float(0)
+         + states('sensor.deye_ev_charger_power_l2') | float(0)
+         + states('sensor.deye_ev_charger_power_l3') | float(0)) | round(0) }}
