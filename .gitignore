@@ -6,3 +6,4 @@ __pycache__/
 *.pyc
 secrets.yaml
 docs/*
+dashboards/ha-custom-home-dash.yaml
