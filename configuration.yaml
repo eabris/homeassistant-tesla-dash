@@ -7,7 +7,6 @@ frontend:
 
 automation: !include packages/tesla/automations.yaml
 script: !include packages/tesla/scripts.yaml
-sensor: !include sensors.yaml
 
 lovelace:
   mode: storage
@@ -2048,6 +2047,22 @@ template:
                if is_state('device_tracker.' ~ car ~ '_location', 'home') else default }}
 
   - sensor:
+      # Deye EV charger total of the three phases (rest: block above).
+      - name: "Deye EV Charger Power"
+        unique_id: deye_ev_charger_power_v1
+        unit_of_measurement: "W"
+        device_class: power
+        state_class: measurement
+        icon: mdi:ev-station
+        availability: >
+          {{ ['sensor.deye_ev_charger_power_l1', 'sensor.deye_ev_charger_power_l2',
+              'sensor.deye_ev_charger_power_l3'] | select('has_value') | list | count > 0 }}
+        state: >
+          {{ (states('sensor.deye_ev_charger_power_l1') | float(0)
+            + states('sensor.deye_ev_charger_power_l2') | float(0)
+            + states('sensor.deye_ev_charger_power_l3') | float(0)) | round(0) }}
+
+  - sensor:
       # Discounted band for the current month: 2,523 kWh/year counted per
       # day -> ~207 kWh in 30-day months, ~214 kWh in 31-day months.
       - name: "Tesla Discounted Quota Monthly"
@@ -2758,6 +2773,43 @@ rest:
           {{ value_json is mapping and value_json.most is mapping
              and value_json.most.olcsobb_mint_a1 is defined }}
         value_template: "{{ value_json.most.olcsobb_mint_a1 }}"
+
+  # Deye EV charger (web UI only). index_cn.html is just a frame; the live
+  # values are JS variables in status.html (var webdata_power1 = "0"; ...),
+  # so read the raw HTML once and pick each variable out with a regex.
+  # The scrape integration can't do this: the <span id="webdata_power1">
+  # is filled by JavaScript, which HA doesn't run.
+  - resource: !secret deye_charger_status_url
+    authentication: basic
+    username: !secret deye_charger_username
+    password: !secret deye_charger_password
+    scan_interval: 30
+    timeout: 10
+    sensor:
+      - name: "Deye EV Charger Power L1"
+        unique_id: deye_ev_charger_power_l1_v1
+        unit_of_measurement: "W"
+        device_class: power
+        state_class: measurement
+        value_template: >
+          {% set m = value | regex_findall('webdata_power1\s*=\s*"\s*([^"]*?)\s*"') %}
+          {{ m[0] | float if m and m[0] | is_number else none }}
+      - name: "Deye EV Charger Power L2"
+        unique_id: deye_ev_charger_power_l2_v1
+        unit_of_measurement: "W"
+        device_class: power
+        state_class: measurement
+        value_template: >
+          {% set m = value | regex_findall('webdata_power2\s*=\s*"\s*([^"]*?)\s*"') %}
+          {{ m[0] | float if m and m[0] | is_number else none }}
+      - name: "Deye EV Charger Power L3"
+        unique_id: deye_ev_charger_power_l3_v1
+        unit_of_measurement: "W"
+        device_class: power
+        state_class: measurement
+        value_template: >
+          {% set m = value | regex_findall('webdata_power3\s*=\s*"\s*([^"]*?)\s*"') %}
+          {{ m[0] | float if m and m[0] | is_number else none }}
 
 # ---------------------------------------------------------------------------
 # REST COMMANDS

@@ -164,6 +164,13 @@ The rain/window-close automation calls a `rest_command` (`tesla_window_close_gps
 
 If you skip this step, everything else in the dashboard still works — only the rain/window-close automation's `script.tesla_windows_close` call will fail (it'll show an error in **Settings → System → Logs** when triggered).
 
+**Deye EV charger (optional):** `configuration.yaml` reads the charger's per-phase power from its web UI (`sensor.deye_ev_charger_power_l1`/`_l2`/`_l3` and the total `sensor.deye_ev_charger_power`). The values are JavaScript variables in `status.html`, not in `index_cn.html`, so the `scrape` integration can't see them. Add these three keys to `secrets.yaml` (Home Assistant won't load the configuration if a `!secret` is missing). If you don't have this charger, delete the Deye block from the `rest:` section and the "Deye EV Charger Power" template sensor instead:
+```yaml
+deye_charger_status_url: "http://<charger-ip>/status.html"
+deye_charger_username: "admin"
+deye_charger_password: "your charger web password"
+```
+
 ---
 
 ## 🧩 Step 5 — Check your entities

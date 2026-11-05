@@ -577,3 +577,12 @@ sensor.tesla_daily_efficiency_wh_per_km          | sensor        | efficiency   
 # different height than nearby non-grid horizontal-stacks (header, temp
 # stepper), read as "uneven box heights". Fix: added `square: false` to
 # all 5 grid cards so cells size to content instead. No entities changed.
+
+# --- DEYE EV CHARGER (configuration.yaml rest: block) ---
+# Read from the charger's web UI page status.html (JS variables webdata_power1..3), polled every 30 s.
+# Needs secrets: deye_charger_status_url, deye_charger_username, deye_charger_password (see secrets.yaml.example).
+# Other variables on that page (not exposed yet, meaning unconfirmed): webdata_sn, webdata_wm1, webdata_wm2, webdata_lora_rate, webdata_charge.
+sensor.deye_ev_charger_power_l1                  | sensor        | charger           | Deye EV Charger Power L1        | REST: webdata_power1 in W. Unknown if the page is unreachable or the value isn't a number.
+sensor.deye_ev_charger_power_l2                  | sensor        | charger           | Deye EV Charger Power L2        | REST: webdata_power2 in W.
+sensor.deye_ev_charger_power_l3                  | sensor        | charger           | Deye EV Charger Power L3        | REST: webdata_power3 in W.
+sensor.deye_ev_charger_power                     | sensor        | charger           | Deye EV Charger Power           | Template: L1 + L2 + L3 (W). Unavailable only when all three phases are.
