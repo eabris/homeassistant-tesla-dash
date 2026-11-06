@@ -177,6 +177,7 @@ sensor:
     name: "Deye EV Charger Energy"
     unique_id: deye_ev_charger_energy_v1
     source: sensor.deye_ev_charger_power
+    device_class: energy
     method: left
     unit_prefix: k
     unit_time: h
