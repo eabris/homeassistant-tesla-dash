@@ -152,7 +152,38 @@ utility_meter:
     periodically_resetting: false
     name: "Tesla Yearly Tariff Charging Energy"
 
+  # Deye EV charger energy for the current plug-in session. No cycle: the
+  # automation deye_ev_charger_session_reset resets it when the cable is
+  # unplugged (last session total -> last_period attribute). Measured at the
+  # charger (wall side, includes charging losses), unlike
+  # sensor.vehicle_charge_energy_added (energy the car reports as added).
+  deye_ev_charger_session_energy:
+    source: sensor.deye_ev_charger_energy
+    periodically_resetting: false
+    name: "Deye EV Charger Session Energy"
+
+  # Car's electricity use per day (kWh) as measured by the Deye charger.
+  deye_ev_charger_daily_energy:
+    source: sensor.deye_ev_charger_energy
+    cycle: daily
+    periodically_resetting: false
+    name: "Deye EV Charger Daily Energy"
+
 sensor:
+  # Deye EV charger lifetime energy (kWh), integrated from the summed phase
+  # power. method: left suits a stepwise power reading; max_sub_interval keeps
+  # it counting while the power stays the same (no new state is written then).
+  - platform: integration
+    name: "Deye EV Charger Energy"
+    unique_id: deye_ev_charger_energy_v1
+    source: sensor.deye_ev_charger_power
+    method: left
+    unit_prefix: k
+    unit_time: h
+    round: 3
+    max_sub_interval:
+      minutes: 1
+
   - platform: history_stats
     name: "Tesla Driving Time Today Raw"
     unique_id: tesla_driving_time_today_raw_v1

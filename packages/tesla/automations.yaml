@@ -752,3 +752,27 @@
                 value: "{{ [states('input_number.tesla_home_charger_max_amps') | int(16), 5] | max }}"
               continue_on_error: true
   mode: queued
+
+- id: deye_ev_charger_session_reset
+  alias: "Deye EV charger — reset session energy on unplug"
+  description: >
+    Resets sensor.deye_ev_charger_session_energy to 0 when the car's charge
+    cable is unplugged, so it counts one plug-in session like
+    sensor.vehicle_charge_energy_added. Reset on unplug, not plug-in: the
+    Fleet cable sensor can lag ~10 min behind the real plug-in, and the car
+    may already be charging by then. The finished session's total stays in
+    the meter's last_period attribute. The power condition skips a false
+    "unplugged" (Fleet entity unavailable) while the charger is delivering.
+  trigger:
+    - trigger: state
+      entity_id: binary_sensor.vehicle_charge_cable
+      from: "on"
+      to: "off"
+  condition:
+    - condition: template
+      value_template: "{{ states('sensor.deye_ev_charger_power') | float(0) < 50 }}"
+  action:
+    - action: utility_meter.reset
+      target:
+        entity_id: sensor.deye_ev_charger_session_energy
+  mode: single
