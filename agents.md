@@ -2196,8 +2196,9 @@ re-priced; quota remaining, the band flag and the active price follow.
 **Rules for future agents:**
 * Never price charging by multiplying a period's energy by the *current*
   tariff price — always accumulate per delta at the price active then.
-* Keep the two accumulators' delta logic identical; if you change one,
-  change both and re-test the dip, session-restart and first-sample cases.
+* Keep the accumulators' delta logic identical (now four, see Section 26);
+  if you change one, change all and re-test the dip, session-restart and
+  first-sample cases.
 * Never give `tesla_quota_used_this_month`, `tesla_quota_usage_correction`
   or `tesla_quota_correction_set` an `initial:`; and keep the correction
   automation's `user_id` guard.
@@ -2694,3 +2695,35 @@ accented zone name.
   not into individual cost sensors.
 * Don't reintroduce tariff-mode branches in cost sensors: price
   differences belong in the accumulator.
+
+### 26. Battery Tab "Charging price" Card (price here + session cost)
+
+**Request:** show the current/session charging price and the location/zone
+on the Overview → Battery tab.
+
+**What was added:**
+* `sensor.tesla_charging_session_cost`, a trigger template in the same block
+  as the other `sensor.vehicle_charge_energy_added` accumulators (Section
+  21). It uses the same delta rules and the same price
+  (`sensor.tesla_location_charging_price`, Section 25), but restarts on a new
+  session (value below half of `last_energy_kwh`). The first sample ever
+  prices the whole session so far at the current price (an estimate, only
+  right after installing). Attributes: `last_energy_kwh` (session kWh),
+  `started`, `location` (home/work/away), `zone`. No `state_class`: it
+  resets every session and isn't needed in long-term statistics. Unit
+  hardcoded `"Ft"` (Section 8).
+* Battery tab card "4.2b" (top of the second section): zone and price
+  source (tariff source attribute at home, "Work rate", "Default rate"),
+  price per kWh now, and the session cost with kWh, average price, start
+  time and place ("This charging session" while charging, "Last charging
+  session" otherwise). Numbers use the currency locale. Tap → Settings
+  (prices); hold → more-info of the session sensor.
+
+**Tested:** Jinja harness (first sample, rising, small dip, new session,
+rising from 0, attributes) and the card's JS in four cases (home charging,
+Work zone charging, away not charging, fresh install with no data).
+
+**Rule:** if you change the delta rules, change all four accumulators on
+`sensor.vehicle_charge_energy_added` together (home energy, tariff energy,
+cost total, session cost).
+

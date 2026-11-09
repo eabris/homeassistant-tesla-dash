@@ -637,6 +637,7 @@ script.tesla_cabin_protect_toggle                | script        | climate      
 # WORK ZONE PRICING (agents.md Section 25, 2026-11-09)
 # ─────────────────────────────────────────────────────────────
 sensor.tesla_location_charging_price             | sensor        | tariff            | Tesla Location Charging Price   | Template (Ft/kWh): price of a kWh where the car is now. device_tracker.<car>_location == home -> sensor.tesla_active_charging_price; state == friendly_name of input_text.tesla_rate_work_zone -> input_number.tesla_rate_work_per_kwh; otherwise input_number.tesla_default_electricity_cost. Attribute location: home / work / away. Used by sensor.tesla_tariff_charging_cost_total, the Settings live status table and the Overview location strip.
+sensor.tesla_charging_session_cost               | sensor        | tariff            | Tesla Charging Session Cost     | Trigger template on sensor.vehicle_charge_energy_added (same block and delta rules as the cost total): cost of the current charging session (the last one while not charging), priced at sensor.tesla_location_charging_price; restarts when a new session starts. Attributes: last_energy_kwh (session kWh), started, location (home/work/away), zone. Overview -> Battery "Charging price" card (Section 26).
 # All electric-cost sensors now use the accumulated cost in every tariff mode
 # (the Off branches multiplied energy by the default rate and ignored where
 # the car charged). Full auto, the home quota and solar surplus already only

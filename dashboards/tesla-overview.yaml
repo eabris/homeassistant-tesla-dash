@@ -2946,6 +2946,100 @@ views:
 
       - type: grid
         cards:
+          # 4.2b Charging price card (agents.md Section 26): where the car is
+          # (zone) and which price applies there, the price per kWh now, and
+          # the cost of the current session (last session while not charging).
+          # Tap: price settings. Hold: session cost sensor details.
+          - type: custom:button-card
+            entity: sensor.tesla_charging_session_cost
+            show_icon: false
+            show_name: false
+            show_state: false
+            tap_action:
+              action: navigate
+              navigation_path: /tesla-analytics/settings
+            hold_action:
+              action: more-info
+            custom_fields:
+              block: |
+                [[[
+                  const st = (id) => states[id]?.state;
+                  const num = (v) => { const x = parseFloat(v); return isNaN(x) ? null : x; };
+                  const code = st('input_select.tesla_currency') || 'HUF';
+                  const loc = st('sensor.tesla_currency_locale') || 'hu-HU';
+                  const sym = st('sensor.tesla_currency_symbol') || 'Ft';
+                  const money = (v) => {
+                    if (v === null) return '–';
+                    try {
+                      return new Intl.NumberFormat(loc, { style: 'currency', currency: code, maximumFractionDigits: 0, minimumFractionDigits: 0 }).format(Math.round(v));
+                    } catch (e) {
+                      return `${Math.round(v)} ${sym}`;
+                    }
+                  };
+                  const perKwh = (v) => v === null ? '–' : `${v.toLocaleString(loc, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${sym}/kWh`;
+                  const place = (z) => !z || z === 'unknown' || z === 'unavailable' ? 'Unknown place'
+                    : z === 'home' ? 'Home' : z === 'not_home' ? 'Away' : z;
+                  const car = st('input_text.tesla_car_name') || 'tesla';
+                  const lp = states['sensor.tesla_location_charging_price'];
+                  const where = lp?.attributes?.location;
+                  const price = num(lp?.state);
+                  const icon = where === 'home' ? '🏠' : where === 'work' ? '🏢' : '📍';
+                  const source = where === 'home'
+                    ? (states['sensor.tesla_active_charging_price']?.attributes?.source || 'Home tariff')
+                    : where === 'work' ? 'Work rate' : 'Default rate';
+                  const charging = st('binary_sensor.tesla_charging_active') === 'on';
+                  const sess = states['sensor.tesla_charging_session_cost'];
+                  const cost = num(sess?.state);
+                  const kwh = num(sess?.attributes?.last_energy_kwh);
+                  const avg = cost !== null && kwh !== null && kwh >= 0.1 ? cost / kwh : null;
+                  const started = sess?.attributes?.started ? new Date(sess.attributes.started) : null;
+                  const hm = (d) => `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+                  let when = '';
+                  if (started && !isNaN(started.getTime())) {
+                    when = charging
+                      ? `Started at ${hm(started)}`
+                      : `${started.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' })}, ${hm(started)}`;
+                  }
+                  const sessPlace = place(sess?.attributes?.zone);
+                  const muted = 'color:rgba(244,244,245,0.5);font-size:12px';
+                  const caption = 'color:rgba(244,244,245,0.48);font-size:11px;font-weight:500;letter-spacing:0.08em';
+                  const session = cost === null && kwh === null
+                    ? `<div style="${muted};margin-top:4px">No charging session recorded yet.</div>`
+                    : `<div style="display:flex;justify-content:space-between;align-items:baseline;flex-wrap:wrap;gap:4px 12px;margin-top:4px">
+                        <div style="color:#f4f4f5;font-size:18px;font-weight:600">${money(cost)}</div>
+                        <div style="${muted}">${kwh === null ? '–' : kwh.toLocaleString(loc, { minimumFractionDigits: 1, maximumFractionDigits: 1 })} kWh · avg ${perKwh(avg)}</div>
+                      </div>
+                      <div style="${muted};font-size:11px;margin-top:4px">${[when, sessPlace].filter(Boolean).join(' · ')}</div>`;
+                  return `<div style="width:100%;text-align:left">
+                    <div style="display:flex;justify-content:space-between;align-items:baseline;gap:12px">
+                      <div style="${caption}">CHARGING PRICE HERE</div>
+                      <div style="${muted}">${icon} ${place(st('device_tracker.' + car + '_location'))}</div>
+                    </div>
+                    <div style="display:flex;justify-content:space-between;align-items:baseline;flex-wrap:wrap;gap:4px 12px;margin-top:6px">
+                      <div style="color:#f4f4f5;font-size:22px;font-weight:600;letter-spacing:-0.02em">${perKwh(price)}</div>
+                      <div style="${muted}">${source}</div>
+                    </div>
+                    <div style="border-top:1px solid rgba(255,255,255,0.07);margin-top:12px;padding-top:10px">
+                      <div style="${caption}">${charging ? 'THIS CHARGING SESSION' : 'LAST CHARGING SESSION'}</div>
+                      ${session}
+                    </div>
+                  </div>`;
+                ]]]
+            styles:
+              card:
+                - background-color: rgba(255,255,255,0.04)
+                - border: 1px solid rgba(255,255,255,0.08)
+                - border-radius: 16px
+                - box-shadow: none
+                - padding: 14px 16px
+                - --ha-card-border-width: 0px
+              grid:
+                - grid-template-areas: '"block"'
+                - grid-template-columns: 1fr
+              custom_fields:
+                block:
+                  - width: 100%
+
           # 4.3 Charge Limit Slider (the car's own limit; Smart/Full auto
           # charging set it to the Target Charge Limit from Settings)
           - type: custom:mushroom-number-card

@@ -2227,6 +2227,41 @@ template:
             {% set default = states('input_number.tesla_default_electricity_cost') | float(0) %}
             {{ states('sensor.tesla_location_charging_price') | float(default) }}
 
+      # Cost of the current charging session, or the last one while not
+      # charging (Overview -> Battery "Charging price" card, agents.md
+      # Section 26). Same delta rules and price as the total above, but it
+      # restarts when sensor.vehicle_charge_energy_added does (a new session).
+      # The very first sample assumes the whole session so far was charged at
+      # the current price (an estimate, only right after installing).
+      # Attribute last_energy_kwh = the session's kWh.
+      - name: "Tesla Charging Session Cost"
+        unique_id: tesla_charging_session_cost_v1
+        unit_of_measurement: "Ft"
+        icon: mdi:cash-clock
+        state: >
+          {% set new = trigger.to_state.state | float(0) %}
+          {% set last = this.attributes.get('last_energy_kwh') %}
+          {% set default = states('input_number.tesla_default_electricity_cost') | float(0) %}
+          {% set price = states('sensor.tesla_location_charging_price') | float(default) %}
+          {% if last is not number or new < last * 0.5 %}
+            {{ (new * price) | round(2) }}
+          {% else %}
+            {{ (this.state | float(0) + (new - last if new >= last else 0) * price) | round(2) }}
+          {% endif %}
+        attributes:
+          last_energy_kwh: >
+            {% set new = trigger.to_state.state | float(0) %}
+            {% set last = this.attributes.get('last_energy_kwh') %}
+            {{ last if last is number and last * 0.5 <= new < last else new }}
+          # When this session was first seen.
+          started: >
+            {% set new = trigger.to_state.state | float(0) %}
+            {% set last = this.attributes.get('last_energy_kwh') %}
+            {{ now().isoformat() if last is not number or new < last * 0.5 else this.attributes.get('started') }}
+          # home / work / away and the zone name, where the session charges.
+          location: "{{ state_attr('sensor.tesla_location_charging_price', 'location') }}"
+          zone: "{{ states('device_tracker.' ~ states('input_text.tesla_car_name') ~ '_location') }}"
+
   # Price of a kWh where the car is right now (agents.md Section 25). Home
   # zone -> the tariff price (sensor.tesla_active_charging_price, the Default
   # Electricity Rate with tariff Off); the Work zone
