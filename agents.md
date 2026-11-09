@@ -2062,7 +2062,9 @@ counter, which restarts at 0 each session). On every change it adds
 `delta × price`, where price is `sensor.tesla_active_charging_price` when
 `device_tracker.<car>_location` is `home`, else
 `input_number.tesla_default_electricity_cost` (Superchargers etc. are not
-on the home tariff). The delta rules, kept identical in both accumulators:
+on the home tariff). **Superseded by Section 25:** the price now comes from
+`sensor.tesla_location_charging_price` (home → tariff, Work zone → Work
+rate, elsewhere → default). The delta rules, kept identical in both accumulators:
 * first sample ever (no `last_energy_kwh` attribute yet) → 0;
 * value went up → `new − last`;
 * value fell below half of `last` → a new session started → add `new`;
@@ -2079,8 +2081,9 @@ source never resets.
 **Rewired cost sensors keep their entity_ids** (Section 13: entity_id
 comes from `name:`, so the names were left alone): daily / weekly /
 monthly / 7d-rolling / previous-month electric cost and "Tesla Electric
-Cost Per KM". In Off mode they use the original `energy × default rate`
-formula unchanged. In Tariff A/D mode they read the tariff meters (previous
+Cost Per KM". In Off mode they used the original `energy × default rate`
+formula (**superseded by Section 25:** every mode now reads the tariff
+meters, because Off ignored where the car charged). In Tariff A/D mode they read the tariff meters (previous
 month = the monthly meter's `last_period` attribute; per-km = this month's
 average price, or the active price before 5 kWh are charged). Annual and
 5-year projections follow automatically through the monthly sensor. The
@@ -2621,3 +2624,73 @@ live HA.
   header series (`in_chart: false`), bars with `in_header: false`,
   per-series `color:`, `float_precision`, `fill: 'null'`.
 * Before referencing a new template sensor, slugify its `name:` (Section 13).
+
+### 25. Work Zone Pricing (car parked/charging a few houses from home)
+
+**Symptom:** the Tesla app showed the car parked at a neighbouring address
+(two houses from home), but the Overview location strip said "At home". The
+user had typed both addresses into the Saved Location Rates (Home / Work)
+and expected those to define the locations.
+
+**Root cause (confirmed against HA core):** the Tesla Fleet
+`device_tracker.<car>_location` only has `latitude`/`longitude`
+(`tesla_fleet/device_tracker.py`); there is no reverse geocoding. HA turns
+the coordinates into a state with `zone.async_active_zone`: the zones that
+contain the point, "sorted by radius and then by distance so that the
+smallest and closest zone wins". `zone.home` has a 100 m default radius, so
+a spot two houses away is "home". The Saved Location Rates are plain
+`input_text`/`input_number` notes with no coordinates; nothing read them.
+Side effect: charging there was priced at the home tariff and counted
+against the home discounted quota, and Full auto treated it as home.
+
+**User decision:** the car charges there on **someone else's electricity**:
+price it at the Work rate and keep Full auto off there.
+
+**Fix:**
+* The user creates a small zone (15–20 m, not passive) in the HA UI.
+  **Never in YAML**: its coordinates are a private address (Section 10).
+  New `input_text.tesla_rate_work_zone` holds its entity ID (no `initial:`).
+* New `sensor.tesla_location_charging_price`: `home` →
+  `sensor.tesla_active_charging_price`; tracker state equal to the
+  `friendly_name` of the Work zone → `input_number.tesla_rate_work_per_kwh`;
+  else the default rate. Attribute `location` = home / work / away. A
+  device_tracker in a non-home zone has the zone's *name* as state, so the
+  match is on `friendly_name`, not the entity ID. `zone.home` and invalid
+  IDs are ignored.
+* `sensor.tesla_tariff_charging_cost_total` (state and `last_price`) prices
+  each kWh with it. The delta rules are unchanged.
+* The seven electric-cost sensors (daily, weekly, 7d, monthly, previous
+  month, yearly, per km) and the "Electric cost · Yearly" chart no longer
+  branch on tariff mode: Off used `energy × default rate`, which ignored
+  location. The accumulator already ran in every mode and prices home at
+  the default rate when the tariff is Off, so home/away results are
+  unchanged; only Work-zone charging and default-rate changes differ (past
+  kWh keep their price, as in Section 21).
+* Nothing else needed changing: Full auto (plan sensor `away`, `_adopt`),
+  `sensor.tesla_home_charging_energy_total` (quota) and the solar surplus
+  already require `is_state(tracker, 'home')`.
+* UI: the Work Zone + Work Rate fields are on Settings → ⚡ Electricity
+  Price (the Work rate is no longer notes-only); "Price where the car is
+  now" row in the Live Tariff Status table; the location strip shows the
+  zone name plus "charging here uses the Work rate". The strip used to
+  title-case zone names with `/\b\w/g`, which breaks accented names
+  ("Kertész" → "KertéSz"); names are now shown as typed.
+
+**Not changed:** the 🌙 Smart Charging window automation still doesn't
+check the location (documented in the README). Past charging is not
+re-priced.
+
+**Tested** with a Jinja harness: home / Work zone / not_home / other zone;
+empty, `zone.home`, missing and mixed-case Work Zone values; the
+accumulator adding 10 kWh at the Work rate; all seven cost sensors giving
+identical results in Off and Tariff A mode; the location label with an
+accented zone name.
+
+**Rules for future agents:**
+* Location logic must use zones (`device_tracker` state), never free-text
+  location names.
+* Never commit zone coordinates or other address-derived values.
+* Any new place-dependent price goes into `sensor.tesla_location_charging_price`,
+  not into individual cost sensors.
+* Don't reintroduce tariff-mode branches in cost sensors: price
+  differences belong in the accumulator.

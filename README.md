@@ -306,10 +306,36 @@ Go to **Tesla Analytics → Settings** to:
 - Set your **default electricity rate** and **fuel comparison** baseline (ICE efficiency + fuel price) used in the actual cost calculations.
 - Keep notes of your **Saved Location Rates** (Home / Solar-Off-Peak / Work — name, rate, hours, active days, season) on **Settings → Advanced**.
 
-> ⚠️ Note: the Saved Location Rates are **notes only** — cost
-> math uses the **Hungarian Electricity Tariff** setting below (or, with the
-> tariff set to **Off**, the single flat **Default Electricity Rate**), not
-> per-location rate switching.
+> ⚠️ Note: the Saved Location Rates are **notes only**, except the **Work
+> rate** once you set a Work zone (below). Cost math uses the tariff (or, with
+> the tariff set to **Off**, the **Default Electricity Rate**) at home.
+
+### Charging at another place (Work zone)
+
+The dashboard decides *where* the car is from Home Assistant **zones**, not
+from the location names you type in Settings. Tesla Fleet only reports GPS
+coordinates; Home Assistant turns them into a zone name. The **Home** zone is
+a circle around your home location with a **100 m** radius by default, so a
+car parked a few houses away still counts as "home".
+
+If the car charges somewhere else on someone else's electricity (e.g. a
+neighbour or your workplace), give that place its own zone:
+
+1. **Settings → Areas, labels & zones → Zones → Add zone.** Put the pin on the
+   parking spot, radius **15–20 m** (smaller than your Home zone: where zones
+   overlap, Home Assistant picks the smallest). Leave *Passive* off. Name it
+   anything, e.g. "Work". Never put zone coordinates in this repo's YAML —
+   they are your address.
+2. **Tesla Analytics → Settings → ⚡ Electricity Price:** enter the zone's
+   entity ID (e.g. `zone.work`) in **Work Zone** and that place's price in
+   **Work Rate**.
+
+From then on, charging inside that zone is priced at the Work rate; the
+Overview location strip shows the zone name and "charging here uses the Work
+rate"; and Full auto charging, the home discounted quota and the solar logic
+ignore it (they only act at "home"). Charging anywhere else away from home
+uses the Default Electricity Rate. Charging that was already counted keeps
+its price. The 🌙 Smart Charging time window doesn't check the location.
 
 ### Hungarian electricity tariffs (Tariff A / Tariff D)
 
@@ -340,9 +366,10 @@ All prices are final gross Ft/kWh (energy + grid fees + VAT).
 How the numbers work:
 - The quota is 2,523 kWh a year, counted per day: about 207 kWh in 30-day
   months, 214 kWh in 31-day months and 193.5 kWh in February.
-- Every kWh the car adds is priced at the price active at that moment. Home
-  charging uses the tariff price; charging away from home uses your Default
-  Electricity Rate.
+- Every kWh the car adds is priced at the price active at that moment and
+  place: home charging at the tariff price, charging in your Work zone at the
+  Work rate, and anywhere else at your Default Electricity Rate. This works
+  the same with the tariff set to Off (home = Default Electricity Rate).
 - This starts counting when you install this version. Earlier charging is not
   re-priced, so in Tariff A/D mode the first day, week and month are partial.
 - When you first set a grid-import sensor in the middle of a month, that month
@@ -634,6 +661,8 @@ left alone by default (pass `--include-labels` to rename those too). Run
 | **Dog Mode** / **Camp Mode** didn't show anything on the car's screen | Fixed: the buttons only switched the climate on at 20 °C / 18 °C. They now turn on Tesla's real Dog / Camp Mode (`climate.set_preset_mode`), the tile turns green while active, and tapping again turns it off. Reload scripts after updating. |
 | No **Cabin Overheat Protection** tile on the Climate tab | The Tesla Fleet entity `climate.<car>_cabin_overheat_protection` is disabled by default. Enable it in **Settings → Devices & Services → Tesla Fleet → entities** (show disabled entities, open it, *Enabled*); the tile appears by itself. |
 | After updating, new Driving/Cost figures show `Entity not available` | The new `history_stats` sensors and the `recorder` change need a **full restart** (Settings → System → Restart), not just a YAML reload. |
+| The Overview location strip says **At home**, but the car is parked a few houses away (the Tesla app shows the other address) | Home Assistant's Home zone has a 100 m radius by default, and the Saved Location Rates names are just text. Create a small zone for the other spot (15–20 m) — see **Maintenance → Charging at another place (Work zone)**. If the car charges there on someone else's electricity, also set it as the **Work Zone** so that charging is priced at the Work rate. |
+| After setting a Work zone, the location strip still says **At home** at that spot | The new zone is bigger than, or doesn't contain, the parking spot. Make it smaller than your Home zone and check the pin. Also check that it isn't *Passive* and that **Work Zone** holds its entity ID (e.g. `zone.work`, Settings → Entities). Analytics → Settings → *Live Tariff Status → Price where the car is now* shows which price applies. |
 
 > **Removing a wrong month from "Distance · Yearly":** Home Assistant can't
 > edit this kind of statistic in the UI. Install the **SQLite Web** add-on

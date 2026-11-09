@@ -797,6 +797,14 @@ input_text:
   tesla_rate_work_season:
     name: "Work Rate Season"
     icon: mdi:calendar-range
+  # Zone where the Work rate applies (agents.md Section 25), e.g.
+  # zone.work. Create the zone in Settings -> Areas, labels & zones ->
+  # Zones (not here: its coordinates are your address). Charging inside it
+  # is priced at input_number.tesla_rate_work_per_kwh; Full auto and the
+  # home quota ignore it (it isn't zone.home). Empty = no Work zone.
+  tesla_rate_work_zone:
+    name: "Work Zone (entity ID)"
+    icon: mdi:map-marker-radius
 
   # Entity ID of your home's LIFETIME grid import energy sensor in kWh (e.g.
   # a smart meter / P1 reader / energy monitor "total consumption" sensor —
@@ -1537,16 +1545,10 @@ template:
         # other 9 "Ft" unit_of_measurement values in this file).
         unit_of_measurement: "Ft"
         icon: mdi:cash
-        # Tariff A/D: real cost accumulated at the price active while
-        # charging (agents.md Section 21). Off: flat default rate.
+        # Real cost accumulated at the price where and when each kWh was
+        # charged (agents.md Sections 21 and 25), in every tariff mode.
         state: >
-          {% if states('input_select.tesla_tariff_mode') in ['Tariff A', 'Tariff D'] %}
-            {{ states('sensor.tesla_daily_tariff_charging_cost') | float(0) | round(0) }}
-          {% else %}
-            {% set energy = states('sensor.tesla_daily_charging_energy') | float(0) %}
-            {% set rate = states('input_number.tesla_default_electricity_cost') | float(60) %}
-            {{ (energy * rate) | round(0) }}
-          {% endif %}
+          {{ states('sensor.tesla_daily_tariff_charging_cost') | float(0) | round(0) }}
 
       # === Monthly + Projections ===
       - name: "Tesla Monthly Electric Cost"
@@ -1557,50 +1559,32 @@ template:
         # uses the monthly charging energy, which has older history.
         state_class: measurement
         icon: mdi:cash-multiple
-        # Tariff A/D: tariff-priced cost + the month's kWh the tariff meters
-        # didn't see (charged before tariff costs started counting) at the
+        # Accumulated cost (any tariff mode) + the month's kWh the meters
+        # didn't see (charged before costs started counting) at the
         # Default Electricity Rate. "Covered" kWh = the larger of the tariff
         # energy meter and the home energy meter (both started with the tariff
         # feature; the larger one is closest to what the cost meter priced).
         state: >
-          {% if states('input_select.tesla_tariff_mode') in ['Tariff A', 'Tariff D'] %}
-            {% set c = states('sensor.tesla_monthly_tariff_charging_cost') | float(0) %}
-            {% set e = states('sensor.tesla_monthly_charging_energy') | float(0) %}
-            {% set covered = [states('sensor.tesla_monthly_tariff_charging_energy') | float(0),
-                              states('sensor.tesla_monthly_home_charging_energy') | float(0)] | max %}
-            {% set rate = states('input_number.tesla_default_electricity_cost') | float(60) %}
-            {{ (c + ([e - covered, 0] | max) * rate) | round(0) }}
-          {% else %}
-            {% set monthly_energy = states('sensor.tesla_monthly_charging_energy') | float(0) %}
-            {% set rate = states('input_number.tesla_default_electricity_cost') | float(60) %}
-            {{ (monthly_energy * rate) | round(0) }}
-          {% endif %}
+          {% set c = states('sensor.tesla_monthly_tariff_charging_cost') | float(0) %}
+          {% set e = states('sensor.tesla_monthly_charging_energy') | float(0) %}
+          {% set covered = [states('sensor.tesla_monthly_tariff_charging_energy') | float(0),
+                            states('sensor.tesla_monthly_home_charging_energy') | float(0)] | max %}
+          {% set rate = states('input_number.tesla_default_electricity_cost') | float(60) %}
+          {{ (c + ([e - covered, 0] | max) * rate) | round(0) }}
 
       - name: "Tesla Weekly Electric Cost"
         unique_id: tesla_weekly_electric_cost_v2
         unit_of_measurement: "Ft"
         icon: mdi:cash-multiple
         state: >
-          {% if states('input_select.tesla_tariff_mode') in ['Tariff A', 'Tariff D'] %}
-            {{ states('sensor.tesla_weekly_tariff_charging_cost') | float(0) | round(0) }}
-          {% else %}
-            {% set weekly_energy = states('sensor.tesla_weekly_charging_energy') | float(0) %}
-            {% set rate = states('input_number.tesla_default_electricity_cost') | float(60) %}
-            {{ (weekly_energy * rate) | round(0) }}
-          {% endif %}
+          {{ states('sensor.tesla_weekly_tariff_charging_cost') | float(0) | round(0) }}
 
       - name: "Tesla Electric Cost 7d Rolling"
         unique_id: tesla_electric_cost_7d_rolling_v1
         unit_of_measurement: "Ft"
         icon: mdi:cash-multiple
         state: >
-          {% if states('input_select.tesla_tariff_mode') in ['Tariff A', 'Tariff D'] %}
-            {{ states('sensor.tesla_tariff_charging_cost_7d_rolling') | float(0) | round(0) }}
-          {% else %}
-            {% set energy = states('sensor.tesla_charging_energy_7d_rolling') | float(0) %}
-            {% set rate = states('input_number.tesla_default_electricity_cost') | float(60) %}
-            {{ (energy * rate) | round(0) }}
-          {% endif %}
+          {{ states('sensor.tesla_tariff_charging_cost_7d_rolling') | float(0) | round(0) }}
 
       # Previous calendar month's charging energy, read straight off the
       # tesla_monthly_charging_energy utility_meter's own auto-maintained
@@ -1619,19 +1603,13 @@ template:
         unit_of_measurement: "Ft"
         icon: mdi:cash-multiple
         state: >
-          {% if states('input_select.tesla_tariff_mode') in ['Tariff A', 'Tariff D'] %}
-            {# Same as Tesla Monthly Electric Cost, on the meters' last_period. #}
-            {% set c = state_attr('sensor.tesla_monthly_tariff_charging_cost', 'last_period') | float(0) %}
-            {% set e = states('sensor.tesla_previous_month_charging_energy') | float(0) %}
-            {% set covered = [state_attr('sensor.tesla_monthly_tariff_charging_energy', 'last_period') | float(0),
-                              state_attr('sensor.tesla_monthly_home_charging_energy', 'last_period') | float(0)] | max %}
-            {% set rate = states('input_number.tesla_default_electricity_cost') | float(60) %}
-            {{ (c + ([e - covered, 0] | max) * rate) | round(0) }}
-          {% else %}
-            {% set energy = states('sensor.tesla_previous_month_charging_energy') | float(0) %}
-            {% set rate = states('input_number.tesla_default_electricity_cost') | float(60) %}
-            {{ (energy * rate) | round(0) }}
-          {% endif %}
+          {# Same as Tesla Monthly Electric Cost, on the meters' last_period. #}
+          {% set c = state_attr('sensor.tesla_monthly_tariff_charging_cost', 'last_period') | float(0) %}
+          {% set e = states('sensor.tesla_previous_month_charging_energy') | float(0) %}
+          {% set covered = [state_attr('sensor.tesla_monthly_tariff_charging_energy', 'last_period') | float(0),
+                            state_attr('sensor.tesla_monthly_home_charging_energy', 'last_period') | float(0)] | max %}
+          {% set rate = states('input_number.tesla_default_electricity_cost') | float(60) %}
+          {{ (c + ([e - covered, 0] | max) * rate) | round(0) }}
 
       # Cost Projections tab (agents.md Section 24): a full month projected
       # from the average cost per day over THIS month so far + ALL of LAST
@@ -1822,18 +1800,12 @@ template:
         unit_of_measurement: "Ft"
         icon: mdi:cash-multiple
         state: >
-          {% if states('input_select.tesla_tariff_mode') in ['Tariff A', 'Tariff D'] %}
-            {# Tariff-priced cost + kWh the tariff meter didn't see, at the default rate. #}
-            {% set c = states('sensor.tesla_yearly_tariff_charging_cost') | float(0) %}
-            {% set e = states('sensor.tesla_yearly_charging_energy') | float(0) %}
-            {% set covered = states('sensor.tesla_yearly_tariff_charging_energy') | float(0) %}
-            {% set rate = states('input_number.tesla_default_electricity_cost') | float(60) %}
-            {{ (c + ([e - covered, 0] | max) * rate) | round(0) }}
-          {% else %}
-            {% set energy = states('sensor.tesla_yearly_charging_energy') | float(0) %}
-            {% set rate = states('input_number.tesla_default_electricity_cost') | float(60) %}
-            {{ (energy * rate) | round(0) }}
-          {% endif %}
+          {# Tariff-priced cost + kWh the tariff meter didn't see, at the default rate. #}
+          {% set c = states('sensor.tesla_yearly_tariff_charging_cost') | float(0) %}
+          {% set e = states('sensor.tesla_yearly_charging_energy') | float(0) %}
+          {% set covered = states('sensor.tesla_yearly_tariff_charging_energy') | float(0) %}
+          {% set rate = states('input_number.tesla_default_electricity_cost') | float(60) %}
+          {{ (c + ([e - covered, 0] | max) * rate) | round(0) }}
 
       - name: "Tesla Yearly Fuel Cost"
         unique_id: tesla_yearly_fuel_cost_v1
@@ -1848,18 +1820,14 @@ template:
         unique_id: tesla_electric_cost_per_km_v5
         unit_of_measurement: "Ft/km"
         icon: mdi:cash
-        # Tariff A/D: this month's average charging price (Tesla Monthly
-        # Electric Cost / charged kWh, both covering the whole month), or the
-        # current active price early in the month.
+        # This month's average charging price (Tesla Monthly Electric Cost /
+        # charged kWh, both covering the whole month), or the current home
+        # price before 5 kWh are charged.
         state: >
           {% set eff = states('sensor.tesla_efficiency_kwh_km') | float(0) %}
-          {% if states('input_select.tesla_tariff_mode') in ['Tariff A', 'Tariff D'] %}
-            {% set e = states('sensor.tesla_monthly_charging_energy') | float(0) %}
-            {% set c = states('sensor.tesla_monthly_electric_cost') | float(0) %}
-            {% set rate = (c / e) if e >= 5 else states('sensor.tesla_active_charging_price') | float(60) %}
-          {% else %}
-            {% set rate = states('input_number.tesla_default_electricity_cost') | float(60) %}
-          {% endif %}
+          {% set e = states('sensor.tesla_monthly_charging_energy') | float(0) %}
+          {% set c = states('sensor.tesla_monthly_electric_cost') | float(0) %}
+          {% set rate = (c / e) if e >= 5 else states('sensor.tesla_active_charging_price') | float(60) %}
           {{ (eff * rate) | round(2) }}
 
       # === Activity Time Tracking ===
@@ -2229,9 +2197,10 @@ template:
             {% set last = this.attributes.get('last_energy_kwh') %}
             {{ last if last is number and last * 0.5 <= new < last else new }}
 
-      # ALL charging, priced at the moment it happens: home charging at
-      # sensor.tesla_active_charging_price (tariff-aware), away charging
-      # (Superchargers etc.) at input_number.tesla_default_electricity_cost.
+      # ALL charging, priced at the moment it happens, at
+      # sensor.tesla_location_charging_price: home at the tariff price, the
+      # Work zone at the Work rate, elsewhere (Superchargers etc.) at the
+      # default rate. Counts in every tariff mode (with Off, home = default).
       # Can go down (negative Tariff D prices), hence state_class: total.
       - name: "Tesla Tariff Charging Cost Total"
         unique_id: tesla_tariff_charging_cost_total_v1
@@ -2243,10 +2212,9 @@ template:
           {% set last = this.attributes.get('last_energy_kwh') %}
           {% set delta = 0 if last is not number else
                (new - last if new >= last else (new if new < last * 0.5 else 0)) %}
-          {% set car = states('input_text.tesla_car_name') %}
-          {% set home = is_state('device_tracker.' ~ car ~ '_location', 'home') %}
+          {# Home: tariff price; Work zone: Work rate; elsewhere: default rate. #}
           {% set default = states('input_number.tesla_default_electricity_cost') | float(0) %}
-          {% set price = (states('sensor.tesla_active_charging_price') | float(default)) if home else default %}
+          {% set price = states('sensor.tesla_location_charging_price') | float(default) %}
           {{ (this.state | float(0) + delta * price) | round(2) }}
         attributes:
           # Keep the previous value on a small dip (noise), so the
@@ -2256,10 +2224,39 @@ template:
             {% set last = this.attributes.get('last_energy_kwh') %}
             {{ last if last is number and last * 0.5 <= new < last else new }}
           last_price: >
-            {% set car = states('input_text.tesla_car_name') %}
             {% set default = states('input_number.tesla_default_electricity_cost') | float(0) %}
-            {{ (states('sensor.tesla_active_charging_price') | float(default))
-               if is_state('device_tracker.' ~ car ~ '_location', 'home') else default }}
+            {{ states('sensor.tesla_location_charging_price') | float(default) }}
+
+  # Price of a kWh where the car is right now (agents.md Section 25). Home
+  # zone -> the tariff price (sensor.tesla_active_charging_price, the Default
+  # Electricity Rate with tariff Off); the Work zone
+  # (input_text.tesla_rate_work_zone) -> the Work rate; anywhere else ->
+  # the Default Electricity Rate. The charging cost total above prices every
+  # kWh with it. A device_tracker in a zone has that zone's name as state.
+  - sensor:
+      - name: "Tesla Location Charging Price"
+        unique_id: tesla_location_charging_price_v1
+        unit_of_measurement: "Ft/kWh"
+        state_class: measurement
+        icon: mdi:map-marker-radius
+        state: >
+          {% set where = states('device_tracker.' ~ states('input_text.tesla_car_name') ~ '_location') %}
+          {% set wz = states('input_text.tesla_rate_work_zone') | trim | lower %}
+          {% set wz_name = state_attr(wz, 'friendly_name') if wz.startswith('zone.') and wz != 'zone.home' else none %}
+          {% set default = states('input_number.tesla_default_electricity_cost') | float(0) %}
+          {% if where == 'home' %}
+            {{ states('sensor.tesla_active_charging_price') | float(default) }}
+          {% elif wz_name and where == wz_name %}
+            {{ states('input_number.tesla_rate_work_per_kwh') | float(default) }}
+          {% else %}
+            {{ default }}
+          {% endif %}
+        attributes:
+          location: >
+            {% set where = states('device_tracker.' ~ states('input_text.tesla_car_name') ~ '_location') %}
+            {% set wz = states('input_text.tesla_rate_work_zone') | trim | lower %}
+            {% set wz_name = state_attr(wz, 'friendly_name') if wz.startswith('zone.') and wz != 'zone.home' else none %}
+            {{ 'home' if where == 'home' else ('work' if wz_name and where == wz_name else 'away') }}
 
   - sensor:
       # Deye EV charger total of the three phases (rest: block above).

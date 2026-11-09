@@ -758,7 +758,9 @@ views:
                 const zone = String(states['device_tracker.' + car + '_location']?.state || '');
                 if (!zone || zone === 'unknown' || zone === 'unavailable') return 'Location unavailable';
                 if (zone === 'not_home') return 'Away from saved zones';
-                return `At ${zone.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}`;
+                if (zone === 'home') return 'At home';
+                const work = states['sensor.tesla_location_charging_price']?.attributes?.location === 'work';
+                return `At ${zone}${work ? ' · charging here uses the Work rate' : ''}`;
               ]]]
             tap_action:
               action: url
@@ -3475,8 +3477,8 @@ views:
                     <div style="color:#999;font-size:12px;margin-top:4px;line-height:1.45">
                       What charging costs you, and what the same driving would cost in a petrol/diesel car.
                       Estimated from your average cost per day this month and last month.
-                      All charging is included; charging away from home is priced at your Default Electricity Rate
-                      (Supercharger bills aren't available from Tesla's API).
+                      All charging is included: at home at your tariff, in your Work zone at the Work rate,
+                      anywhere else at your Default Electricity Rate (Supercharger bills aren't available from Tesla's API).
                     </div>
                   </div>`;
                 ]]]

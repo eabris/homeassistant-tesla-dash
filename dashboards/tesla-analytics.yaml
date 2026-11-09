@@ -901,9 +901,8 @@ views:
               in_chart: false
               legend_value: true
           # Monthly charged kWh (utility meter, has long-term statistics from
-          # the start) x the rate: this month's average price (Tesla Monthly
-          # Electric Cost / charged kWh) in Tariff A/D, otherwise the Default
-          # Electricity Rate. Past months use today's rate (an estimate).
+          # the start) x this month's average price (Tesla Monthly Electric
+          # Cost / charged kWh). Past months use that price (an estimate).
           - entity: sensor.tesla_monthly_charging_energy
             name: Electric cost
             type: column
@@ -916,12 +915,9 @@ views:
             transform: >
               const st = hass.states;
               const n = (id, d) => { const v = parseFloat(st[id]?.state); return isNaN(v) ? d : v; };
-              let rate = n('input_number.tesla_default_electricity_cost', 60);
-              if (['Tariff A', 'Tariff D'].includes(st['input_select.tesla_tariff_mode']?.state)) {
-                const e = n('sensor.tesla_monthly_charging_energy', 0);
-                const c = n('sensor.tesla_monthly_electric_cost', 0);
-                rate = e >= 5 ? c / e : n('sensor.tesla_active_charging_price', rate);
-              }
+              const e = n('sensor.tesla_monthly_charging_energy', 0);
+              const c = n('sensor.tesla_monthly_electric_cost', 0);
+              const rate = e >= 5 ? c / e : n('sensor.tesla_active_charging_price', n('input_number.tesla_default_electricity_cost', 60));
               return x * rate;
             show:
               in_header: false
@@ -1314,8 +1310,8 @@ views:
             content: |
               ## ⚡ Electricity Price
 
-              **Default rate:** price per kWh when no tariff is selected, and for any
-              charging away from home.
+              **Default rate:** price per kWh when no tariff is selected, and for
+              charging away from home (except your Work zone, below).
 
               **Tariff (Hungary):**
               - **Off**: always the default rate.
@@ -1360,6 +1356,22 @@ views:
                 name: "Used This Month So Far (corrects the count)"
           - type: markdown
             content: |
+              **Charging at another place (Work):** if the car charges
+              somewhere else on someone else's electricity (e.g. a few houses
+              away), create a small zone there in Home Assistant: **Settings →
+              Areas, labels & zones → Zones → Add zone**, radius 15–20 m (smaller
+              than your Home zone, so it wins where they overlap). Enter its
+              entity ID and that place's price below. Charging inside it is
+              priced at this rate, and Full auto and your home quota ignore it.
+              Anywhere else away from home uses the Default rate.
+          - type: entities
+            entities:
+              - entity: input_text.tesla_rate_work_zone
+                name: "Work Zone (entity ID, e.g. zone.work)"
+              - entity: input_number.tesla_rate_work_per_kwh
+                name: "Work Rate (per kWh)"
+          - type: markdown
+            content: |
               {% set mode = states('input_select.tesla_tariff_mode') %}
               {% set price = states('sensor.tesla_active_charging_price') %}
               {% set unit = 'Ft' if mode in ['Tariff A', 'Tariff D'] else states('sensor.tesla_currency_symbol') %}
@@ -1371,7 +1383,8 @@ views:
 
               | | |
               |---|---|
-              | **Active charging price** | {{ price ~ ' ' ~ unit ~ '/kWh' if price | is_number else '–' }} ({{ state_attr('sensor.tesla_active_charging_price', 'source') | default('–', true) }}) |
+              | **Home charging price** | {{ price ~ ' ' ~ unit ~ '/kWh' if price | is_number else '–' }} ({{ state_attr('sensor.tesla_active_charging_price', 'source') | default('–', true) }}) |
+              | **Price where the car is now** | {% set lp = states('sensor.tesla_location_charging_price') %}{% set loc = state_attr('sensor.tesla_location_charging_price', 'location') %}{{ lp ~ ' ' ~ unit ~ '/kWh' if lp | is_number else '–' }} ({{ {'home': 'at home, tariff', 'work': 'Work zone, Work rate', 'away': 'away, default rate'}.get(loc, '–') }}) |
               | **Tariff A price now** | {{ states('sensor.tesla_tariff_a_current_price') }} Ft/kWh |
               | **Tariff D price now** | {{ d ~ ' Ft/kWh' if d | is_number else 'no data from dnap.hu right now' }} |
               | **Cheapest D hour (next 24 h)** | {{ as_timestamp(cheap) | timestamp_custom('%a %H:%M') if as_timestamp(cheap, none) is not none else '–' }} |
@@ -1638,9 +1651,11 @@ views:
             content: |
               ## 📍 Saved Location Rates (notes only)
 
-              A place to write down the rates of the places you charge. **These
-              values are not used in any calculation**: costs use the Electricity
-              Price settings on the Settings tab. Currency:
+              A place to write down the rates of the places you charge. These
+              are **notes only**, with one exception: the **Work rate** prices
+              charging inside your Work zone once you set one (Settings → ⚡
+              Electricity Price). Names, hours, days and season are always just
+              notes. Currency:
               **{{ states('input_select.tesla_currency') }} ({{ states('sensor.tesla_currency_symbol') }})**.
           - type: markdown
             content: >
