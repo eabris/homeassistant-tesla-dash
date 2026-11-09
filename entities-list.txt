@@ -8,7 +8,7 @@
 # Format example:
 # entity_id                                      | type           | category          | friendly_name                        | notes / purpose
 #
-# Last updated: 2026-10-11 (Hungarian electricity tariffs A/D + Full auto charge planner)
+# Last updated: 2026-11-09 (dashboard UX + accuracy pass, agents.md Section 24)
 # ============================================================
 #
 # NOTE ON THE "vehicle_" PREFIX (Fleet Sensor Aliases):
@@ -161,8 +161,8 @@ input_datetime.tesla_quota_correction_set        | input_datetime| internal     
 sensor.tesla_tires_status                        | sensor        | safety            | Tesla Tires Status              | Template: combined tire warning summary (Optimal / Check Tires)
 
 # --- EFFICIENCY (Templates) ---
-sensor.tesla_efficiency_kwh_km               | sensor        | efficiency        | Tesla Efficiency kWh/km         | Template: REAL rolling 7-day efficiency (tesla_weekly_drive_energy / tesla_weekly_distance); falls back to 0.228 kWh/km baseline until >5km logged in the last 7 days
-sensor.tesla_efficiency_wh_per_km                | sensor        | efficiency        | Tesla Efficiency Wh/km          | Template: efficiency in Wh/km (kWh/km * 1000)
+sensor.tesla_efficiency_kwh_km               | sensor        | efficiency        | Tesla Efficiency kWh/km         | Template: REAL efficiency over THIS + LAST calendar month (monthly drive energy + its last_period) / (monthly distance + previous month distance). Last month counts only if both are known. Falls back to 0.228 until 20 km of real data. (Was the calendar week: equal to today's value every Monday, agents.md Section 24.)
+sensor.tesla_efficiency_wh_per_km                | sensor        | efficiency        | Tesla Efficiency Wh/km          | Template: efficiency in Wh/km (kWh/km * 1000). Analytics -> Driving "Energy efficiency" header AVERAGE.
 sensor.tesla_electric_cost_per_km                | sensor        | cost_tracking     | Tesla Electric Cost Per KM      | Template: efficiency * input_number.tesla_default_electricity_cost (Off mode). In Tariff A/D mode: efficiency * this month's average charging price (sensor.tesla_monthly_tariff_charging_cost / sensor.tesla_monthly_charging_energy, or sensor.tesla_active_charging_price before 5 kWh are charged)
 sensor.tesla_fuel_cost_per_km                    | sensor        | cost_tracking     | Tesla Fuel Cost per km          | Template: ICE equivalent fuel cost per km (comparison_ice_efficiency @ comparison_fuel_price_per_liter); unit follows selected currency
 sensor.tesla_drive_energy_consumed_total         | sensor        | efficiency        | Tesla Drive Energy Consumed Total | Template (device_class energy, state_class total_increasing): wraps input_number.tesla_drive_energy_consumed_total_kwh, an ever-increasing accumulator fed by the tesla_drive_energy_session_start/end automations, which compute REAL energy used per drive from (battery % drop x input_number.tesla_battery_capacity_kwh). Source for the daily/weekly/monthly drive-energy utility meters.
@@ -170,7 +170,7 @@ sensor.tesla_drive_energy_consumed_total         | sensor        | efficiency   
 # --- ENERGY TRACKING (Utility Meters + Templates) ---
 sensor.tesla_daily_charging_energy               | sensor        | energy_tracking   | Tesla Daily Charging Energy     | Utility meter: daily kWh from charge_energy_added
 sensor.tesla_weekly_charging_energy              | sensor        | energy_tracking   | Tesla Weekly Charging Energy    | Utility meter: weekly kWh from charge_energy_added
-sensor.tesla_charging_energy_7d_rolling          | sensor        | energy_tracking   | Tesla Charging Energy 7d Rolling | platform: statistics, state_characteristic: change, max_age: 7 days, source sensor.vehicle_charge_energy_added (total_increasing). True trailing-168h charging energy -- distinct from tesla_weekly_charging_energy's calendar-week figure. Powers the History tab's "Last 7 Days" card.
+sensor.tesla_charging_energy_7d_rolling          | sensor        | energy_tracking   | Tesla Charging Energy 7d Rolling | platform: statistics, state_characteristic: change, max_age: 7 days, source sensor.tesla_tariff_charging_energy_total (all charged kWh, never resets). Was sensor.vehicle_charge_energy_added, which restarts at 0 every session, so it showed nonsense like 1.97 kWh (agents.md Section 24). Powers the History tab's "Last 7 Days" card.
 sensor.tesla_monthly_charging_energy             | sensor        | energy_tracking   | Tesla Monthly Charging Energy   | Utility meter: monthly kWh from charge_energy_added
 sensor.tesla_previous_month_charging_energy      | sensor        | energy_tracking   | Tesla Previous Month Charging Energy | Template: reads state_attr('sensor.tesla_monthly_charging_energy', 'last_period') -- HA's utility_meter auto-populates this attribute with the prior cycle's total every time the monthly cycle rolls over, no custom automation needed. Powers the "Previous Month" card. Reads 0/unknown until the first rollover.
 sensor.tesla_daily_drive_energy                  | sensor        | energy_tracking   | Tesla Daily Drive Energy        | Utility meter: daily kWh from sensor.tesla_drive_energy_consumed_total (real driving consumption, not charging)
@@ -193,14 +193,14 @@ sensor.tesla_weekly_electric_cost                | sensor        | cost_tracking
 sensor.tesla_electric_cost_7d_rolling            | sensor        | cost_tracking     | Tesla Electric Cost 7d Rolling  | Template: tesla_charging_energy_7d_rolling * input_number.tesla_default_electricity_cost (Off mode; Tariff A/D: sensor.tesla_tariff_charging_cost_7d_rolling); powers the History tab's "Last 7 Days" card (rolling, distinct from the calendar-week THIS WEEK card)
 sensor.tesla_previous_month_electric_cost        | sensor        | cost_tracking     | Tesla Previous Month Electric Cost | Template: tesla_previous_month_charging_energy * input_number.tesla_default_electricity_cost (Off mode; Tariff A/D: last_period attribute of sensor.tesla_monthly_tariff_charging_cost); powers the "Previous Month" card. Populates once tesla_monthly_charging_energy's utility_meter cycle first rolls over.
 sensor.tesla_monthly_electric_cost               | sensor        | cost_tracking     | Tesla Monthly Electric Cost     | Template: monthly charging energy * input_number.tesla_default_electricity_cost (Off mode). In Tariff A/D mode (input_select.tesla_tariff_mode) it reads the tariff-priced cost accumulator sensor.tesla_monthly_tariff_charging_cost instead (see HUNGARIAN ELECTRICITY TARIFFS below).
-sensor.tesla_annual_electric_cost                | sensor        | cost_tracking     | Tesla Annual Electric Cost      | Template: monthly electric cost * 12 (projected); unit follows selected currency
+sensor.tesla_annual_electric_cost                | sensor        | cost_tracking     | Tesla Annual Electric Cost      | Template: sensor.tesla_projected_monthly_electric_cost * 12 (was "this month so far" * 12). Unit hardcoded "Ft".
 sensor.tesla_5_year_electric_cost                | sensor        | cost_tracking     | Tesla 5 Year Electric Cost      | Template: annual electric cost * 5 (projected); unit follows selected currency; NOTE: real entity_id has an underscore between "5" and "year" (auto-slugified from the friendly name's space) -- do not reference it as tesla_5year_electric_cost anywhere
 sensor.tesla_daily_fuel_cost_equivalent          | sensor        | cost_tracking     | Tesla Daily Fuel Cost Equivalent | Template: daily_distance * fuel_cost_per_km
 sensor.tesla_weekly_fuel_cost                    | sensor        | cost_tracking     | Tesla Weekly Fuel Cost Equivalent | Template: weekly_distance * fuel_cost_per_km
 sensor.tesla_fuel_cost_7d_rolling_equivalent     | sensor        | cost_tracking     | Tesla Fuel Cost 7d Rolling Equivalent | Template: tesla_distance_7d_rolling * fuel_cost_per_km; powers the History tab's "Last 7 Days" card
 sensor.tesla_previous_month_fuel_cost            | sensor        | cost_tracking     | Tesla Previous Month Fuel Cost  | Template: tesla_previous_month_distance * fuel_cost_per_km; powers the "Previous Month" card
 sensor.tesla_monthly_fuel_cost                   | sensor        | cost_tracking     | Tesla Monthly Fuel Cost Equivalent | Template: monthly_distance * fuel_cost_per_km; default_entity_id set for dashboard match
-sensor.tesla_annual_fuel_cost_equivalent         | sensor        | cost_tracking     | Tesla Annual Fuel Cost Equivalent | Template: monthly fuel cost equivalent * 12 (projected); used by the Cost Projections tab's Savings row
+sensor.tesla_annual_fuel_cost_equivalent         | sensor        | cost_tracking     | Tesla Annual Fuel Cost Equivalent | Template: sensor.tesla_projected_monthly_fuel_cost * 12; used by the Cost Projections tab's "you save" row
 sensor.tesla_5_year_fuel_cost_equivalent         | sensor        | cost_tracking     | Tesla 5 Year Fuel Cost Equivalent | Template: annual fuel cost equivalent * 5 (projected); NOTE: real entity_id has an underscore between "5" and "year" (same slugification gotcha as tesla_5_year_electric_cost) -- do not reference it as tesla_5year_fuel_cost_equivalent
 
 # --- HUNGARIAN ELECTRICITY TARIFFS (agents.md Section 21) ---
@@ -449,19 +449,22 @@ input_text.tesla_rate_work_season                      | input_text    | setting
 #   - script.tesla_refresh_fleet_token (forces the tesla_fleet integration to refresh its
 #     OAuth token, copies it into secrets.yaml via shell_command.refresh_tesla_token, then
 #     script.reload -- no HA restart. Fields: quiet, retry_window_close. Button on
-#     Analytics -> Settings -> "Tesla API Token")
+#     Analytics -> Settings -> Advanced -> "Tesla API Token")
 #   - script.tesla_defrost_toggle / tesla_charge_start / tesla_charge_stop / tesla_unlock_port
 #   - script.tesla_charge_now (Full auto "Charge now": charge to the car's limit until unplugged)
 #   - script.tesla_charge_stop_manual (Battery tab "Stop charging": stops, ends Charge now,
 #     and with Full auto on pauses it until unplugged; automations use tesla_charge_stop)
 #   - script.tesla_climate_temp_up / tesla_climate_temp_down
 #   - script.tesla_seat_heater_next_fl/fr/rl/rr/3l/3r / tesla_steering_heater_next
-#   - script.tesla_dog_mode / tesla_camp_mode
+#   - script.tesla_dog_mode / tesla_camp_mode (toggle Tesla's real Dog / Camp Mode:
+#     climate.set_preset_mode dog|camp, or off when already on)
+#   - script.tesla_cabin_protect_toggle (Cabin Overheat Protection on/off via
+#     climate.<car>_cabin_overheat_protection, disabled by default in Tesla Fleet)
 # ============================================================
 sensor.tesla_driving_time_30d_raw                | sensor        | activity          | Tesla Driving Time 30d Raw      | History stats: hours driven in last 30 days (rolling)
 sensor.tesla_drive_sessions_30d                  | sensor        | activity          | Tesla Drive Sessions 30d        | History stats: drive session count in last 30 days (rolling)
 sensor.tesla_monthly_driving_duration            | sensor        | activity          | Tesla Monthly Driving Duration  | Template: 30d driving time formatted as "Xd Xh" for Driving analytics TOTAL badge
-sensor.tesla_daily_efficiency_wh_per_km          | sensor        | efficiency        | Tesla Daily Efficiency Wh Per Km | Template: today's actual Wh/km (daily_energy_consumed*1000/daily_distance); falls back to static 228 Wh/km when no driving
+sensor.tesla_daily_efficiency_wh_per_km          | sensor        | efficiency        | Tesla Daily Efficiency Wh Per Km | Template: today's Wh/km from REAL logged drive energy (tesla_daily_drive_energy*1000/daily_distance). Unknown (no bar) when there's no real drive energy today -- the old fallback copied the average.
 
 # ─────────────────────────────────────────────────────────────
 # FIX: Analytics "Duration" / "Speed efficiency" / "Temperature
@@ -590,3 +593,41 @@ sensor.deye_ev_charger_energy                    | sensor        | charger      
 sensor.deye_ev_charger_session_energy            | sensor        | charger           | Deye EV Charger Session Energy  | utility_meter without cycle on the above: kWh for the current plug-in session (the charger-measured twin of sensor.vehicle_charge_energy_added). Previous session total = attribute last_period.
 sensor.deye_ev_charger_daily_energy              | sensor        | charger           | Deye EV Charger Daily Energy    | utility_meter (daily) of sensor.deye_ev_charger_energy: kWh the car drew from the charger today, resets at midnight. Yesterday's total = attribute last_period.
 automation.deye_ev_charger_session_reset         | automation    | charger           | Deye EV charger — reset session energy on unplug | utility_meter.reset of the session meter when binary_sensor.vehicle_charge_cable goes on -> off and the charger power is < 50 W. Reset on unplug because the Fleet cable sensor lags the real plug-in.
+
+# ─────────────────────────────────────────────────────────────
+# DASHBOARD UX + ACCURACY PASS (agents.md Section 24, 2026-11-09)
+# ─────────────────────────────────────────────────────────────
+# recorder: purge_keep_days: 365 (was HA's default 10 days, so the 30-day
+# charts and "30d" history_stats only ever saw 10 days).
+#
+# Changed:
+#   sensor.vehicle_battery_range -> reads sensor.<car>_battery_range (rated range,
+#     enabled by default) and falls back to sensor.<car>_estimate_battery_range
+#     (disabled by default in Tesla Fleet; it was the only source before, so the
+#     dashboards showed the "SoC x 4.1" estimate).
+#   sensor.tesla_efficiency_kwh_km, sensor.tesla_daily_efficiency_wh_per_km,
+#   sensor.tesla_charging_energy_7d_rolling, sensor.tesla_annual_electric_cost,
+#   sensor.tesla_annual_fuel_cost_equivalent -> see their rows above.
+#   script.tesla_dog_mode / tesla_camp_mode -> real Dog / Camp Mode (preset_mode).
+#
+# New:
+sensor.tesla_driving_time_month_raw              | sensor        | activity          | Tesla Driving Time Month Raw    | history_stats (time): hours binary_sensor.tesla_driving_active was on since the 1st of this month. Needs recorder history back to the 1st.
+sensor.tesla_drive_sessions_month                | sensor        | activity          | Tesla Drive Sessions Month      | history_stats (count): drives since the 1st of this month. Analytics -> Driving "Drives" THIS MONTH.
+sensor.tesla_monthly_driving_time                | sensor        | activity          | Tesla Monthly Driving Time      | Template (h, no device_class): sensor.tesla_driving_time_month_raw rounded. History "This month" + Driving "Duration" THIS MONTH.
+sensor.tesla_average_daily_distance              | sensor        | distance          | Tesla Average Daily Distance    | Template (km): this month's distance / day of month (today included). Driving "Distance" PER DAY (AVG).
+sensor.tesla_average_daily_energy_consumed       | sensor        | energy_tracking   | Tesla Average Daily Energy Consumed | Template (kWh): this month's driving energy / day of month. Driving "Energy used" PER DAY (AVG).
+sensor.tesla_average_daily_driving_time          | sensor        | activity          | Tesla Average Daily Driving Time | Template (min): this month's driving time / day of month. Driving "Duration" PER DAY (AVG).
+sensor.tesla_average_daily_drives                | sensor        | activity          | Tesla Average Daily Drives      | Template (drives): this month's drives / day of month. Driving "Drives" PER DAY (AVG).
+sensor.tesla_average_speed_this_month                 | sensor        | activity          | Tesla Average Speed This Month  | Template (km/h): monthly distance / monthly time in Drive. Unknown until 0.1 h driven. Driving "Speed" AVG THIS MONTH.
+sensor.tesla_top_speed_this_month                | sensor        | activity          | Tesla Top Speed This Month      | Trigger template (km/h): highest sensor.vehicle_speed this calendar month (attribute month); cleared by a 00:00:05 daily trigger on the 1st. Driving "Speed" TOP THIS MONTH.
+sensor.tesla_last_driving_day_efficiency         | sensor        | efficiency        | Tesla Last Driving Day Efficiency | Trigger template (Wh/km) on sensor.tesla_daily_drive_energy: the most recent day with >= 5 km and real logged drive energy (attribute day). Driving "Energy efficiency" LAST DRIVING DAY.
+sensor.tesla_projected_monthly_electric_cost     | sensor        | cost_tracking     | Tesla Projected Monthly Electric Cost | Template (Ft): average cost per day over this month so far + all of last month (just this month if last month is 0) x 30.44. Feeds annual/5-year. Cost Projections PER MONTH.
+sensor.tesla_projected_monthly_fuel_cost         | sensor        | cost_tracking     | Tesla Projected Monthly Fuel Cost | Template (Ft): same projection for the fuel-car comparison. Feeds sensor.tesla_annual_fuel_cost_equivalent.
+script.tesla_cabin_protect_toggle                | script        | climate           | Tesla Cabin Overheat Protection Toggle | climate.turn_on / turn_off on climate.<car>_cabin_overheat_protection. Climate tab tile, hidden until that Tesla Fleet entity is enabled.
+#
+# Dashboard-only changes (no entities): Overview tabs + Analytics History use
+# `type: sections` views (1 column on mobile, 2-3 on desktop); shared
+# button_card_templates tesla_cost_period / tesla_period_summary; Analytics
+# Settings regrouped into topic stacks + new Advanced sub-page
+# (/tesla-analytics/settings-advanced); apexcharts headers labelled and
+# group_by.fill: 'null' on every daily bar series.

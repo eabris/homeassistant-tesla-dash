@@ -1,334 +1,138 @@
 title: Tesla Analytics
 icon: mdi:chart-line
+
+# Shared custom:button-card templates (used with `template:` + `variables:`).
+button_card_templates:
+  # History tab: the same 5 rows for every period (variables.period = today,
+  # week, days7, month or prev), so the cards line up on desktop.
+  tesla_period_summary:
+    show_icon: false
+    show_name: false
+    show_state: false
+    tap_action:
+      action: none
+    custom_fields:
+      block: |
+        [[[
+          const st = (id) => states[id]?.state;
+          const val = (id) => { const v = parseFloat(st(id)); return isNaN(v) ? null : v; };
+          const code = st('input_select.tesla_currency') || 'HUF';
+          const loc = st('sensor.tesla_currency_locale') || 'hu-HU';
+          const money = (v) => {
+            if (v === null) return '–';
+            try {
+              return new Intl.NumberFormat(loc, { style: 'currency', currency: code, maximumFractionDigits: 0, minimumFractionDigits: 0 }).format(Math.round(v));
+            } catch (e) {
+              return `${Math.round(v)} ${st('sensor.tesla_currency_symbol') || ''}`;
+            }
+          };
+          const isMi = (st('input_select.tesla_unit_system') || 'Metric (km, °C, bar)') !== 'Metric (km, °C, bar)';
+          const dist = (km, dec) => km === null ? '–' : `${(isMi ? km * 0.621371 : km).toFixed(dec)} ${isMi ? 'mi' : 'km'}`;
+          const kwh = (v) => v === null ? '–' : `${v.toFixed(1)} kWh`;
+          const dur = (min) => {
+            if (min === null) return '';
+            const m = Math.round(min);
+            return m >= 60 ? `${Math.floor(m / 60)}h ${m % 60}m` : `${m}m`;
+          };
+          const now = new Date();
+          const lastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1).toLocaleString('en-GB', { month: 'long' });
+          const P = {
+            today: { title: 'TODAY', dist: 'sensor.tesla_daily_distance', dec: 1,
+              energy: 'sensor.tesla_daily_charging_energy', cost: 'sensor.tesla_daily_electric_cost',
+              fuel: 'sensor.tesla_daily_fuel_cost_equivalent',
+              driveMin: 'sensor.tesla_driving_time_today', chargeMin: 'sensor.tesla_charging_time_today' },
+            week: { title: 'THIS WEEK', hint: 'since Monday', dist: 'sensor.tesla_weekly_distance', dec: 0,
+              energy: 'sensor.tesla_weekly_charging_energy', cost: 'sensor.tesla_weekly_electric_cost',
+              fuel: 'sensor.tesla_weekly_fuel_cost' },
+            days7: { title: 'LAST 7 DAYS', hint: 'rolling', dist: 'sensor.tesla_distance_7d_rolling', dec: 0,
+              energy: 'sensor.tesla_charging_energy_7d_rolling', cost: 'sensor.tesla_electric_cost_7d_rolling',
+              fuel: 'sensor.tesla_fuel_cost_7d_rolling_equivalent',
+              driveMin: 'sensor.tesla_driving_time_7d', chargeMin: 'sensor.tesla_charging_time_7d' },
+            month: { title: 'THIS MONTH', hint: 'since the 1st', dist: 'sensor.tesla_monthly_distance', dec: 0,
+              energy: 'sensor.tesla_monthly_charging_energy', cost: 'sensor.tesla_monthly_electric_cost',
+              fuel: 'sensor.tesla_monthly_fuel_cost', driveHours: 'sensor.tesla_monthly_driving_time' },
+            prev: { title: 'LAST MONTH', hint: lastMonth, dist: 'sensor.tesla_previous_month_distance', dec: 0,
+              energy: 'sensor.tesla_previous_month_charging_energy', cost: 'sensor.tesla_previous_month_electric_cost',
+              fuel: 'sensor.tesla_previous_month_fuel_cost' },
+          }[variables.period];
+          if (!P) return '';
+          const driveMin = P.driveMin ? val(P.driveMin) : (P.driveHours && val(P.driveHours) !== null ? val(P.driveHours) * 60 : null);
+          const chargeMin = P.chargeMin ? val(P.chargeMin) : null;
+          const cost = val(P.cost);
+          const fuel = val(P.fuel);
+          const saved = cost !== null && fuel !== null ? fuel - cost : null;
+          const row = (icon, label, value, sub, color = '#fff') =>
+            `<div style="display:flex;align-items:center;gap:12px;padding:8px 0;border-top:1px solid rgba(255,255,255,0.07)">
+              <span style="font-size:18px;width:22px;text-align:center;flex-shrink:0">${icon}</span>
+              <div style="flex:1;min-width:0">
+                <div style="color:#888;font-size:10px;font-weight:600;letter-spacing:1.2px">${label}</div>
+                <div style="color:${color};font-size:15px;font-weight:700">${value}${sub ? `<span style="color:#aaa;font-size:11px;font-weight:400">&nbsp;&nbsp;${sub}</span>` : ''}</div>
+              </div>
+            </div>`;
+          const hint = P.hint ? ` <span style="color:#666;font-size:10px;font-weight:400;letter-spacing:0.5px">(${P.hint})</span>` : '';
+          return `<div style="width:100%;text-align:left">
+            <div style="color:#ccc;font-size:12px;font-weight:700;letter-spacing:1.5px;padding-bottom:4px">📅 ${P.title}${hint}</div>
+            ${row('🚗', 'DISTANCE', dist(val(P.dist), P.dec), driveMin ? `driving ${dur(driveMin)}` : '')}
+            ${row('⚡', 'ENERGY CHARGED', kwh(val(P.energy)), chargeMin ? `charging ${dur(chargeMin)}` : '')}
+            ${row('💰', 'CHARGING COST', money(cost), '')}
+            ${row('⛽', 'A FUEL CAR WOULD COST', money(fuel), '', '#ccc')}
+            ${saved === null || saved >= 0
+              ? row('✅', 'YOU SAVED', money(saved), '', '#4CAF50')
+              : row('💸', 'CHARGING COST MORE BY', money(-saved), '', '#F44336')}
+          </div>`;
+        ]]]
+    styles:
+      card:
+        - background-color: rgba(28, 28, 30, 0.95)
+        - border-radius: 16px
+        - padding: 16px 20px
+      grid:
+        - grid-template-areas: '"block"'
+        - grid-template-columns: 1fr
+      custom_fields:
+        block:
+          - width: 100%
+
 views:
   # ========== VIEW 1: HISTORY ==========
+  # One card per period (button_card_templates: tesla_period_summary), each
+  # in its own section: 1 column on mobile, up to 3 side by side on desktop.
   - title: History
     path: history
     icon: mdi:history
-    cards:
-      - type: vertical-stack
+    type: sections
+    max_columns: 3
+    sections:
+      - type: grid
         cards:
-
-          # TODAY
           - type: custom:button-card
-            show_icon: false
-            show_name: false
-            show_state: false
-            tap_action:
-              action: none
-            custom_fields:
-              block: |
-                [[[
-                  const fmtMin = (raw) => {
-                    const m = parseFloat(String(raw || '0'));
-                    if (isNaN(m) || m <= 0) return '–';
-                    const h = Math.floor(m / 60); const min = Math.round(m % 60);
-                    return h > 0 ? `${h}h ${min}m` : `${min}m`;
-                  };
-                  const fmt = (raw, unit, dec=1) => {
-                    const v = parseFloat(String(raw || '0'));
-                    return isNaN(v) || v <= 0 ? '–' : `${v.toFixed(dec)} ${unit}`;
-                  };
-                  const currencySymbol = states['sensor.tesla_currency_symbol']?.state || 'Ft';
-                  const currencyLocale = states['sensor.tesla_currency_locale']?.state || 'hu-HU';
-                  const ftm = (raw) => {
-                    const v = parseFloat(String(raw || '0')) || 0;
-                    return v <= 0 ? currencySymbol + '0' : currencySymbol + Math.round(v).toLocaleString(currencyLocale);
-                  };
-                  const row = (icon, label, val, sub) =>
-                    `<div style="display:flex;align-items:center;gap:12px;padding:8px 0;border-top:1px solid rgba(255,255,255,0.07)">
-                      <span style="font-size:18px;width:22px;text-align:center;flex-shrink:0">${icon}</span>
-                      <div style="flex:1;min-width:0">
-                        <div style="color:#888;font-size:10px;font-weight:600;letter-spacing:1.2px">${label}</div>
-                        <div style="color:#fff;font-size:15px;font-weight:700">${val}${sub ? `<span style="color:#aaa;font-size:11px;font-weight:400">  ${sub}</span>` : ''}</div>
-                      </div>
-                    </div>`;
-                  const unitSys = states['input_select.tesla_unit_system']?.state || 'Metric (km, °C, bar)';
-                  const isMi = unitSys !== 'Metric (km, °C, bar)';
-                  const distUnit = isMi ? 'mi' : 'km';
-                  const distKm = parseFloat(states['sensor.tesla_daily_distance']?.state || '0') || 0;
-                  const dist = fmt(isMi ? distKm * 0.621371 : distKm, distUnit, 1);
-                  const driveT = fmtMin(states['sensor.tesla_driving_time_today']?.state);
-                  const energy = fmt(states['sensor.tesla_daily_charging_energy']?.state, 'kWh', 2);
-                  const chargeT = fmtMin(states['sensor.tesla_charging_time_today']?.state);
-                  const elecCost = ftm(states['sensor.tesla_daily_electric_cost']?.state);
-                  const fuelEq = ftm(states['sensor.tesla_daily_fuel_cost_equivalent']?.state);
-                  const elecV = parseFloat(states['sensor.tesla_daily_electric_cost']?.state || '0') || 0;
-                  const fuelV = parseFloat(states['sensor.tesla_daily_fuel_cost_equivalent']?.state || '0') || 0;
-                  const saved = Math.max(0, fuelV - elecV);
-                  return `<div style="width:100%;text-align:left">
-                    <div style="color:#ccc;font-size:12px;font-weight:700;letter-spacing:1.5px;padding-bottom:4px">📅 TODAY</div>
-                    ${row('🚗', 'DISTANCE', dist, `drive time ${driveT}`)}
-                    ${row('⚡', 'ENERGY CHARGED', energy, `charge time ${chargeT}`)}
-                    ${row('💰', 'ELECTRIC COST', elecCost, `vs fuel ${fuelEq}`)}
-                    ${saved > 0 ? row('✅', 'SAVED VS ICE', currencySymbol + Math.round(saved).toLocaleString(currencyLocale), '') : ''}
-                  </div>`;
-                ]]]
-            styles:
-              card:
-                - background-color: rgba(28, 28, 30, 0.95)
-                - border-radius: 16px
-                - padding: 16px 20px
-              grid:
-                - grid-template-areas: '"block"'
-                - grid-template-columns: 1fr
-                - grid-template-rows: 1fr
-              custom_fields:
-                block:
-                  - width: 100%
-
-          # THIS WEEK (calendar week, utility meter reset)
+            template: tesla_period_summary
+            variables:
+              period: today
+      - type: grid
+        cards:
           - type: custom:button-card
-            show_icon: false
-            show_name: false
-            show_state: false
-            tap_action:
-              action: none
-            custom_fields:
-              block: |
-                [[[
-                  const fmt = (raw, unit, dec=1) => {
-                    const v = parseFloat(String(raw || '0'));
-                    return isNaN(v) || v <= 0 ? '–' : `${v.toFixed(dec)} ${unit}`;
-                  };
-                  const currencySymbol = states['sensor.tesla_currency_symbol']?.state || 'Ft';
-                  const currencyLocale = states['sensor.tesla_currency_locale']?.state || 'hu-HU';
-                  const ftm = (raw) => {
-                    const v = parseFloat(String(raw || '0')) || 0;
-                    return v <= 0 ? currencySymbol + '0' : currencySymbol + Math.round(v).toLocaleString(currencyLocale);
-                  };
-                  const row = (icon, label, val, sub) =>
-                    `<div style="display:flex;align-items:center;gap:12px;padding:8px 0;border-top:1px solid rgba(255,255,255,0.07)">
-                      <span style="font-size:18px;width:22px;text-align:center;flex-shrink:0">${icon}</span>
-                      <div style="flex:1;min-width:0">
-                        <div style="color:#888;font-size:10px;font-weight:600;letter-spacing:1.2px">${label}</div>
-                        <div style="color:#fff;font-size:15px;font-weight:700">${val}${sub ? `<span style="color:#aaa;font-size:11px;font-weight:400">  ${sub}</span>` : ''}</div>
-                      </div>
-                    </div>`;
-                  const unitSys = states['input_select.tesla_unit_system']?.state || 'Metric (km, °C, bar)';
-                  const isMi = unitSys !== 'Metric (km, °C, bar)';
-                  const distUnit = isMi ? 'mi' : 'km';
-                  const distKm = parseFloat(states['sensor.tesla_weekly_distance']?.state || '0') || 0;
-                  const dist = fmt(isMi ? distKm * 0.621371 : distKm, distUnit, 0);
-                  const energy = fmt(states['sensor.tesla_weekly_charging_energy']?.state, 'kWh', 2);
-                  const elecCost = ftm(states['sensor.tesla_weekly_electric_cost']?.state);
-                  const fuelEq = ftm(states['sensor.tesla_weekly_fuel_cost']?.state);
-                  const elecV = parseFloat(states['sensor.tesla_weekly_electric_cost']?.state || '0') || 0;
-                  const fuelV = parseFloat(states['sensor.tesla_weekly_fuel_cost']?.state || '0') || 0;
-                  const saved = Math.max(0, fuelV - elecV);
-                  return `<div style="width:100%;text-align:left">
-                    <div style="color:#ccc;font-size:12px;font-weight:700;letter-spacing:1.5px;padding-bottom:4px">📅 THIS WEEK <span style="color:#666;font-size:10px;font-weight:400">(since Mon)</span></div>
-                    ${row('🚗', 'DISTANCE', dist, '')}
-                    ${row('⚡', 'ENERGY CHARGED', energy, '')}
-                    ${row('💰', 'ELECTRIC COST', elecCost, `vs fuel ${fuelEq}`)}
-                    ${saved > 0 ? row('✅', 'SAVED VS ICE', currencySymbol + Math.round(saved).toLocaleString(currencyLocale), '') : ''}
-                  </div>`;
-                ]]]
-            styles:
-              card:
-                - background-color: rgba(28, 28, 30, 0.95)
-                - border-radius: 16px
-                - padding: 16px 20px
-              grid:
-                - grid-template-areas: '"block"'
-                - grid-template-columns: 1fr
-                - grid-template-rows: 1fr
-              custom_fields:
-                block:
-                  - width: 100%
-
-          # LAST 7 DAYS (rolling window: statistics "change" for
-          # distance/energy, history_stats for drive/charge time)
+            template: tesla_period_summary
+            variables:
+              period: week
+      - type: grid
+        cards:
           - type: custom:button-card
-            show_icon: false
-            show_name: false
-            show_state: false
-            tap_action:
-              action: none
-            custom_fields:
-              block: |
-                [[[
-                  const fmtMin = (raw) => {
-                    const m = parseFloat(String(raw || '0'));
-                    if (isNaN(m) || m <= 0) return '–';
-                    const h = Math.floor(m / 60); const min = Math.round(m % 60);
-                    return h > 0 ? `${h}h ${min}m` : `${min}m`;
-                  };
-                  const fmt = (raw, unit, dec=1) => {
-                    const v = parseFloat(String(raw || '0'));
-                    return isNaN(v) || v <= 0 ? '–' : `${v.toFixed(dec)} ${unit}`;
-                  };
-                  const currencySymbol = states['sensor.tesla_currency_symbol']?.state || 'Ft';
-                  const currencyLocale = states['sensor.tesla_currency_locale']?.state || 'hu-HU';
-                  const ftm = (raw) => {
-                    const v = parseFloat(String(raw || '0')) || 0;
-                    return v <= 0 ? currencySymbol + '0' : currencySymbol + Math.round(v).toLocaleString(currencyLocale);
-                  };
-                  const row = (icon, label, val, sub) =>
-                    `<div style="display:flex;align-items:center;gap:12px;padding:8px 0;border-top:1px solid rgba(255,255,255,0.07)">
-                      <span style="font-size:18px;width:22px;text-align:center;flex-shrink:0">${icon}</span>
-                      <div style="flex:1;min-width:0">
-                        <div style="color:#888;font-size:10px;font-weight:600;letter-spacing:1.2px">${label}</div>
-                        <div style="color:#fff;font-size:15px;font-weight:700">${val}${sub ? `<span style="color:#aaa;font-size:11px;font-weight:400">  ${sub}</span>` : ''}</div>
-                      </div>
-                    </div>`;
-                  const unitSys = states['input_select.tesla_unit_system']?.state || 'Metric (km, °C, bar)';
-                  const isMi = unitSys !== 'Metric (km, °C, bar)';
-                  const distUnit = isMi ? 'mi' : 'km';
-                  const distKm = parseFloat(states['sensor.tesla_distance_7d_rolling']?.state || '0') || 0;
-                  const dist = fmt(isMi ? distKm * 0.621371 : distKm, distUnit, 0);
-                  const energy = fmt(states['sensor.tesla_charging_energy_7d_rolling']?.state, 'kWh', 2);
-                  const elecCost = ftm(states['sensor.tesla_electric_cost_7d_rolling']?.state);
-                  const fuelEq = ftm(states['sensor.tesla_fuel_cost_7d_rolling_equivalent']?.state);
-                  const elecV = parseFloat(states['sensor.tesla_electric_cost_7d_rolling']?.state || '0') || 0;
-                  const fuelV = parseFloat(states['sensor.tesla_fuel_cost_7d_rolling_equivalent']?.state || '0') || 0;
-                  const saved = Math.max(0, fuelV - elecV);
-                  const driveT = fmtMin(states['sensor.tesla_driving_time_7d']?.state);
-                  const chargeT = fmtMin(states['sensor.tesla_charging_time_7d']?.state);
-                  return `<div style="width:100%;text-align:left">
-                    <div style="color:#ccc;font-size:12px;font-weight:700;letter-spacing:1.5px;padding-bottom:4px">📅 LAST 7 DAYS <span style="color:#666;font-size:10px;font-weight:400">(rolling)</span></div>
-                    ${row('🚗', 'DISTANCE', dist, '')}
-                    ${row('⚡', 'ENERGY CHARGED', energy, '')}
-                    ${row('💰', 'ELECTRIC COST', elecCost, `vs fuel ${fuelEq}`)}
-                    ${saved > 0 ? row('✅', 'SAVED VS ICE', currencySymbol + Math.round(saved).toLocaleString(currencyLocale), '') : ''}
-                    ${row('⏱️', 'DRIVE TIME', driveT, '')}
-                    ${row('🔌', 'CHARGE TIME', chargeT, '')}
-                  </div>`;
-                ]]]
-            styles:
-              card:
-                - background-color: rgba(28, 28, 30, 0.95)
-                - border-radius: 16px
-                - padding: 16px 20px
-              grid:
-                - grid-template-areas: '"block"'
-                - grid-template-columns: 1fr
-                - grid-template-rows: 1fr
-              custom_fields:
-                block:
-                  - width: 100%
-
-          # THIS MONTH
+            template: tesla_period_summary
+            variables:
+              period: days7
+      - type: grid
+        cards:
           - type: custom:button-card
-            show_icon: false
-            show_name: false
-            show_state: false
-            tap_action:
-              action: none
-            custom_fields:
-              block: |
-                [[[
-                  const fmt = (raw, unit, dec=1) => {
-                    const v = parseFloat(String(raw || '0'));
-                    return isNaN(v) || v <= 0 ? '–' : `${v.toFixed(dec)} ${unit}`;
-                  };
-                  const currencySymbol = states['sensor.tesla_currency_symbol']?.state || 'Ft';
-                  const currencyLocale = states['sensor.tesla_currency_locale']?.state || 'hu-HU';
-                  const ftm = (raw) => {
-                    const v = parseFloat(String(raw || '0')) || 0;
-                    return v <= 0 ? currencySymbol + '0' : currencySymbol + Math.round(v).toLocaleString(currencyLocale);
-                  };
-                  const row = (icon, label, val, sub) =>
-                    `<div style="display:flex;align-items:center;gap:12px;padding:8px 0;border-top:1px solid rgba(255,255,255,0.07)">
-                      <span style="font-size:18px;width:22px;text-align:center;flex-shrink:0">${icon}</span>
-                      <div style="flex:1;min-width:0">
-                        <div style="color:#888;font-size:10px;font-weight:600;letter-spacing:1.2px">${label}</div>
-                        <div style="color:#fff;font-size:15px;font-weight:700">${val}${sub ? `<span style="color:#aaa;font-size:11px;font-weight:400">  ${sub}</span>` : ''}</div>
-                      </div>
-                    </div>`;
-                  const unitSys = states['input_select.tesla_unit_system']?.state || 'Metric (km, °C, bar)';
-                  const isMi = unitSys !== 'Metric (km, °C, bar)';
-                  const distUnit = isMi ? 'mi' : 'km';
-                  const distKm = parseFloat(states['sensor.tesla_monthly_distance']?.state || '0') || 0;
-                  const dist = fmt(isMi ? distKm * 0.621371 : distKm, distUnit, 0);
-                  const energy = fmt(states['sensor.tesla_monthly_charging_energy']?.state, 'kWh', 2);
-                  const elecCost = ftm(states['sensor.tesla_monthly_electric_cost']?.state);
-                  const fuelEq = ftm(states['sensor.tesla_monthly_fuel_cost']?.state);
-                  const elecV = parseFloat(states['sensor.tesla_monthly_electric_cost']?.state || '0') || 0;
-                  const fuelV = parseFloat(states['sensor.tesla_monthly_fuel_cost']?.state || '0') || 0;
-                  const saved = Math.max(0, fuelV - elecV);
-                  return `<div style="width:100%;text-align:left">
-                    <div style="color:#ccc;font-size:12px;font-weight:700;letter-spacing:1.5px;padding-bottom:4px">📅 THIS MONTH</div>
-                    ${row('🚗', 'DISTANCE', dist, '')}
-                    ${row('⚡', 'ENERGY CHARGED', energy, '')}
-                    ${row('💰', 'ELECTRIC COST', elecCost, `vs fuel ${fuelEq}`)}
-                    ${saved > 0 ? row('✅', 'SAVED VS ICE', currencySymbol + Math.round(saved).toLocaleString(currencyLocale), '') : ''}
-                  </div>`;
-                ]]]
-            styles:
-              card:
-                - background-color: rgba(28, 28, 30, 0.95)
-                - border-radius: 16px
-                - padding: 16px 20px
-              grid:
-                - grid-template-areas: '"block"'
-                - grid-template-columns: 1fr
-                - grid-template-rows: 1fr
-              custom_fields:
-                block:
-                  - width: 100%
-
-          # PREVIOUS MONTH (last complete calendar month; distance snapshot +
-          # utility_meter last_period both populate on the 1st of each month --
-          # will read "–"/Ft0 until the first rollover after this card was added)
+            template: tesla_period_summary
+            variables:
+              period: month
+      - type: grid
+        cards:
           - type: custom:button-card
-            show_icon: false
-            show_name: false
-            show_state: false
-            tap_action:
-              action: none
-            custom_fields:
-              block: |
-                [[[
-                  const fmt = (raw, unit, dec=1) => {
-                    const v = parseFloat(String(raw || '0'));
-                    return isNaN(v) || v <= 0 ? '–' : `${v.toFixed(dec)} ${unit}`;
-                  };
-                  const currencySymbol = states['sensor.tesla_currency_symbol']?.state || 'Ft';
-                  const currencyLocale = states['sensor.tesla_currency_locale']?.state || 'hu-HU';
-                  const ftm = (raw) => {
-                    const v = parseFloat(String(raw || '0')) || 0;
-                    return v <= 0 ? currencySymbol + '0' : currencySymbol + Math.round(v).toLocaleString(currencyLocale);
-                  };
-                  const row = (icon, label, val, sub) =>
-                    `<div style="display:flex;align-items:center;gap:12px;padding:8px 0;border-top:1px solid rgba(255,255,255,0.07)">
-                      <span style="font-size:18px;width:22px;text-align:center;flex-shrink:0">${icon}</span>
-                      <div style="flex:1;min-width:0">
-                        <div style="color:#888;font-size:10px;font-weight:600;letter-spacing:1.2px">${label}</div>
-                        <div style="color:#fff;font-size:15px;font-weight:700">${val}${sub ? `<span style="color:#aaa;font-size:11px;font-weight:400">  ${sub}</span>` : ''}</div>
-                      </div>
-                    </div>`;
-                  const unitSys = states['input_select.tesla_unit_system']?.state || 'Metric (km, °C, bar)';
-                  const isMi = unitSys !== 'Metric (km, °C, bar)';
-                  const distUnit = isMi ? 'mi' : 'km';
-                  const distKm = parseFloat(states['sensor.tesla_previous_month_distance']?.state || '0') || 0;
-                  const dist = fmt(isMi ? distKm * 0.621371 : distKm, distUnit, 0);
-                  const energy = fmt(states['sensor.tesla_previous_month_charging_energy']?.state, 'kWh', 2);
-                  const elecCost = ftm(states['sensor.tesla_previous_month_electric_cost']?.state);
-                  const fuelEq = ftm(states['sensor.tesla_previous_month_fuel_cost']?.state);
-                  const elecV = parseFloat(states['sensor.tesla_previous_month_electric_cost']?.state || '0') || 0;
-                  const fuelV = parseFloat(states['sensor.tesla_previous_month_fuel_cost']?.state || '0') || 0;
-                  const saved = Math.max(0, fuelV - elecV);
-                  return `<div style="width:100%;text-align:left">
-                    <div style="color:#ccc;font-size:12px;font-weight:700;letter-spacing:1.5px;padding-bottom:4px">📅 PREVIOUS MONTH <span style="color:#666;font-size:10px;font-weight:400">(updates on the 1st)</span></div>
-                    ${row('🚗', 'DISTANCE', dist, '')}
-                    ${row('⚡', 'ENERGY CHARGED', energy, '')}
-                    ${row('💰', 'ELECTRIC COST', elecCost, `vs fuel ${fuelEq}`)}
-                    ${saved > 0 ? row('✅', 'SAVED VS ICE', currencySymbol + Math.round(saved).toLocaleString(currencyLocale), '') : ''}
-                  </div>`;
-                ]]]
-            styles:
-              card:
-                - background-color: rgba(28, 28, 30, 0.95)
-                - border-radius: 16px
-                - padding: 16px 20px
-              grid:
-                - grid-template-areas: '"block"'
-                - grid-template-columns: 1fr
-                - grid-template-rows: 1fr
-              custom_fields:
-                block:
-                  - width: 100%
+            template: tesla_period_summary
+            variables:
+              period: prev
 
   # ========== VIEW 2: DRIVING ANALYTICS ==========
   - title: Driving
@@ -347,7 +151,7 @@ views:
           colorize_states: true
         apex_config:
           subtitle:
-            text: The total distance driven.
+            text: "Distance per day, last 30 days. \"Per day\" = this month so far ÷ days."
             offsetY: 0
             style:
               fontSize: "12px"
@@ -371,25 +175,38 @@ views:
                 day: "MMM d"
           dataLabels:
             enabled: false
-          colors:
-            - '#1E88E5'
         series:
           - entity: sensor.tesla_monthly_distance
-            name: TOTAL
+            name: THIS MONTH
+            color: '#FF9F0A'
             unit: " km"
+            float_precision: 0
+            show:
+              in_chart: false
+              legend_value: true
+          - entity: sensor.tesla_average_daily_distance
+            name: PER DAY (AVG)
+            color: '#1E88E5'
+            unit: " km"
+            float_precision: 1
             show:
               in_chart: false
               legend_value: true
           - entity: sensor.tesla_daily_distance
-            name: km
+            name: Distance
             type: column
-            show:
-              legend_value: false
-              in_header: false
+            color: '#1E88E5'
+            unit: " km"
+            float_precision: 1
             transform: "return x > 500 ? null : x;"
+            show:
+              in_header: false
+              legend_value: false
             group_by:
               func: max
               duration: 1d
+              # Days without data stay empty instead of repeating the day before.
+              fill: 'null'
 
       # ── 2. ENERGY USED ──
       - type: custom:apexcharts-card
@@ -402,7 +219,7 @@ views:
           colorize_states: true
         apex_config:
           subtitle:
-            text: The total energy consumed while driving.
+            text: "Energy the car used while driving, per day, last 30 days."
             offsetY: 0
             style:
               fontSize: "12px"
@@ -426,23 +243,37 @@ views:
                 day: "MMM d"
           dataLabels:
             enabled: false
-          colors:
-            - '#1E88E5'
         series:
           - entity: sensor.tesla_monthly_energy_consumed
-            name: TOTAL
+            name: THIS MONTH
+            color: '#FF9F0A'
             unit: " kWh"
+            float_precision: 0
+            show:
+              in_chart: false
+              legend_value: true
+          - entity: sensor.tesla_average_daily_energy_consumed
+            name: PER DAY (AVG)
+            color: '#1E88E5'
+            unit: " kWh"
+            float_precision: 1
             show:
               in_chart: false
               legend_value: true
           - entity: sensor.tesla_daily_energy_consumed
-            name: DAILY
+            name: Energy used
             type: column
+            color: '#1E88E5'
+            unit: " kWh"
+            float_precision: 1
             show:
+              in_header: false
               legend_value: false
             group_by:
               func: max
               duration: 1d
+              # Days without data stay empty instead of repeating the day before.
+              fill: 'null'
 
       # ── 3. ELECTRIC COST ──
       - type: custom:apexcharts-card
@@ -455,7 +286,7 @@ views:
           colorize_states: true
         apex_config:
           subtitle:
-            text: Based on the charging efficiency and cost of this period.
+            text: "What charging cost, per day, last 30 days. Per km = this month's average."
             offsetY: 0
             style:
               fontSize: "12px"
@@ -479,30 +310,34 @@ views:
                 day: "MMM d"
           dataLabels:
             enabled: false
-          colors:
-            - '#FF9F0A'
-            - '#FF9F0A'
-            - '#1E88E5'
         series:
           - entity: sensor.tesla_monthly_electric_cost
-            name: TOTAL
+            name: THIS MONTH
+            color: '#FF9F0A'
+            float_precision: 0
             show:
               in_chart: false
               legend_value: true
           - entity: sensor.tesla_electric_cost_per_km
-            name: PER KILOMETER
+            name: PER KM
+            color: '#1E88E5'
+            float_precision: 1
             show:
               in_chart: false
               legend_value: true
           - entity: sensor.tesla_daily_electric_cost
-            name: Cost
+            name: Charging cost
             type: column
+            color: '#FF9F0A'
+            float_precision: 0
             show:
-              legend_value: false
               in_header: false
+              legend_value: false
             group_by:
               func: max
               duration: 1d
+              # Days without data stay empty instead of repeating the day before.
+              fill: 'null'
 
       # ── 4. FUEL COST ──
       - type: custom:apexcharts-card
@@ -515,7 +350,7 @@ views:
           colorize_states: true
         apex_config:
           subtitle:
-            text: The total cost of driving if fuel was used.
+            text: "What the same driving would cost in a petrol/diesel car, per day, last 30 days."
             offsetY: 0
             style:
               fontSize: "12px"
@@ -539,29 +374,37 @@ views:
                 day: "MMM d"
           dataLabels:
             enabled: false
-          colors:
-            - '#1E88E5'
         series:
           - entity: sensor.tesla_monthly_fuel_cost
-            name: TOTAL
+            name: THIS MONTH
+            color: '#FF9F0A'
+            float_precision: 0
+            show:
+              in_chart: false
+              legend_value: true
+          - entity: sensor.tesla_fuel_cost_per_km
+            name: PER KM
+            color: '#1E88E5'
+            float_precision: 1
             show:
               in_chart: false
               legend_value: true
           - entity: sensor.tesla_daily_fuel_cost_equivalent
-            name: DAILY
+            name: Fuel would cost
             type: column
-            show:
-              legend_value: false
-            # Outlier guard: was a hardcoded `x > 25000` which silently assumed
-            # HUF pricing. Derived instead from the user's actual configured
-            # fuel price (input_number.comparison_fuel_price_per_liter), so it
-            # scales correctly for any currency: caps at a 100-litre-equivalent
-            # single day, which is already an implausible amount of driving.
+            color: '#1E88E5'
+            float_precision: 0
+            # Outlier guard derived from the configured fuel price (100 litres in a day).
             transform: >
               return x > (hass.states['input_number.comparison_fuel_price_per_liter']?.state * 100 || 25000) ? null : x;
+            show:
+              in_header: false
+              legend_value: false
             group_by:
               func: max
               duration: 1d
+              # Days without data stay empty instead of repeating the day before.
+              fill: 'null'
 
       # ── 5. DURATION ──
       - type: custom:apexcharts-card
@@ -574,7 +417,7 @@ views:
           colorize_states: true
         apex_config:
           subtitle:
-            text: The total time spent driving.
+            text: "Time spent driving, per day, last 30 days (minutes)."
             offsetY: 0
             style:
               fontSize: "12px"
@@ -601,27 +444,37 @@ views:
               text: "min"
           dataLabels:
             enabled: false
-          colors:
-            - '#1E88E5'
         series:
-          # Uses the plain-numeric "minutes" sensors (no device_class), not
-          # the raw history_stats hours/duration sensors -- see comment on
-          # sensor.tesla_driving_time_30d in configuration.yaml for why.
-          - entity: sensor.tesla_driving_time_30d
-            name: TOTAL
+          - entity: sensor.tesla_monthly_driving_time
+            name: THIS MONTH
+            color: '#FF9F0A'
+            unit: " h"
+            float_precision: 1
+            show:
+              in_chart: false
+              legend_value: true
+          - entity: sensor.tesla_average_daily_driving_time
+            name: PER DAY (AVG)
+            color: '#1E88E5'
             unit: " min"
+            float_precision: 0
             show:
               in_chart: false
               legend_value: true
           - entity: sensor.tesla_driving_time_today
-            name: min
+            name: Driving time
             type: column
+            color: '#1E88E5'
+            unit: " min"
+            float_precision: 0
+            show:
+              in_header: false
+              legend_value: false
             group_by:
               func: max
               duration: 1d
-            show:
-              legend_value: false
-              in_header: false
+              # Days without data stay empty instead of repeating the day before.
+              fill: 'null'
 
       # ── 6. SPEED ──
       - type: custom:apexcharts-card
@@ -634,7 +487,7 @@ views:
           colorize_states: true
         apex_config:
           subtitle:
-            text: Average and peak driving speeds during this period.
+            text: "Average and top speed per day, last 30 days. Monthly average = distance ÷ time in Drive."
             offsetY: 0
             style:
               fontSize: "12px"
@@ -661,27 +514,54 @@ views:
               text: "km/h"
           dataLabels:
             enabled: false
-          colors:
-            - '#90CAF9'
-            - '#1565C0'
           legend:
             show: true
             position: bottom
         series:
-          - entity: sensor.vehicle_speed
-            name: AVERAGE
-            type: column
+          - entity: sensor.tesla_average_speed_this_month
+            name: AVG THIS MONTH
+            color: '#FF9F0A'
             unit: " km/h"
+            float_precision: 0
+            show:
+              in_chart: false
+              legend_value: true
+          - entity: sensor.tesla_top_speed_this_month
+            name: TOP THIS MONTH
+            color: '#1E88E5'
+            unit: " km/h"
+            float_precision: 0
+            show:
+              in_chart: false
+              legend_value: true
+          - entity: sensor.vehicle_speed
+            name: Average
+            type: column
+            color: '#90CAF9'
+            unit: " km/h"
+            float_precision: 0
+            show:
+              in_header: false
+              legend_value: false
             group_by:
               func: avg
               duration: 1d
+              # Days without data stay empty instead of repeating the day before.
+              fill: 'null'
           - entity: sensor.vehicle_speed
-            name: MAX
+            name: Top
             type: column
+            color: '#1565C0'
             unit: " km/h"
+            float_precision: 0
+            show:
+              in_header: false
+              legend_value: false
             group_by:
               func: max
               duration: 1d
+              # Days without data stay empty instead of repeating the day before.
+              fill: 'null'
 
       # ── 7. TOTAL DRIVES ──
       - type: custom:apexcharts-card
@@ -689,12 +569,12 @@ views:
         cache: true
         header:
           show: true
-          title: Total drives
+          title: Drives
           show_states: true
           colorize_states: true
         apex_config:
           subtitle:
-            text: The number of drives during this period.
+            text: "Number of drives per day, last 30 days."
             offsetY: 0
             style:
               fontSize: "12px"
@@ -721,22 +601,36 @@ views:
             forceNiceScale: true
           dataLabels:
             enabled: false
-          colors:
-            - '#1E88E5'
         series:
-          - entity: sensor.tesla_drive_sessions_30d
-            name: TOTAL
+          - entity: sensor.tesla_drive_sessions_month
+            name: THIS MONTH
+            color: '#FF9F0A'
+            unit: " drives"
+            float_precision: 0
+            show:
+              in_chart: false
+              legend_value: true
+          - entity: sensor.tesla_average_daily_drives
+            name: PER DAY (AVG)
+            color: '#1E88E5'
+            unit: " drives"
+            float_precision: 1
             show:
               in_chart: false
               legend_value: true
           - entity: sensor.tesla_drive_sessions_today
-            name: drives
+            name: Drives
             type: column
+            color: '#1E88E5'
+            float_precision: 0
             show:
+              in_header: false
               legend_value: false
             group_by:
               func: max
               duration: 1d
+              # Days without data stay empty instead of repeating the day before.
+              fill: 'null'
 
       # ── 8. ENERGY EFFICIENCY ──
       - type: custom:apexcharts-card
@@ -749,7 +643,7 @@ views:
           colorize_states: true
         apex_config:
           subtitle:
-            text: Energy usage while driving.
+            text: "Energy used per km (lower is better). Average = this month and last month. Bars: each driving day."
             offsetY: 0
             style:
               fontSize: "12px"
@@ -777,23 +671,37 @@ views:
             min: 0
           dataLabels:
             enabled: false
-          colors:
-            - '#1E88E5'
         series:
           - entity: sensor.tesla_efficiency_wh_per_km
             name: AVERAGE
+            color: '#FF9F0A'
             unit: " Wh/km"
+            float_precision: 0
+            show:
+              in_chart: false
+              legend_value: true
+          - entity: sensor.tesla_last_driving_day_efficiency
+            name: LAST DRIVING DAY
+            color: '#1E88E5'
+            unit: " Wh/km"
+            float_precision: 0
             show:
               in_chart: false
               legend_value: true
           - entity: sensor.tesla_daily_efficiency_wh_per_km
-            name: Wh/km
+            name: Efficiency
             type: column
+            color: '#1E88E5'
+            unit: " Wh/km"
+            float_precision: 0
             show:
+              in_header: false
               legend_value: false
             group_by:
               func: last
               duration: 1d
+              # Days without data stay empty instead of repeating the day before.
+              fill: 'null'
 
       # ── 9. DISTANCE · YEARLY ──
       - type: custom:apexcharts-card
@@ -842,13 +750,13 @@ views:
             - '#1E88E5'
         series:
           - entity: sensor.tesla_yearly_distance
-            name: YEARLY
+            name: THIS YEAR
             unit: " km"
             show:
               in_chart: false
               legend_value: true
           - entity: sensor.tesla_monthly_distance
-            name: MONTHLY
+            name: THIS MONTH
             unit: " km"
             show:
               in_chart: false
@@ -914,13 +822,13 @@ views:
             - '#1E88E5'
         series:
           - entity: sensor.tesla_yearly_energy_consumed
-            name: YEARLY
+            name: THIS YEAR
             unit: " kWh"
             show:
               in_chart: false
               legend_value: true
           - entity: sensor.tesla_monthly_energy_consumed
-            name: MONTHLY
+            name: THIS MONTH
             unit: " kWh"
             show:
               in_chart: false
@@ -983,12 +891,12 @@ views:
             - '#FF9F0A'
         series:
           - entity: sensor.tesla_yearly_electric_cost
-            name: YEARLY
+            name: THIS YEAR
             show:
               in_chart: false
               legend_value: true
           - entity: sensor.tesla_monthly_electric_cost
-            name: MONTHLY
+            name: THIS MONTH
             show:
               in_chart: false
               legend_value: true
@@ -1066,12 +974,12 @@ views:
             - '#1E88E5'
         series:
           - entity: sensor.tesla_yearly_fuel_cost
-            name: YEARLY
+            name: THIS YEAR
             show:
               in_chart: false
               legend_value: true
           - entity: sensor.tesla_monthly_fuel_cost
-            name: MONTHLY
+            name: THIS MONTH
             show:
               in_chart: false
               legend_value: true
@@ -1095,48 +1003,14 @@ views:
               legend_value: false
 
   # ========== VIEW 3: CHARGING ANALYTICS ==========
+  # Header values: NOW = live reading (0 when not charging), THIS MONTH /
+  # TODAY = totals. Bars: one per day, last 30 days; empty when no data.
   - title: Charging
     path: charging
     icon: mdi:lightning-bolt
     cards:
 
-      # ── Charger Power ──
-      - type: custom:apexcharts-card
-        graph_span: 30d
-        cache: true
-        header:
-          show: true
-          title: "Charger power"
-          show_states: true
-          colorize_states: true
-        apex_config:
-          chart:
-            height: 230
-            foreColor: '#7F7F7F'
-            toolbar:
-              show: false
-          plotOptions:
-            bar:
-              columnWidth: 70%
-              borderRadius: 2
-          grid:
-            borderColor: '#2D2D2D'
-            strokeDashArray: 4
-          xaxis:
-            type: datetime
-          dataLabels:
-            enabled: false
-          colors:
-            - '#1E88E5'
-        series:
-          - entity: sensor.vehicle_charger_power
-            name: "kW"
-            type: column
-            group_by:
-              func: max
-              duration: 1d
-
-      # ── Energy Added ──
+      # ── Energy added ──
       - type: custom:apexcharts-card
         graph_span: 30d
         cache: true
@@ -1146,6 +1020,12 @@ views:
           show_states: true
           colorize_states: true
         apex_config:
+          subtitle:
+            text: "Energy charged into the battery per day, last 30 days."
+            offsetY: 0
+            style:
+              fontSize: "12px"
+              color: "#888888"
           chart:
             height: 230
             foreColor: '#7F7F7F'
@@ -1160,26 +1040,100 @@ views:
             strokeDashArray: 4
           xaxis:
             type: datetime
+            labels:
+              datetimeFormatter:
+                day: "MMM d"
           dataLabels:
             enabled: false
-          colors:
-            - '#1565C0'
-            - '#1E88E5'
         series:
           - entity: sensor.tesla_monthly_charging_energy
-            name: "TOTAL"
+            name: THIS MONTH
+            color: '#FF9F0A'
             unit: " kWh"
+            float_precision: 1
             show:
               in_chart: false
               legend_value: true
-          - entity: sensor.vehicle_charge_energy_added
-            name: "kWh"
+          - entity: sensor.tesla_daily_charging_energy
+            name: TODAY
+            color: '#1E88E5'
+            unit: " kWh"
+            float_precision: 1
+            show:
+              in_chart: false
+              legend_value: true
+          - entity: sensor.tesla_daily_charging_energy
+            name: Charged
             type: column
+            color: '#1E88E5'
+            float_precision: 1
+            show:
+              in_header: false
+              legend_value: false
             group_by:
               func: max
               duration: 1d
+              fill: 'null'
 
-      # ── Charge Rate ──
+
+      # ── Charger power ──
+      - type: custom:apexcharts-card
+        graph_span: 30d
+        cache: true
+        header:
+          show: true
+          title: "Charger power"
+          show_states: true
+          colorize_states: true
+        apex_config:
+          subtitle:
+            text: "Highest charging power per day, last 30 days."
+            offsetY: 0
+            style:
+              fontSize: "12px"
+              color: "#888888"
+          chart:
+            height: 230
+            foreColor: '#7F7F7F'
+            toolbar:
+              show: false
+          plotOptions:
+            bar:
+              columnWidth: 70%
+              borderRadius: 2
+          grid:
+            borderColor: '#2D2D2D'
+            strokeDashArray: 4
+          xaxis:
+            type: datetime
+            labels:
+              datetimeFormatter:
+                day: "MMM d"
+          dataLabels:
+            enabled: false
+        series:
+          - entity: sensor.vehicle_charger_power
+            name: NOW
+            color: '#FF9F0A'
+            float_precision: 1
+            show:
+              in_chart: false
+              legend_value: true
+          - entity: sensor.vehicle_charger_power
+            name: Highest
+            type: column
+            color: '#1E88E5'
+            float_precision: 1
+            show:
+              in_header: false
+              legend_value: false
+            group_by:
+              func: max
+              duration: 1d
+              fill: 'null'
+
+
+      # ── Charge rate ──
       - type: custom:apexcharts-card
         graph_span: 30d
         cache: true
@@ -1189,6 +1143,12 @@ views:
           show_states: true
           colorize_states: true
         apex_config:
+          subtitle:
+            text: "Range added per hour of charging (highest per day), last 30 days."
+            offsetY: 0
+            style:
+              fontSize: "12px"
+              color: "#888888"
           chart:
             height: 230
             foreColor: '#7F7F7F'
@@ -1203,19 +1163,34 @@ views:
             strokeDashArray: 4
           xaxis:
             type: datetime
+            labels:
+              datetimeFormatter:
+                day: "MMM d"
           dataLabels:
             enabled: false
-          colors:
-            - '#4CAF50'
         series:
           - entity: sensor.vehicle_charge_rate
-            name: "km/h"
+            name: NOW
+            color: '#FF9F0A'
+            float_precision: 0
+            show:
+              in_chart: false
+              legend_value: true
+          - entity: sensor.vehicle_charge_rate
+            name: Highest
             type: column
+            color: '#4CAF50'
+            float_precision: 0
+            show:
+              in_header: false
+              legend_value: false
             group_by:
               func: max
               duration: 1d
+              fill: 'null'
 
-      # ── Charger Current ──
+
+      # ── Charger current ──
       - type: custom:apexcharts-card
         graph_span: 30d
         cache: true
@@ -1225,6 +1200,12 @@ views:
           show_states: true
           colorize_states: true
         apex_config:
+          subtitle:
+            text: "Highest charging current per day, last 30 days."
+            offsetY: 0
+            style:
+              fontSize: "12px"
+              color: "#888888"
           chart:
             height: 230
             foreColor: '#7F7F7F'
@@ -1239,539 +1220,508 @@ views:
             strokeDashArray: 4
           xaxis:
             type: datetime
+            labels:
+              datetimeFormatter:
+                day: "MMM d"
           dataLabels:
             enabled: false
-          colors:
-            - '#9C27B0'
         series:
           - entity: sensor.vehicle_charger_current
-            name: "A"
+            name: NOW
+            color: '#FF9F0A'
+            float_precision: 0
+            show:
+              in_chart: false
+              legend_value: true
+          - entity: sensor.vehicle_charger_current
+            name: Highest
             type: column
+            color: '#9C27B0'
+            float_precision: 0
+            show:
+              in_header: false
+              legend_value: false
             group_by:
               func: max
               duration: 1d
+              fill: 'null'
+
 
   # ========== VIEW 4: SETTINGS ==========
+  # Each topic is one vertical-stack, so the heading always stays with its
+  # controls on desktop (masonry used to split them into different columns).
+  # Notes-only and maintenance items live on the Advanced sub-page below.
   - title: Settings
     path: settings
     icon: mdi:cog
     cards:
-      - type: markdown
-        content: |
-          ## Settings & Configuration
 
-      # Currency Selector
-      - type: markdown
-        content: |
-          ## 💱 Currency
-
-          Choose the currency used for all cost calculations and displays
-          across both dashboards (electricity cost, fuel comparison, savings,
-          projections, history). The number you enter for rates below should
-          already be in this currency.
-
-      - type: custom:mushroom-select-card
-        entity: input_select.tesla_currency
-        name: "Currency"
-        icon: mdi:cash-multiple
-
-      # Unit System Selector
-      - type: markdown
-        content: |
-          ## 📏 Unit System
-
-          Choose how distance, speed, tire pressure, and temperature are
-          displayed across both dashboards. Charging/battery energy always
-          stays in kWh/kW/A/V regardless of this setting (that's universal
-          for EVs, even in the US). **UK** uses miles/mph like US Imperial,
-          but keeps °C and bar like Metric — matching how most UK/Ireland
-          drivers actually configure their car.
-
-          **Known limitation:** the long-term history charts on the
-          *Driving* and *Charging* analytics tabs currently always plot in
-          km / km/h / Wh per km regardless of this setting — only this
-          Settings tab, the Overview dashboard, and the History tab's
-          Today/Week/Month summary cards fully respect it for now.
-
-          **Also note:** this only changes how these *custom dashboard
-          cards* display values — the underlying sensors (odometer, range,
-          tire pressure, temperature, etc.) always store km/bar/°C
-          internally, matching what the Tesla Fleet integration natively
-          reports. So if you check a value in **Developer Tools → States**,
-          a native History/Logbook entry, or a plain `history-graph` /
-          `statistics-graph` card outside these dashboards, it'll always
-          show km/bar/°C no matter what you pick above. (This is
-          intentional — dynamically changing a stats-tracked sensor's unit
-          at runtime would trigger Home Assistant's "unit changed" repair
-          warnings and can disrupt Long-Term Statistics.)
-
-      - type: custom:mushroom-select-card
-        entity: input_select.tesla_unit_system
-        name: "Unit System"
-        icon: mdi:ruler-square-compass
-
-      # Recommended Tire Pressure Configuration
-      - type: markdown
-        content: |
-          ## 🛞 Wheels & Recommended Cold Tire Pressure
-
-          Tesla's Fleet API only reports each wheel's *live* pressure — it
-          doesn't expose a manufacturer-recommended value, and the correct
-          number depends on your specific wheel size (it isn't universal).
-
-          Pick your wheel size below and the pressure + range-adjustment
-          sliders auto-fill with Tesla community-typical starting values —
-          then double-check the pressure against the placard on your
-          driver's door jamb and edit if it differs. Pressure is always
-          stored in bar; it converts to psi on the Tires tab automatically
-          if you're using US Imperial units.
-
-      - type: custom:mushroom-select-card
-        entity: input_select.tesla_wheel_size
-        name: "Wheel Size"
-        icon: mdi:tire
-
-      - type: custom:mushroom-number-card
-        entity: input_number.tesla_recommended_tire_pressure
-        name: "Recommended Cold Pressure"
-        icon: mdi:gauge
-        min: 1.5
-        max: 3.8
-        step: 0.05
-
-      - type: markdown
-        content: |
-          **Range adjustment:** larger/heavier wheels increase rolling
-          resistance, reducing real-world range below the vehicle's
-          official rated range. This % is subtracted from the official
-          range to estimate a more realistic figure — shown in brackets
-          next to the official range throughout both dashboards. It's a
-          rough estimate; tune it over time based on your own observed
-          real-world range if it doesn't match.
-
-      - type: custom:mushroom-number-card
-        entity: input_number.tesla_wheel_range_adjustment_pct
-        name: "Wheel Range Adjustment"
-        icon: mdi:speedometer
-        min: 0
-        max: 25
-        step: 0.5
-
-      # Electricity Cost Configuration
-      - type: markdown
-        content: |
-          ## ⚡ Electricity Costs
-
-      - type: custom:mushroom-number-card
-        entity: input_number.tesla_default_electricity_cost
-        name: "Default Electricity Rate"
-        icon: mdi:cash
-        min: 0
-        max: 200
-        step: 0.5
-
-      # Hungarian electricity tariff (agents.md Section 21)
-      - type: markdown
-        content: |
-          ## 🇭🇺 Hungarian Electricity Tariff
-
-          Pick how your home electricity is billed. The price in force
-          *while the car charges* is added up into every charging-cost
-          figure on both dashboards (changing the tariff later does not
-          rewrite costs already counted).
-
-          - **Off** — every charge is priced at the Default Electricity Rate above.
-          - **Tariff A** — 36.21 Ft/kWh inside your discounted quota
-            (2,523 kWh/year, counted per day: ~207 kWh in 30-day months,
-            ~214 kWh in 31-day months), then the above-quota A1 rate
-            (~70.10 Ft/kWh, read live from dnap.hu).
-          - **Tariff D** — 36.21 Ft/kWh inside the quota, then the live
-            quarter-hour Tariff D price from dnap.hu (it can even be
-            negative). Turn on **Full Auto Charging** below to charge in
-            the cheapest quarter hours automatically.
-
-          Charging away from home (Superchargers etc.) is always priced at
-          the Default Electricity Rate. Tariff prices are in Hungarian
-          Forint — keep the Currency set to HUF when using Tariff A or D.
-
-      - type: custom:mushroom-select-card
-        entity: input_select.tesla_tariff_mode
-        name: "Tariff"
-        icon: mdi:transmission-tower
-
-      - type: custom:mushroom-entity-card
-        entity: input_boolean.tesla_use_discounted_quota
-        name: "Use Discounted Quota (rezsicsökkentett sáv)"
-        icon: mdi:sale
-        tap_action:
-          action: toggle
-
-      - type: markdown
-        content: |
-          **Quota tracking:** to count your real monthly usage, enter the
-          entity ID of a **lifetime** grid-import energy sensor (kWh, only
-          ever goes up — e.g. a smart-meter / P1 reader sensor such as
-          `sensor.your_grid_import_kwh`). Leave it empty to estimate usage
-          instead: *household kWh per month (without the car)* spread
-          evenly over the month, plus the car's home charging.
-
-          **Started mid-month?** Type what your home has already used this
-          month (from your meter or your provider's app) into **Used This
-          Month So Far**. The count is corrected to that value right away
-          and keeps counting up from there. It resets with the next month.
-
-      - type: entities
-        entities:
-          - entity: input_text.tesla_grid_import_entity
-            name: "Grid Import Sensor (entity ID)"
-          - entity: input_number.tesla_household_monthly_kwh
-            name: "Household kWh / Month (without car)"
-          - entity: input_number.tesla_quota_used_this_month
-            name: "Used This Month So Far (corrects the count)"
-
-      - type: markdown
-        content: |
-          {% set mode = states('input_select.tesla_tariff_mode') %}
-          {% set price = states('sensor.tesla_active_charging_price') %}
-          {% set unit = 'Ft' if mode in ['Tariff A', 'Tariff D'] else states('sensor.tesla_currency_symbol') %}
-          {% set d = states('sensor.tesla_d_tariff_price') %}
-          {% set cheap = states('sensor.tesla_d_tariff_cheapest_hour') %}
-          {% set src = state_attr('sensor.tesla_quota_usage_monthly', 'source') %}
-
-          ### Live Tariff Status
-
-          | | |
-          |---|---|
-          | **Active charging price** | {{ price ~ ' ' ~ unit ~ '/kWh' if price | is_number else '–' }} ({{ state_attr('sensor.tesla_active_charging_price', 'source') | default('–', true) }}) |
-          | **Tariff A price now** | {{ states('sensor.tesla_tariff_a_current_price') }} Ft/kWh |
-          | **Tariff D price now** | {{ d ~ ' Ft/kWh' if d | is_number else 'no data from dnap.hu right now' }} |
-          | **Cheapest D hour (next 24 h)** | {{ as_timestamp(cheap) | timestamp_custom('%a %H:%M') if as_timestamp(cheap, none) is not none else '–' }} |
-          | **Quota used this month** | {{ states('sensor.tesla_quota_usage_monthly') }} / {{ states('sensor.tesla_discounted_quota_monthly') }} kWh ({{ 'grid meter' if src == 'meter' else 'estimate' }}{{ ', corrected ' ~ ('%+.1f' | format(state_attr('sensor.tesla_quota_usage_monthly', 'correction_kwh') | float(0))) ~ ' kWh' if state_attr('sensor.tesla_quota_usage_monthly', 'correction_kwh') | float(0) != 0 else '' }}) |
-          | **Quota remaining** | {{ states('sensor.tesla_quota_remaining_monthly') }} kWh |
-          | **Discounted band** | {{ 'Active (36.21 Ft/kWh)' if is_state('binary_sensor.tesla_discount_band_active', 'on') else ('Used up' if is_state('input_boolean.tesla_use_discounted_quota', 'on') else 'Disabled') }} |
-          | **Full auto charging** | {{ state_attr('sensor.tesla_auto_charge_plan', 'summary') | default('–', true) if is_state('input_boolean.tesla_full_auto_charging', 'on') else 'Off' }} |
-
-
-          <sub>Tariff D prices: [dnap.hu](https://dnap.hu) (wholesale price:
-          Bundesnetzagentur | SMARD.de), CC BY 4.0. On days dnap.hu has no
-          data yet, Tariff D falls back to the above-quota A1 rate.</sub>
-
-      # Smart Charging (off-peak window automation)
-      - type: markdown
-        content: |
-          ## 🌙 Smart Charging
-
-          When enabled, charging automatically starts once per day at the
-          window start time below (if plugged in and below your target %),
-          and stops if the window ends before the target is reached — so you
-          don't accidentally pay peak rates. This fires **at most once per
-          day** (one start, one stop) by design; it will not repeatedly
-          toggle charging on/off.
-
-          Works with every tariff. While **Full Auto Charging** (below) is
-          on, this window is not used: Full auto decides when to charge.
-          The Target Charge Limit applies to both.
-
-      - type: custom:mushroom-entity-card
-        entity: input_boolean.tesla_enable_smart_charging
-        name: "Enable Smart Charging"
-        icon: mdi:wand-magic-sparkles
-        tap_action:
-          action: toggle
-
-      - type: custom:mushroom-number-card
-        entity: input_number.tesla_target_charge_limit
-        name: "Target Charge Limit"
-        icon: mdi:battery-80
-        min: 50
-        max: 100
-        step: 1
-
-      - type: horizontal-stack
+      # Currency & units
+      - type: vertical-stack
         cards:
-          - type: custom:mushroom-entity-card
-            entity: input_datetime.tesla_smart_charge_window_start
-            name: "Window Start"
-            icon: mdi:clock-start
-            tap_action:
-              action: more-info
-          - type: custom:mushroom-entity-card
-            entity: input_datetime.tesla_smart_charge_window_end
-            name: "Window End"
-            icon: mdi:clock-end
-            tap_action:
-              action: more-info
+          - type: markdown
+            content: |
+              ## 💱 Currency & 📏 Units
 
-      # Full Auto Charging (agents.md Section 22)
-      - type: markdown
-        content: |
-          ## 🤖 Full Auto Charging
+              Pick the currency you pay in (type every price on this page in it) and how
+              distance, speed, tire pressure and temperature are shown. Energy always
+              stays in kWh / kW. The Driving and Charging charts always use km.
+          - type: custom:mushroom-select-card
+            entity: input_select.tesla_currency
+            name: "Currency"
+            icon: mdi:cash-multiple
+          - type: custom:mushroom-select-card
+            entity: input_select.tesla_unit_system
+            name: "Unit System"
+            icon: mdi:ruler-square-compass
 
-          When on, Home Assistant decides by itself when the car charges at
-          home, with every tariff. Every 5 minutes it looks at:
-
-          - how much energy the car needs to reach the **Target Charge
-            Limit** (above) by the **Ready By** time (or an earlier *Next
-            Departure*),
-          - the price of every quarter hour until then (live Tariff D
-            prices, the Tariff A rate, or the Default Electricity Rate),
-          - the solar forecast (Open-Meteo or Forecast.Solar, which already
-            include the weather), corrected with what your panels produce right now,
-          - what your exported solar is worth (**Solar Feed-in Price**).
-
-          Then it charges the cheapest way: on solar surplus when there is
-          enough (the current follows the sun, at least 5 A, topped up from
-          the grid only while that's still cheaper than charging from the
-          grid alone), and the rest in the cheapest grid block before the
-          deadline. On a cloudy day it simply waits for the cheap block,
-          e.g. at night. If prices are equal it charges as late as
-          possible.
-
-          - Below the **Always Charge Below Battery Level** it charges
-            straight away; at or below the **Always Charge Below Price**
-            too.
-          - It starts or stops at most once per 30 minutes and changes the
-            amps at most every 5 minutes, so charging never flaps.
-          - When the car starts charging by itself after you plug in, Full
-            auto takes that session over (it may pause it until the cheap
-            block).
-          - **Charge now** charges straight away to the car's own limit
-            until you unplug. **Stop charging** (Battery tab) pauses Full
-            auto until you unplug.
-
-          Turn off *Scheduled Charging* in the Tesla app, or it will fight
-          Full auto. Solar and cost figures are estimates.
-
-      - type: horizontal-stack
+      # Wheels & tires
+      - type: vertical-stack
         cards:
+          - type: markdown
+            content: |
+              ## 🛞 Wheels & Tires
+
+              Pick your wheel size: the recommended cold pressure and the range
+              adjustment fill in automatically. Check the pressure against the sticker
+              in the driver's door frame and change it if it's different.
+
+              **Range adjustment:** bigger wheels lower the real-world range. This % is
+              taken off Tesla's rated range to show the "≈ real-world" range.
+          - type: custom:mushroom-select-card
+            entity: input_select.tesla_wheel_size
+            name: "Wheel Size"
+            icon: mdi:tire
+          - type: custom:mushroom-number-card
+            entity: input_number.tesla_recommended_tire_pressure
+            name: "Recommended Cold Pressure"
+            icon: mdi:gauge
+            min: 1.5
+            max: 3.8
+            step: 0.05
+          - type: custom:mushroom-number-card
+            entity: input_number.tesla_wheel_range_adjustment_pct
+            name: "Wheel Range Adjustment"
+            icon: mdi:speedometer
+            min: 0
+            max: 25
+            step: 0.5
+
+      # Electricity price + Hungarian tariff (agents.md Section 21)
+      - type: vertical-stack
+        cards:
+          - type: markdown
+            content: |
+              ## ⚡ Electricity Price
+
+              **Default rate:** price per kWh when no tariff is selected, and for any
+              charging away from home.
+
+              **Tariff (Hungary):**
+              - **Off**: always the default rate.
+              - **Tariff A**: 36.21 Ft/kWh within your discounted quota (2,523 kWh a
+                year, ~207 kWh a month), then the above-quota A1 rate (~70 Ft/kWh).
+              - **Tariff D**: 36.21 Ft/kWh within the quota, then the live
+                quarter-hour price from dnap.hu (it can even be negative).
+
+              Keep the currency on HUF for Tariff A or D. Each kWh is priced at the
+              moment it's charged; changing the tariff later doesn't change past costs.
+          - type: custom:mushroom-number-card
+            entity: input_number.tesla_default_electricity_cost
+            name: "Default Electricity Rate"
+            icon: mdi:cash
+            min: 0
+            max: 200
+            step: 0.5
+          - type: custom:mushroom-select-card
+            entity: input_select.tesla_tariff_mode
+            name: "Tariff"
+            icon: mdi:transmission-tower
           - type: custom:mushroom-entity-card
-            entity: input_boolean.tesla_full_auto_charging
-            name: "Full Auto Charging"
-            icon: mdi:robot-outline
+            entity: input_boolean.tesla_use_discounted_quota
+            name: "Use Discounted Quota (rezsicsökkentett sáv)"
+            icon: mdi:sale
             tap_action:
               action: toggle
+          - type: markdown
+            content: |
+              **Quota tracking (optional):** enter a lifetime grid-import energy
+              sensor (kWh, only goes up) to count your real usage. Leave it empty to
+              estimate it from your household kWh per month plus home charging.
+              Started mid-month? Type what you've used so far this month into
+              **Used This Month So Far**.
+          - type: entities
+            entities:
+              - entity: input_text.tesla_grid_import_entity
+                name: "Grid Import Sensor (entity ID)"
+              - entity: input_number.tesla_household_monthly_kwh
+                name: "Household kWh / Month (without car)"
+              - entity: input_number.tesla_quota_used_this_month
+                name: "Used This Month So Far (corrects the count)"
+          - type: markdown
+            content: |
+              {% set mode = states('input_select.tesla_tariff_mode') %}
+              {% set price = states('sensor.tesla_active_charging_price') %}
+              {% set unit = 'Ft' if mode in ['Tariff A', 'Tariff D'] else states('sensor.tesla_currency_symbol') %}
+              {% set d = states('sensor.tesla_d_tariff_price') %}
+              {% set cheap = states('sensor.tesla_d_tariff_cheapest_hour') %}
+              {% set src = state_attr('sensor.tesla_quota_usage_monthly', 'source') %}
+
+              ### Live Tariff Status
+
+              | | |
+              |---|---|
+              | **Active charging price** | {{ price ~ ' ' ~ unit ~ '/kWh' if price | is_number else '–' }} ({{ state_attr('sensor.tesla_active_charging_price', 'source') | default('–', true) }}) |
+              | **Tariff A price now** | {{ states('sensor.tesla_tariff_a_current_price') }} Ft/kWh |
+              | **Tariff D price now** | {{ d ~ ' Ft/kWh' if d | is_number else 'no data from dnap.hu right now' }} |
+              | **Cheapest D hour (next 24 h)** | {{ as_timestamp(cheap) | timestamp_custom('%a %H:%M') if as_timestamp(cheap, none) is not none else '–' }} |
+              | **Quota used this month** | {{ states('sensor.tesla_quota_usage_monthly') }} / {{ states('sensor.tesla_discounted_quota_monthly') }} kWh ({{ 'grid meter' if src == 'meter' else 'estimate' }}{{ ', corrected ' ~ ('%+.1f' | format(state_attr('sensor.tesla_quota_usage_monthly', 'correction_kwh') | float(0))) ~ ' kWh' if state_attr('sensor.tesla_quota_usage_monthly', 'correction_kwh') | float(0) != 0 else '' }}) |
+              | **Quota remaining** | {{ states('sensor.tesla_quota_remaining_monthly') }} kWh |
+              | **Discounted band** | {{ 'Active (36.21 Ft/kWh)' if is_state('binary_sensor.tesla_discount_band_active', 'on') else ('Used up' if is_state('input_boolean.tesla_use_discounted_quota', 'on') else 'Disabled') }} |
+              | **Full auto charging** | {{ state_attr('sensor.tesla_auto_charge_plan', 'summary') | default('–', true) if is_state('input_boolean.tesla_full_auto_charging', 'on') else 'Off' }} |
+
+
+              <sub>Tariff D prices: [dnap.hu](https://dnap.hu) (wholesale price:
+              Bundesnetzagentur | SMARD.de), CC BY 4.0. On days dnap.hu has no
+              data yet, Tariff D falls back to the above-quota A1 rate.</sub>
+
+      # Smart Charging (fixed time window)
+      - type: vertical-stack
+        cards:
+          - type: markdown
+            content: |
+              ## 🌙 Smart Charging (time window)
+
+              Charges inside a fixed time window (e.g. a cheap night rate), up to the
+              **Target Charge Limit**. It starts at most once and stops at most once a
+              day, so charging never switches on and off. Not used while **Full Auto
+              Charging** is on; the Target Charge Limit applies to both.
           - type: custom:mushroom-entity-card
-            entity: script.tesla_charge_now
-            name: "Charge now"
-            icon: mdi:flash-alert
-            secondary_info: none
+            entity: input_boolean.tesla_enable_smart_charging
+            name: "Enable Smart Charging"
+            icon: mdi:wand-magic-sparkles
+            tap_action:
+              action: toggle
+          - type: custom:mushroom-number-card
+            entity: input_number.tesla_target_charge_limit
+            name: "Target Charge Limit"
+            icon: mdi:battery-80
+            min: 50
+            max: 100
+            step: 1
+          - type: horizontal-stack
+            cards:
+              - type: custom:mushroom-entity-card
+                entity: input_datetime.tesla_smart_charge_window_start
+                name: "Window Start"
+                icon: mdi:clock-start
+                tap_action:
+                  action: more-info
+              - type: custom:mushroom-entity-card
+                entity: input_datetime.tesla_smart_charge_window_end
+                name: "Window End"
+                icon: mdi:clock-end
+                tap_action:
+                  action: more-info
+
+      # Full Auto Charging (agents.md Section 22)
+      - type: vertical-stack
+        cards:
+          - type: markdown
+            content: |
+              ## 🤖 Full Auto Charging
+
+              When on, Home Assistant picks when to charge at home: it reaches the
+              **Target Charge Limit** by the **Ready By** time at the lowest cost, using
+              the electricity price, your solar surplus and the solar forecast.
+
+              - Below **Always Charge Below Battery Level** it charges right away; at or
+                below **Always Charge Below Price** too.
+              - It starts or stops at most once per 30 minutes.
+              - **Charge now** charges right away until you unplug. **Stop charging**
+                (Battery tab) pauses Full auto until you unplug.
+
+              Turn off *Scheduled Charging* in the Tesla app, or the two will fight.
+              Solar and cost figures are estimates.
+          - type: horizontal-stack
+            cards:
+              - type: custom:mushroom-entity-card
+                entity: input_boolean.tesla_full_auto_charging
+                name: "Full Auto Charging"
+                icon: mdi:robot-outline
+                tap_action:
+                  action: toggle
+              - type: custom:mushroom-entity-card
+                entity: script.tesla_charge_now
+                name: "Charge now"
+                icon: mdi:flash-alert
+                secondary_info: none
+                tap_action:
+                  action: call-service
+                  service: script.tesla_charge_now
+                  confirmation:
+                    text: "Charge straight away, whatever the price, until the car is unplugged?"
+          - type: markdown
+            content: |
+              {% set p = 'sensor.tesla_auto_charge_plan' %}
+              {% set mode = states('input_select.tesla_tariff_mode') %}
+              {% set unit = 'Ft' if mode in ['Tariff A', 'Tariff D'] else states('sensor.tesla_currency_symbol') %}
+              {% macro num(v, d=1) %}{{ (v | float) | round(d) if v | is_number else '–' }}{% endmacro %}
+              {% set bs = state_attr(p, 'block_start') %}
+              {% set be = state_attr(p, 'block_end') %}
+
+              ### Plan
+
+              {% if is_state('input_boolean.tesla_full_auto_charging', 'on') %}
+              **{{ state_attr(p, 'summary') | default('Working out a plan…', true) }}**
+
+              | | |
+              |---|---|
+              | **Energy needed** | {{ num(state_attr(p, 'need_kwh')) }} kWh (~{{ num(state_attr(p, 'solar_kwh')) }} kWh from solar) |
+              | **Grid block** | {{ bs ~ ' – ' ~ be if bs and be else '–' }} |
+              | **Block price (with solar)** | {{ num(state_attr(p, 'avg_effective_price')) }} {{ unit }}/kWh |
+              | **Grid only would be** | {{ num(state_attr(p, 'grid_only_price')) }} {{ unit }}/kWh |
+              | **Estimated cost** | {{ num(state_attr(p, 'est_cost'), 0) }} {{ unit }} |
+              | **Price now** | {{ num(state_attr(p, 'price_now')) }} {{ unit }}/kWh |
+              | **Solar surplus now** | {{ num(state_attr(p, 'surplus_kw'), 2) }} kW |
+              | **Ready by** | {{ state_attr(p, 'deadline') | default('–', true) }} |
+              | **Session** | {{ 'Charge now (until unplugged)' if is_state('input_boolean.tesla_charge_now_override', 'on') else ('Paused until unplugged' if is_state('input_boolean.tesla_auto_charge_paused', 'on') else ('Managed by Full auto' if is_state('input_boolean.tesla_auto_charge_owned', 'on') else '–')) }} |
+              {% else %}
+              Full auto is off. Charging follows Smart Charging (above) or the
+              car's own settings.
+              {% endif %}
+          - type: entities
+            title: Full Auto Settings
+            entities:
+              - entity: input_datetime.tesla_charge_ready_by
+                name: "Ready By (every day)"
+              - entity: input_number.tesla_auto_charge_min_soc
+                name: "Always Charge Below Battery Level"
+              - entity: input_number.tesla_auto_charge_cheap_price
+                name: "Always Charge Below Price (-50 = never)"
+              - entity: input_number.tesla_home_charger_max_amps
+                name: "Home Charger Max Current"
+              - entity: input_select.tesla_home_charger_phases
+                name: "Home Charger Phases"
+              - entity: input_number.tesla_solar_feed_in_price
+                name: "Solar Feed-in Price"
+          - type: markdown
+            content: |
+              **Solar (optional):** enter entity IDs from Developer Tools >
+              States. *Grid Power* must be positive while importing and
+              negative while exporting (W or kW). *Solar Power* is your
+              inverter's live PV output. *Solar Forecast* is the "Estimated power
+              production - now" sensor of Open-Meteo Solar Forecast (recommended:
+              15-minute forecast) or Forecast.Solar (e.g.
+              `sensor.power_production_now`). Leave them empty without solar;
+              Full auto then plans on prices only.
+          - type: entities
+            entities:
+              - entity: input_text.tesla_grid_power_entity
+                name: "Grid Power Sensor (entity ID)"
+              - entity: input_text.tesla_pv_power_entity
+                name: "Solar Power Sensor (entity ID)"
+              - entity: input_text.tesla_solar_forecast_entity
+                name: "Solar Forecast Sensor (entity ID)"
+
+      # Fuel comparison
+      - type: vertical-stack
+        cards:
+          - type: markdown
+            content: |
+              ## ⛽ Fuel Comparison
+
+              The petrol/diesel car to compare against: how much fuel it uses and what a
+              litre costs. Used for "a fuel car would cost" and "you saved".
+          - type: custom:mushroom-number-card
+            entity: input_number.comparison_ice_efficiency
+            name: "ICE Fuel Efficiency"
+            icon: mdi:fuel
+            unit: "L/100km"
+            min: 1
+            max: 25
+            step: 0.1
+          - type: custom:mushroom-number-card
+            entity: input_number.comparison_fuel_price_per_liter
+            name: "Fuel Price per Litre"
+            icon: mdi:cash
+            min: 0
+            max: 2000
+            step: 1
+
+      # Link to the Advanced sub-page
+      - type: custom:button-card
+        icon: mdi:wrench-cog
+        name: "Advanced"
+        label: "API token, unit details, rate notes"
+        show_label: true
+        tap_action:
+          action: navigate
+          navigation_path: /tesla-analytics/settings-advanced
+        styles:
+          card:
+            - padding: 14px 16px
+          grid:
+            - grid-template-areas: '"i n" "i l"'
+            - grid-template-columns: 40px 1fr
+            - column-gap: 10px
+            - align-items: center
+          icon:
+            - width: 22px
+          name:
+            - justify-self: start
+            - font-weight: 600
+          label:
+            - justify-self: start
+            - font-size: 12px
+            - opacity: 0.7
+
+  # ========== VIEW 5: ADVANCED SETTINGS (sub-page of Settings) ==========
+  # subview: no tab in the top bar; reached from Settings -> Advanced.
+  - title: Advanced settings
+    path: settings-advanced
+    icon: mdi:wrench-cog
+    subview: true
+    back_path: /tesla-analytics/settings
+    cards:
+
+      # Tesla Fleet API token (Close Windows GPS workaround)
+      - type: vertical-stack
+        cards:
+          - type: markdown
+            content: |
+              ## 🔑 Tesla API Token
+
+              **Close Windows** sends its command to Tesla directly, using a copy
+              of the Tesla Fleet token stored in `secrets.yaml`. That copy expires
+              about every 8 hours. It refreshes itself every hour and whenever
+              Close Windows gets a 401 error. Tap below to refresh it now. No
+              restart needed; the result appears in your notifications.
+          - type: custom:mushroom-entity-card
+            entity: script.tesla_refresh_fleet_token
+            name: "Refresh Tesla API token"
+            icon: mdi:key-change
+            secondary_info: last-changed
             tap_action:
               action: call-service
-              service: script.tesla_charge_now
-              confirmation:
-                text: "Charge straight away, whatever the price, until the car is unplugged?"
+              service: script.tesla_refresh_fleet_token
 
-      - type: markdown
-        content: |
-          {% set p = 'sensor.tesla_auto_charge_plan' %}
-          {% set mode = states('input_select.tesla_tariff_mode') %}
-          {% set unit = 'Ft' if mode in ['Tariff A', 'Tariff D'] else states('sensor.tesla_currency_symbol') %}
-          {% macro num(v, d=1) %}{{ (v | float) | round(d) if v | is_number else '–' }}{% endmacro %}
-          {% set bs = state_attr(p, 'block_start') %}
-          {% set be = state_attr(p, 'block_end') %}
+      # Unit system details
+      - type: vertical-stack
+        cards:
+          - type: markdown
+            content: |
+              ## 📏 Unit System details
 
-          ### Plan
+              **UK** uses miles and mph like US Imperial, but keeps °C and bar
+              like Metric. Energy (kWh, kW, A, V) never changes.
 
-          {% if is_state('input_boolean.tesla_full_auto_charging', 'on') %}
-          **{{ state_attr(p, 'summary') | default('Working out a plan…', true) }}**
+              Only these two dashboards convert values (except the Driving and
+              Charging charts, which always use km). The sensors themselves
+              always store km, bar and °C, as Tesla reports them, so Developer
+              Tools, History, Logbook and other dashboards always show those.
+              Changing a sensor's unit on the fly would break Home Assistant's
+              long-term statistics.
 
-          | | |
-          |---|---|
-          | **Energy needed** | {{ num(state_attr(p, 'need_kwh')) }} kWh (~{{ num(state_attr(p, 'solar_kwh')) }} kWh from solar) |
-          | **Grid block** | {{ bs ~ ' – ' ~ be if bs and be else '–' }} |
-          | **Block price (with solar)** | {{ num(state_attr(p, 'avg_effective_price')) }} {{ unit }}/kWh |
-          | **Grid only would be** | {{ num(state_attr(p, 'grid_only_price')) }} {{ unit }}/kWh |
-          | **Estimated cost** | {{ num(state_attr(p, 'est_cost'), 0) }} {{ unit }} |
-          | **Price now** | {{ num(state_attr(p, 'price_now')) }} {{ unit }}/kWh |
-          | **Solar surplus now** | {{ num(state_attr(p, 'surplus_kw'), 2) }} kW |
-          | **Ready by** | {{ state_attr(p, 'deadline') | default('–', true) }} |
-          | **Session** | {{ 'Charge now (until unplugged)' if is_state('input_boolean.tesla_charge_now_override', 'on') else ('Paused until unplugged' if is_state('input_boolean.tesla_auto_charge_paused', 'on') else ('Managed by Full auto' if is_state('input_boolean.tesla_auto_charge_owned', 'on') else '–')) }} |
-          {% else %}
-          Full auto is off. Charging follows Smart Charging (above) or the
-          car's own settings.
-          {% endif %}
-
-      - type: entities
-        title: Full Auto Settings
-        entities:
-          - entity: input_datetime.tesla_charge_ready_by
-            name: "Ready By (every day)"
-          - entity: input_number.tesla_auto_charge_min_soc
-            name: "Always Charge Below Battery Level"
-          - entity: input_number.tesla_auto_charge_cheap_price
-            name: "Always Charge Below Price (-50 = never)"
-          - entity: input_number.tesla_home_charger_max_amps
-            name: "Home Charger Max Current"
-          - entity: input_select.tesla_home_charger_phases
-            name: "Home Charger Phases"
-          - entity: input_number.tesla_solar_feed_in_price
-            name: "Solar Feed-in Price"
-
-      - type: markdown
-        content: |
-          **Solar (optional):** enter entity IDs from Developer Tools >
-          States. *Grid Power* must be positive while importing and
-          negative while exporting (W or kW). *Solar Power* is your
-          inverter's live PV output. *Solar Forecast* is the "Estimated power
-          production - now" sensor of Open-Meteo Solar Forecast (recommended:
-          15-minute forecast) or Forecast.Solar (e.g.
-          `sensor.power_production_now`). Leave them empty without solar;
-          Full auto then plans on prices only.
-
-      - type: entities
-        entities:
-          - entity: input_text.tesla_grid_power_entity
-            name: "Grid Power Sensor (entity ID)"
-          - entity: input_text.tesla_pv_power_entity
-            name: "Solar Power Sensor (entity ID)"
-          - entity: input_text.tesla_solar_forecast_entity
-            name: "Solar Forecast Sensor (entity ID)"
-
-      # Supercharger Configuration (Placeholder)
       - type: markdown
         content: |
           ## 🔌 Supercharging
 
-          Unlike the Tessie app, this project's Tesla Fleet integration does
-          **not** sync Supercharging session costs from your Tesla account —
-          that data isn't exposed by the Fleet API. Supercharger costs shown
-          in Cost Projections and Analytics are placeholders (0) until this
-          is implemented (e.g. by manually logging sessions, or once a
-          community sensor for Supercharger billing exists).
+          Tesla's Fleet API doesn't share Supercharger bills, so they can't be
+          tracked. Charging away from home is counted at your Default
+          Electricity Rate instead.
 
-      # Fuel Comparison Profiler
-      - type: markdown
-        content: |
-          ## 🚗 Fuel Comparison (ICE Vehicle)
+      # Saved location rates: notes only
+      - type: vertical-stack
+        cards:
+          - type: markdown
+            content: |
+              ## 📍 Saved Location Rates (notes only)
 
-      - type: custom:mushroom-number-card
-        entity: input_number.comparison_ice_efficiency
-        name: "ICE Fuel Efficiency"
-        icon: mdi:fuel
-        unit: "L/100km"
-        min: 1
-        max: 25
-        step: 0.1
+              A place to write down the rates of the places you charge. **These
+              values are not used in any calculation**: costs use the Electricity
+              Price settings on the Settings tab. Currency:
+              **{{ states('input_select.tesla_currency') }} ({{ states('sensor.tesla_currency_symbol') }})**.
+          - type: markdown
+            content: >
+              ### {{ states('input_text.tesla_rate_home_name') }}
 
-      - type: custom:mushroom-number-card
-        entity: input_number.comparison_fuel_price_per_liter
-        name: "Fuel Price per Litre"
-        icon: mdi:cash
-        min: 0
-        max: 2000
-        step: 1
+              - **Rate:** {{ states('input_number.tesla_rate_home_per_kwh') }} {{
+              states('sensor.tesla_currency_symbol') }}/kWh
 
-      # Rate Schedules — Saved Location Rates (live, editable)
-      - type: markdown
-        content: |
-          ---
-          ## 📍 Saved Location Rates
+              - **Hours:** {{ states('input_text.tesla_rate_home_hours') }}
 
-          Rates below are shown in whatever currency you set above (currently
-          **{{ states('input_select.tesla_currency') }} ({{ states('sensor.tesla_currency_symbol') }})**).
-          Edit any value using the entity rows underneath each location.
+              - **Active Days:** {{ states('input_text.tesla_rate_home_days') }}
 
-          **Note:** These are informational/manual rate profiles — the actual
-          cost calculations on the Overview/Analytics dashboards use the
-          **Hungarian Electricity Tariff** selected above (with *Off*, the
-          single flat `input_number.tesla_default_electricity_cost` rate).
-          Location-aware switching between these saved rates is not wired
-          up yet; use these cards to document your tariffs for now.
+              - **Season:** {{ states('input_text.tesla_rate_home_season') }}
+          - type: entities
+            title: Edit Home Rate
+            entities:
+              - entity: input_text.tesla_rate_home_name
+                name: Location name
+              - entity: input_number.tesla_rate_home_per_kwh
+                name: Rate
+              - entity: input_text.tesla_rate_home_hours
+                name: Hours
+              - entity: input_text.tesla_rate_home_days
+                name: Active days
+              - entity: input_text.tesla_rate_home_season
+                name: Season
 
-      - type: markdown
-        content: >
-          ### {{ states('input_text.tesla_rate_home_name') }}
+      # Solar / off-peak rate notes
+      - type: vertical-stack
+        cards:
+          - type: markdown
+            content: >
+              ### {{ states('input_text.tesla_rate_solar_name') }}
 
-          - **Rate:** {{ states('input_number.tesla_rate_home_per_kwh') }} {{
-          states('sensor.tesla_currency_symbol') }}/kWh
+              - **Rate:** {{ states('input_number.tesla_rate_solar_per_kwh') }} {{
+              states('sensor.tesla_currency_symbol') }}/kWh
 
-          - **Hours:** {{ states('input_text.tesla_rate_home_hours') }}
+              - **Hours:** {{ states('input_text.tesla_rate_solar_hours') }}
 
-          - **Active Days:** {{ states('input_text.tesla_rate_home_days') }}
+              - **Active Days:** {{ states('input_text.tesla_rate_solar_days') }}
 
-          - **Season:** {{ states('input_text.tesla_rate_home_season') }}
-      - type: entities
-        title: Edit Home Rate
-        entities:
-          - entity: input_text.tesla_rate_home_name
-            name: Location name
-          - entity: input_number.tesla_rate_home_per_kwh
-            name: Rate
-          - entity: input_text.tesla_rate_home_hours
-            name: Hours
-          - entity: input_text.tesla_rate_home_days
-            name: Active days
-          - entity: input_text.tesla_rate_home_season
-            name: Season
+              - **Season:** {{ states('input_text.tesla_rate_solar_season') }}
+          - type: entities
+            title: Edit Solar / Off-Peak Rate
+            entities:
+              - entity: input_text.tesla_rate_solar_name
+                name: Location name
+              - entity: input_number.tesla_rate_solar_per_kwh
+                name: Rate
+              - entity: input_text.tesla_rate_solar_hours
+                name: Hours
+              - entity: input_text.tesla_rate_solar_days
+                name: Active days
+              - entity: input_text.tesla_rate_solar_season
+                name: Season
 
-      - type: markdown
-        content: >
-          ### {{ states('input_text.tesla_rate_solar_name') }}
+      # Work rate notes
+      - type: vertical-stack
+        cards:
+          - type: markdown
+            content: >
+              ### {{ states('input_text.tesla_rate_work_name') }}
 
-          - **Rate:** {{ states('input_number.tesla_rate_solar_per_kwh') }} {{
-          states('sensor.tesla_currency_symbol') }}/kWh
+              - **Rate:** {{ states('input_number.tesla_rate_work_per_kwh') }} {{
+              states('sensor.tesla_currency_symbol') }}/kWh
 
-          - **Hours:** {{ states('input_text.tesla_rate_solar_hours') }}
+              - **Hours:** {{ states('input_text.tesla_rate_work_hours') }}
 
-          - **Active Days:** {{ states('input_text.tesla_rate_solar_days') }}
+              - **Active Days:** {{ states('input_text.tesla_rate_work_days') }}
 
-          - **Season:** {{ states('input_text.tesla_rate_solar_season') }}
-      - type: entities
-        title: Edit Solar / Off-Peak Rate
-        entities:
-          - entity: input_text.tesla_rate_solar_name
-            name: Location name
-          - entity: input_number.tesla_rate_solar_per_kwh
-            name: Rate
-          - entity: input_text.tesla_rate_solar_hours
-            name: Hours
-          - entity: input_text.tesla_rate_solar_days
-            name: Active days
-          - entity: input_text.tesla_rate_solar_season
-            name: Season
-
-      - type: markdown
-        content: >
-          ### {{ states('input_text.tesla_rate_work_name') }}
-
-          - **Rate:** {{ states('input_number.tesla_rate_work_per_kwh') }} {{
-          states('sensor.tesla_currency_symbol') }}/kWh
-
-          - **Hours:** {{ states('input_text.tesla_rate_work_hours') }}
-
-          - **Active Days:** {{ states('input_text.tesla_rate_work_days') }}
-
-          - **Season:** {{ states('input_text.tesla_rate_work_season') }}
-      - type: entities
-        title: Edit Work Rate
-        entities:
-          - entity: input_text.tesla_rate_work_name
-            name: Location name
-          - entity: input_number.tesla_rate_work_per_kwh
-            name: Rate
-          - entity: input_text.tesla_rate_work_hours
-            name: Hours
-          - entity: input_text.tesla_rate_work_days
-            name: Active days
-          - entity: input_text.tesla_rate_work_season
-            name: Season
-
-      # Tesla Fleet API token (Close Windows GPS workaround)
-      - type: markdown
-        content: |
-          ## 🔑 Tesla API Token
-
-          **Close Windows** sends its command to Tesla directly, using a copy
-          of the Tesla Fleet token stored in `secrets.yaml`. That copy expires
-          about every 8 hours. It refreshes itself every hour and whenever
-          Close Windows gets a 401 error. Tap below to refresh it now. No
-          restart needed; the result appears in your notifications.
-
-      - type: custom:mushroom-entity-card
-        entity: script.tesla_refresh_fleet_token
-        name: "Refresh Tesla API token"
-        icon: mdi:key-change
-        secondary_info: last-changed
-        tap_action:
-          action: call-service
-          service: script.tesla_refresh_fleet_token
+              - **Season:** {{ states('input_text.tesla_rate_work_season') }}
+          - type: entities
+            title: Edit Work Rate
+            entities:
+              - entity: input_text.tesla_rate_work_name
+                name: Location name
+              - entity: input_number.tesla_rate_work_per_kwh
+                name: Rate
+              - entity: input_text.tesla_rate_work_hours
+                name: Hours
+              - entity: input_text.tesla_rate_work_days
+                name: Active days
+              - entity: input_text.tesla_rate_work_season
+                name: Season

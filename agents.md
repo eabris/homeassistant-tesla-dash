@@ -978,7 +978,9 @@ way), so there is no template-sensor-level workaround.
 `"Ft/km"` for the two per-km ones) matching the currently-selected HUF
 currency — the user explicitly chose this over removing the unit label
 entirely. **If you change `input_select.tesla_currency` away from HUF,
-these 10 static strings must be manually updated to match** (there is no
+these 10 static strings must be manually updated to match**, plus the
+newer `"Ft"` sensors from Sections 21 and 24 (e.g.
+`tesla_projected_monthly_electric_cost` / `_fuel_cost`) (there is no
 way to make this automatic without a custom component that rewrites the
 entity registry's unit on every currency change — out of scope for this
 project). The underlying cost *values* are unaffected by this limitation:
@@ -1080,6 +1082,11 @@ replaced by the wheel-adjusted calculation per user request, since "ideal
 range" isn't wheel-size-aware and was a less actionable number for this
 purpose. (`sensor.vehicle_ideal_battery_range` itself is untouched and
 still defined, just no longer read by this specific card.)
+
+**Superseded wording (Section 24):** the brackets were unexplained, so the
+display is now `{official} {unit} (≈{calculated} real)` in compact spots
+and "≈{calculated} {unit} real-world" as a second line where there's room.
+Same two numbers, same formula; only the wording changed.
 
 ### 10a. Tesla Fleet Token Refresh Script (`scripts/refresh_tesla_token.sh`)
 
@@ -1990,7 +1997,7 @@ Assistant restart only sometimes fixed it.
   says to reload scripts. Tested on the python3 and jq paths with fake
   `core.config_entries` files: valid, unchanged, expired, invalidated (0),
   and first run.
-* Manual button: Analytics → Settings → "🔑 Tesla API Token"
+* Manual button: Analytics → Settings → Advanced → "🔑 Tesla API Token" (moved there in Section 24)
   (`custom:mushroom-entity-card` on `script.tesla_refresh_fleet_token`).
 
 **General rule going forward:** never tell the user to restart HA to apply
@@ -2487,3 +2494,130 @@ yearly sensor's formula in step with its monthly twin.
   adjusts `sum` statistics. The README has the `DELETE` statements.
 * Per-series `color:` is set on the chart columns, because a `colors:` list
   in `apex_config` didn't line up with the header-only series.
+
+### 24. Dashboard UX + Accuracy Pass (user-friendliness audit, Nov 2026)
+
+**Request:** the user shared screenshots of every tab and asked for a
+plan to make the dashboards "100% user friendly, nothing confusing even
+for a simple-minded user", then to execute it. Their own findings:
+Overview/History look empty on desktop; the Driving *Distance* card
+should show a daily average; *Energy efficiency* showed the same 282 for
+both header numbers; and header numbers had no "current / last / daily /
+monthly" label. The audit found these real bugs too (root causes
+confirmed against HA core, apexcharts-card and button-card sources):
+
+* **Range was always the SoC × 4.1 guess.** `sensor.vehicle_battery_range`
+  read `sensor.<car>_estimate_battery_range`, and Tesla Fleet's
+  `charge_state_est_battery_range` has `entity_registry_enabled_default=False`
+  (`tesla_fleet/sensor.py`). The rated `battery_range` is enabled by
+  default. The alias now reads `_battery_range` and only falls back to
+  the estimate. Symptom: "~213 km" (52 × 4.1) on one card, "213 km" on another.
+* **History "Last 7 days: Energy charged 1.97 kWh".** The statistics
+  sensor took the 7-day `change` of `sensor.vehicle_charge_energy_added`,
+  which restarts at 0 every session. It now uses
+  `sensor.tesla_tariff_charging_energy_total` (all kWh, every tariff mode,
+  never resets). Rule: a statistics `change` sensor's source must be a
+  lifetime counter, never a per-session/per-period one.
+* **Flat identical bars (Oct 12–28 on every Driving chart).**
+  apexcharts-card's `group_by.fill` defaults to `last` (README: "`last`
+  will replace them with the last non-empty state"), so days with no
+  history repeated the previous day. Every daily bar series now has
+  `fill: 'null'`. Rule: always set `fill: 'null'` on `group_by` bar series
+  of daily totals.
+* **Only ~10 days of history.** There was no `recorder:` block, so HA's
+  default `purge_keep_days: 10` applied: the "30d" history_stats counted 10
+  days and the Charging charts started ~Oct 30. The user chose **365 days**
+  (Technical Appendix §1), knowing the whole database grows. Purged data
+  can't come back; charts fill up over time.
+* **Efficiency "average" = today on Mondays.** `sensor.tesla_efficiency_kwh_km`
+  used the calendar-week meters (reset Monday 00:00), not a rolling 7 days
+  as its comment claimed: on Mondays it equalled today's value, and fell
+  back to 0.228 until 5 km were driven. The daily bar sensor also copied
+  the average whenever the day had no real drive energy. Now: average =
+  (this month + last month real drive energy) / (both months' distance),
+  last month only if both values exist; daily bars = real energy only,
+  else unknown (no bar). New `sensor.tesla_last_driving_day_efficiency`
+  (trigger template on `sensor.tesla_daily_drive_energy`, ≥ 5 km, keeps the
+  last value) is the header's second number.
+* **Cost Projections far too low.** Monthly was "this month so far",
+  annual = that × 12 (on the 9th: 78,864 Ft/year instead of ~625,000).
+  New `sensor.tesla_projected_monthly_electric_cost` / `_fuel_cost`: cost
+  per day over this month so far (fractional days, min 1) + all of last
+  month (if > 0) × 365.25/12. Annual/5-year chain from them.
+* **Dog / Camp Mode were fake.** The scripts only did `climate.turn_on`
+  + `set_temperature` 20/18 °C. Tesla Fleet's climate entity has
+  `preset_modes = ["off", "keep", "dog", "camp"]` (`set_climate_keeper_mode`).
+  The scripts now toggle `climate.set_preset_mode`; tiles show On/Off and
+  turn green.
+* **"Cabin Protect: Not in Fleet API" was false.** `TeslaFleetCabinOverheatProtectionEntity`
+  exists (hvac modes off / cool / fan_only), disabled by default. New
+  `script.tesla_cabin_protect_toggle`; the tile hides itself (`display:
+  none`) until the entity exists. Bio Defense (no HA entity) and Valet Mode
+  (no Fleet API) placeholder tiles were removed.
+* **Location tap did nothing.** The `url_path` JS called `state_attr()`, a
+  Jinja function that doesn't exist in button-card JS. Rule: in `[[[ ]]]`
+  use `states[id]?.attributes?.x`, never Jinja helpers.
+
+**UX changes:**
+* **Layout:** all six Overview tabs and Analytics History are now
+  `type: sections` views (`max_columns` 2, Cost 3, History 3). Mobile keeps
+  the exact old order (sections stack in YAML order); desktop gets columns
+  instead of one 400 px strip. Custom cards default to full width / auto
+  height in a grid section (`DEFAULT_GRID_SIZE = {columns: 12, rows:
+  "auto"}`, frontend `compute-card-grid-size.ts`). The conversion was checked
+  by loading old and new YAML and asserting the flattened card list of every
+  view is identical. Driving/Charging stay masonry (already multi-column);
+  Settings stays masonry, but each topic is one `vertical-stack` so a
+  heading can't be split from its controls.
+* **Every header number is labelled with its period:** Driving uses THIS
+  MONTH + PER DAY (AVG) (or PER KM for costs, AVG/TOP THIS MONTH for
+  speed, AVERAGE / LAST DRIVING DAY for efficiency); Charging uses NOW /
+  THIS MONTH / TODAY; yearly charts THIS YEAR / THIS MONTH. Subtitles say
+  what the bars are. New per-day/month sensors: `tesla_average_daily_*`,
+  `tesla_monthly_driving_time`, `tesla_drive_sessions_month`,
+  `tesla_driving_time_month_raw`, `tesla_average_speed_this_month`,
+  `tesla_top_speed_this_month`. Charging "Energy added" bars now come from
+  the daily meter (the old per-session max missed multi-session days).
+* **Shared templates:** `button_card_templates` at the top of both
+  dashboards (`tesla_cost_period`, `tesla_period_summary`) replace 8
+  copy-pasted cards. Money uses `Intl.NumberFormat(locale, {style:
+  'currency', currency: <input_select.tesla_currency>, min/max fraction 0})`
+  everywhere ("6572 Ft", "$6,572"). The old cards mixed "Ft432", "6572 Ft".
+* **Clearer tiles:** Schedule → *Next departure* ("Not set" for past/1970
+  dates instead of "00:00"); Idles → *Parked for* (time since the last
+  drive, `triggers_update: all` so it ticks); Activity = Driving / Charging
+  / Asleep / Parked; Automation → *Auto charging* (Full auto / Time window
+  23:00–06:00 / Off; tap opens Settings instead of silently toggling);
+  Drives/Charges *today*; Battery tab tiles say "Not charging" instead of
+  0 A / 0 V; Cost "HOME" → "Charging costs you" (it always included all
+  charging) and the always-0 Supercharger / Other rows were dropped.
+* **Settings:** regrouped (Currency & units, Wheels & tires, Electricity
+  price, Smart Charging, Full auto, Fuel comparison) with shorter text; a
+  `subview: true` page `/tesla-analytics/settings-advanced` holds the API
+  token refresh, unit-system details, the Supercharging note and the
+  notes-only Saved Location Rates (which affect no calculation).
+
+**Testing done:** YAML parse of all files; every `[[[ ]]]` template
+compiled and run in Node with mock states taken from the screenshots;
+every new/changed Jinja template rendered with a mock HA environment (38
+cases: alias fallback, efficiency with/without last month, projections on
+the 1st / in March / without last month, trigger sensors keeping values,
+script toggles); every `sensor.tesla_*`/`vehicle_*` referenced by the
+dashboards resolved against names in `configuration.yaml` (that check
+caught `tesla_average_speed_month` vs the real slug
+`tesla_average_speed_this_month` — Section 13 again). Not yet run in a
+live HA.
+
+**Rules for future agents:**
+* Every number in a chart header or tile must say which period it covers.
+  Never show two numbers that come from the same source or fallback.
+* Never let a fallback silently copy another displayed value (render
+  `none` instead, Section 12).
+* New `history_stats` windows need recorder history that long; keep
+  `purge_keep_days` ≥ the longest window + 1 day.
+* Don't add placeholder tiles for features the integration can't do; hide
+  tiles whose entity may be disabled instead of showing "not available".
+* When adding a Driving/Charging chart, copy an existing one: labelled
+  header series (`in_chart: false`), bars with `in_header: false`,
+  per-series `color:`, `float_precision`, `fill: 'null'`.
+* Before referencing a new template sensor, slugify its `name:` (Section 13).

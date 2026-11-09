@@ -507,39 +507,48 @@ tesla_steering_heater_next:
       target:
         entity_id: "{{ 'select.' + states('input_text.tesla_car_name') + '_steering_wheel_heater' }}"
 
+# Dog / Camp Mode: Tesla's real climate keeper modes (agents.md Section 24).
+# Tesla Fleet exposes them as preset_mode on climate.<car>_climate
+# (off / keep / dog / camp). These used to only switch the climate on at
+# 20 / 18 C, which did not show the Dog Mode message on the car's screen
+# and was not kept on while parked. Tapping again turns the mode off.
 tesla_dog_mode:
   alias: "Tesla Dog Mode"
-  description: "Keep cabin comfortable at 20 C"
+  description: "Turn Tesla Dog Mode on, or off if it's already on"
   icon: mdi:dog-side
   sequence:
-    - action: climate.turn_on
+    - variables:
+        climate_entity: "{{ 'climate.' + states('input_text.tesla_car_name') + '_climate' }}"
+    - action: climate.set_preset_mode
       target:
-        entity_id: "{{ 'climate.' + states('input_text.tesla_car_name') + '_climate' }}"
-    - action: climate.set_temperature
-      target:
-        entity_id: "{{ 'climate.' + states('input_text.tesla_car_name') + '_climate' }}"
+        entity_id: "{{ climate_entity }}"
       data:
-        temperature: 20
-    - action: persistent_notification.create
-      data:
-        title: "Tesla"
-        message: "Dog Mode preset applied (20 C)."
+        preset_mode: "{{ 'off' if is_state_attr(climate_entity, 'preset_mode', 'dog') else 'dog' }}"
 
 tesla_camp_mode:
   alias: "Tesla Camp Mode"
-  description: "Keep cabin warm at 18 C"
+  description: "Turn Tesla Camp Mode on, or off if it's already on"
   icon: mdi:campfire
   sequence:
-    - action: climate.turn_on
+    - variables:
+        climate_entity: "{{ 'climate.' + states('input_text.tesla_car_name') + '_climate' }}"
+    - action: climate.set_preset_mode
       target:
-        entity_id: "{{ 'climate.' + states('input_text.tesla_car_name') + '_climate' }}"
-    - action: climate.set_temperature
+        entity_id: "{{ climate_entity }}"
+      data:
+        preset_mode: "{{ 'off' if is_state_attr(climate_entity, 'preset_mode', 'camp') else 'camp' }}"
+
+# Cabin Overheat Protection on/off. The Tesla Fleet entity
+# climate.<car>_cabin_overheat_protection is disabled by default: enable it in
+# Settings -> Devices & services -> Tesla Fleet -> entities. The Climate tab
+# hides its button until the entity exists.
+tesla_cabin_protect_toggle:
+  alias: "Tesla Cabin Overheat Protection Toggle"
+  icon: mdi:shield-sun
+  sequence:
+    - variables:
+        cop_entity: "{{ 'climate.' + states('input_text.tesla_car_name') + '_cabin_overheat_protection' }}"
+    - action: "{{ 'climate.turn_off' if states(cop_entity) in ['cool', 'fan_only'] else 'climate.turn_on' }}"
       target:
-        entity_id: "{{ 'climate.' + states('input_text.tesla_car_name') + '_climate' }}"
-      data:
-        temperature: 18
-    - action: persistent_notification.create
-      data:
-        title: "Tesla"
-        message: "Camp Mode preset applied (18 C)."
+        entity_id: "{{ cop_entity }}"
 

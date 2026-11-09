@@ -13,30 +13,29 @@ This README is written for **everyone**, including people who have never touched
 Two ready-made Lovelace dashboards, wired directly to your Tesla's native entities, styled to look and feel like the Tessie mobile app:
 
 ### 🧭 Tesla Overview dashboard
-Six tabs covering everyday use of the car:
-- **Dashboard** — the main cockpit: header with vehicle name + battery/range readout, a Tesla-app-style vehicle hero (clean side photo with model/status overlay and a Lock / Wake / Port dock under the car), a conditional "Charging" status card (time remaining, amps/volts/kW), a 6-button quick-action row (lock, climate, frunk, trunk, flash lights, more), a tap-to-open location strip, and an info grid (climate, battery, schedule, tires, drives, charges, idles, activity, automation, profiler) plus a vehicle specs footer (model, VIN, plate, firmware, odometer, alerts).
-- **Controls** — window venting, sentry mode toggle, media playback, valet mode & speed limit.
-- **Climate** — Tesla-app-style 6-seat cabin map (`tesla-cabin-topdown.png`) with tappable heat-wave icons on each seat and the steering wheel, interior/exterior readout, Off / target-temp / Vent dock, Defrost, plus Dog/Camp presets.
-- **Battery** — battery level gauge, detailed telemetry table (range, drain, energy, pack temperature, amperage, voltage, lifetime energy used), a charge-limit slider, a Full auto charging status card (tap to turn it on/off), and start/stop charging (or "Charge now" with Full auto on) + unlock charge port buttons.
-- **Tires** — real-time pressure readout for all 4 wheels plus a historical pressure graph with color-coded safe/warning zones.
-- **Cost Projections** — monthly/annual/5-year charging cost breakdown by network (home, Supercharger, other), plus a status card for the selected Hungarian electricity tariff (active price, discounted-quota usage).
+Six tabs covering everyday use of the car. On a phone everything is one column; on a desktop each tab spreads over two or three columns.
+- **Dashboard** — the main cockpit: a Tesla-app-style vehicle hero (side photo with name, status and battery/range, plus a Lock / Wake / Charging / Unlock dock), a "Charging" card while charging (time left, finish time, kW, km/h added, amps, volts), a quick-action row (climate, frunk, trunk, flash, sentry), a tap-to-open-in-Google-Maps location strip, and a tile grid (climate, battery & range, next departure, tires, drives today, charges today, parked for, activity, auto charging) plus a vehicle specs footer.
+- **Controls** — status chips, wake, window vent/close, sentry mode and media playback.
+- **Climate** — Tesla-app-style 6-seat cabin map (`tesla-cabin-topdown.png`) with tappable seat/steering-wheel heaters, interior/exterior temperature, climate on/off + target temperature, close windows, defrost, Tesla's real **Dog Mode** and **Camp Mode**, and **Cabin Overheat Protection** (shown once you enable that Tesla Fleet entity).
+- **Battery** — battery % and range, energy in the battery, energy added, charging power/current/voltage and finish time, energy used for driving, the car's charge-limit slider, a Full auto charging card, and start/stop charging (or "Charge now" with Full auto on) + unlock charge port buttons.
+- **Tires** — live pressure of all 4 wheels on a top-down car image, the recommended cold pressure for your wheels, and a 7-day pressure chart.
+- **Cost Projections** — what charging costs you per month, per year and over 5 years, what a petrol/diesel car would cost for the same driving, and how much you save; plus a status card for the selected Hungarian electricity tariff (active price, discounted-quota usage).
 
 ### 📊 Tesla Analytics dashboard
-Four tabs for historical insight and configuration:
-- **History** — a unified, chronological timeline of every drive, charge, and idle/standby session, each with time, location, distance/energy, battery % change, and cost — tap a drive for a detail popup with an interactive route map and speed/altitude chart.
-- **Driving** — distance, real energy used, electric cost, duration, speed, drive count, and **real energy efficiency (Wh/km)** computed from actual battery-drop telemetry (not a fixed estimate), plus efficiency-vs-speed and efficiency-vs-temperature charts.
-- **Charging** — charging session breakdowns and power/current charts.
-- **Analytics** — a date-range selector (7 days / 30 days / 1 year / all time) driving KPI summary rows and a full suite of charts: cost comparison vs. a gas car, efficiency vs. speed, driving-time heatmaps, charging source breakdown, charging power curves, phantom-drain analysis, and macro vehicle-state (driving/charging/idling/sleeping) breakdowns.
-- **Settings** — pick your **currency** (HUF/EUR/USD/GBP — all cost figures across both dashboards update instantly), your **unit system** (Metric / US Imperial / UK — see below), set your electricity rate or **Hungarian electricity tariff** (Tariff A / Tariff D, with the discounted quota), **Full auto charging**, fuel-comparison baseline, and edit your **Saved Location Rates** (Home / Solar-Off-Peak / Work — name, rate, hours, active days, season) directly from the dashboard, no YAML editing required.
+Four tabs (plus an Advanced sub-page) for history and configuration:
+- **History** — five summary cards (today, this week, last 7 days, this month, last month), each with distance, energy charged, charging cost, what a fuel car would cost, and what you saved.
+- **Driving** — 30-day daily charts for distance, energy used, charging cost, fuel cost, driving time, speed, number of drives and **real energy efficiency (Wh/km)** from actual battery-drop telemetry, plus 12-month charts. Every number in a chart header says what it is (*This month*, *Per day (avg)*, *Per km*, *Last driving day*…).
+- **Charging** — 30-day charts of energy charged per day, charger power, charge rate and current, each with the live value (*Now*) in the header.
+- **Settings** — **currency** (HUF/EUR/USD/GBP) and **unit system** (Metric / US Imperial / UK), wheel size and tire pressure, electricity rate or **Hungarian electricity tariff** (Tariff A / Tariff D, with the discounted quota), **Smart Charging**, **Full auto charging** and the fuel-comparison car. The **Advanced** sub-page holds the Tesla API token refresh, unit-system details and your Saved Location Rates notes.
 
 ### ⚙️ Plus
-- **Smart Charging** — an optional off-peak charging automation. Turn it on (Overview → Dashboard tab → "Automation" tile) and set your target charge % and off-peak window (Analytics → Settings tab → 🌙 Smart Charging); charging then starts automatically once/day at the window start (if plugged in and below target) and stops if the window ends first. It charges at full power: the highest current the car accepts (usually 16 A), capped at **Home Charger Max Current** (Settings → Full auto charging). Deliberately fires **at most once per day** — no rapid on/off toggling, which is easier on the car's charging hardware. Not used while Full auto charging (below) is on.
-- **Hungarian electricity tariffs** — pick **Tariff A** or **Tariff D** in Analytics → Settings → 🇭🇺 Hungarian Electricity Tariff. Charging costs are then priced at the tariff that was active while the car charged: the discounted 36.21 Ft/kWh band while your monthly quota lasts, then the A1 rate or the live quarter-hour Tariff D price (from [dnap.hu](https://dnap.hu)). See "Hungarian electricity tariffs" under Maintenance.
+- **Smart Charging** — an optional off-peak charging automation. Turn it on, and set your target charge % and off-peak window, in Analytics → Settings → 🌙 Smart Charging (the Overview "Auto charging" tile shows which mode is active and opens that page); charging then starts automatically once/day at the window start (if plugged in and below target) and stops if the window ends first. It charges at full power: the highest current the car accepts (usually 16 A), capped at **Home Charger Max Current** (Settings → Full auto charging). Deliberately fires **at most once per day** — no rapid on/off toggling, which is easier on the car's charging hardware. Not used while Full auto charging (below) is on.
+- **Hungarian electricity tariffs** — pick **Tariff A** or **Tariff D** in Analytics → Settings → ⚡ Electricity Price. Charging costs are then priced at the tariff that was active while the car charged: the discounted 36.21 Ft/kWh band while your monthly quota lasts, then the A1 rate or the live quarter-hour Tariff D price (from [dnap.hu](https://dnap.hu)). See "Hungarian electricity tariffs" under Maintenance.
 - **Full auto charging** — optional: Home Assistant decides by itself when the car charges at home. It weighs your solar forecast and live solar output, the price of every quarter hour (live Tariff D prices, Tariff A or your flat rate), the battery level and your daily "ready by" time. It charges on solar when the sun is strong enough (the current follows the sun), and in the cheapest grid block before the deadline otherwise, e.g. at night on a cloudy day. It never flaps (at most one start/stop per 30 minutes), and has "Charge now" and "Stop" overrides. Works with every tariff. See "Full auto charging" under Maintenance.
-- A currency selector and per-location rate cards (editable straight from the Settings tab) so all cost/savings figures are shown and calculated in your own currency and tariffs — no more hardcoded Forints.
+- A currency selector so all cost/savings figures are shown in your own currency — no more hardcoded Forints.
 - Optional integration with **TeslaMate** for long-term trip/charge history and Grafana-powered stats.
-- A **unit system** selector (Analytics → Settings tab → 📏 Unit System) with three presets — **Metric** (km, °C, bar), **US Imperial** (mi, °F, psi), and **UK** (mi, °C, bar, since UK/Ireland drivers commonly use miles but keep Celsius and bar) — matching the independent distance/temperature/pressure options on a real Tesla's own touchscreen. Applies to the Overview dashboard, the Tires tab's pressure chart, and the Analytics History tab's daily/weekly/monthly distance figures. *Known limitation:* the Driving/Charging analytics tabs' long-term history charts currently always plot in km/km-h/Wh-per-km regardless of this setting, and the underlying sensors always store km/bar/°C internally (so Developer Tools → States, Logbook, and any plain history/statistics card will always show metric, regardless of your selection above).
-- A **wheel size** selector (Analytics → Settings tab → 🛞 Wheels & Recommended Cold Tire Pressure, options 18"–22") that auto-fills your recommended cold tire pressure and a "wheel range adjustment %" with Tesla community-typical starting estimates for that size — both sliders stay fully editable afterward if your actual placard/observed values differ. The range adjustment is then used everywhere your vehicle's range is shown: `{official range} ({wheel-adjusted range})`, e.g. `189 km (164 km)` — official is Tesla's own rated range, the bracketed figure accounts for the extra rolling resistance of larger/heavier wheels.
+- A **unit system** selector (Analytics → Settings → 💱 Currency & 📏 Units) with three presets — **Metric** (km, °C, bar), **US Imperial** (mi, °F, psi), and **UK** (mi, °C, bar, since UK/Ireland drivers commonly use miles but keep Celsius and bar) — matching the independent distance/temperature/pressure options on a real Tesla's own touchscreen. Applies to the Overview dashboard, the Tires tab's pressure chart, and the Analytics History tab's daily/weekly/monthly distance figures. *Known limitation:* the Driving/Charging analytics tabs' long-term history charts currently always plot in km/km-h/Wh-per-km regardless of this setting, and the underlying sensors always store km/bar/°C internally (so Developer Tools → States, Logbook, and any plain history/statistics card will always show metric, regardless of your selection above).
+- A **wheel size** selector (Analytics → Settings → 🛞 Wheels & Tires, options 18"–22") that auto-fills your recommended cold tire pressure and a "wheel range adjustment %" with Tesla community-typical starting estimates for that size — both sliders stay fully editable afterward if your actual placard/observed values differ. The range adjustment is then used everywhere your vehicle's range is shown, as Tesla's rated range plus an "≈ real-world" figure, e.g. `189 km (≈164 real)` — the second number accounts for the extra rolling resistance of larger/heavier wheels.
 - Energy figures (kWh, kW, A, V) always stay in these units regardless of the unit system chosen — that's universal for EVs everywhere, including in the US.
 - A fully documented entity inventory (`entities-list.txt`) so you always know which sensors/helpers power which card.
 - A `scripts/rename_tesla_prefix.py` maintenance tool to safely rename the `tesla_` entity prefix project-wide (e.g. for a second vehicle) — see the Maintenance section below.
@@ -142,6 +141,13 @@ lovelace:
       icon: mdi:chart-line
       show_in_sidebar: true
       filename: dashboards/tesla-analytics.yaml
+
+# Keep a year of history: the 30-day charts and the "this month" driving
+# figures read raw history, which Home Assistant keeps for only 10 days by
+# default. Applies to all entities, so the database gets bigger; use at
+# least 35 if disk space is tight.
+recorder:
+  purge_keep_days: 365
 ```
 
 Then **restart Home Assistant** (Settings → System → Restart). If there are YAML errors, the File editor add-on (or **Settings → System → Logs**) will tell you exactly what line is wrong.
@@ -298,16 +304,16 @@ This requires **Docker** and **Docker Compose** on a machine that can stay on 24
 Go to **Tesla Analytics → Settings** to:
 - Pick your **currency** (HUF, EUR, USD, GBP) — every cost figure across both dashboards (electricity cost, fuel comparison, savings, projections, history) switches instantly.
 - Set your **default electricity rate** and **fuel comparison** baseline (ICE efficiency + fuel price) used in the actual cost calculations.
-- Edit the **Saved Location Rates** cards (Home / Solar-Off-Peak / Work) — name, rate, hours, active days, season — directly from entity rows on the dashboard.
+- Keep notes of your **Saved Location Rates** (Home / Solar-Off-Peak / Work — name, rate, hours, active days, season) on **Settings → Advanced**.
 
-> ⚠️ Note: the Saved Location Rate cards are **informational/manual** — cost
+> ⚠️ Note: the Saved Location Rates are **notes only** — cost
 > math uses the **Hungarian Electricity Tariff** setting below (or, with the
 > tariff set to **Off**, the single flat **Default Electricity Rate**), not
 > per-location rate switching.
 
 ### Hungarian electricity tariffs (Tariff A / Tariff D)
 
-Set this up in **Tesla Analytics → Settings → 🇭🇺 Hungarian Electricity Tariff**.
+Set this up in **Tesla Analytics → Settings → ⚡ Electricity Price**.
 All prices are final gross Ft/kWh (energy + grid fees + VAT).
 
 | Tariff | Price of home charging |
@@ -456,7 +462,7 @@ then "Close Windows" fails with `Status: 401 … token expired`. This project
 keeps the copy fresh automatically (see below). To refresh it **right now**,
 with no SSH and no restart:
 
-- **Analytics dashboard → Settings → 🔑 Tesla API Token → "Refresh Tesla API
+- **Analytics dashboard → Settings → Advanced → 🔑 Tesla API Token → "Refresh Tesla API
   token"**, or
 - **Developer Tools → Actions →** `script.tesla_refresh_fleet_token` → Perform action.
 
@@ -596,7 +602,7 @@ left alone by default (pass `--include-labels` to rename those too). Run
 
 | Problem | Fix |
 | :--- | :--- |
-| "Quota used this month" is lower than your meter (e.g. you installed mid-month) | Analytics → Settings → 🇭🇺 tariff section: type the real kWh used so far this month into **Used This Month So Far**. The Live Tariff Status row then shows "corrected +X kWh". It resets with the next month. |
+| "Quota used this month" is lower than your meter (e.g. you installed mid-month) | Analytics → Settings → ⚡ Electricity Price: type the real kWh used so far this month into **Used This Month So Far**. The Live Tariff Status row then shows "corrected +X kWh". It resets with the next month. |
 | Dashboard shows "Custom element doesn't exist" | You're missing a HACS card — revisit Step 2 and make sure you restarted Home Assistant after installing. |
 | Entities show as `unavailable` | Check that the Tesla Fleet integration is connected and your car is online (Tesla vehicles sleep to save battery). |
 | YAML errors after restart | Check **Settings → System → Logs**, or validate YAML in the File editor — usually an indentation issue. |
@@ -620,6 +626,14 @@ left alone by default (pass `--include-labels` to rename those too). Run
 | After choosing Tariff A/D, the daily/weekly/monthly electric cost dropped to 0 or looks too low | Expected the first time: tariff costs are counted from when you install this version, not re-priced backwards. They fill in as the car charges. Switching back to **Off** shows the old default-rate figures. |
 | Monthly/yearly electric cost or **Electric cost · Yearly** bars far too low after choosing Tariff A/D (e.g. a past month at ~10 Ft/kWh) | Fixed: the tariff cost only counted kWh charged since install, but was divided by the whole month's kWh. Now the month's kWh charged before install are added at the **Default Electricity Rate**, and the average price is monthly cost ÷ monthly kWh. Check the Default Electricity Rate in Settings. Past months in the yearly chart are estimates at this month's average price. |
 | `sensor.deye_ev_charger_energy` isn't offered in the Energy dashboard's device list | It gets its kWh unit from `sensor.deye_ev_charger_power`. Check in **Settings → Developer tools → States** that the power sensor has a number with unit `W` (not `unavailable`). If it's unavailable, check the `deye_charger_*` keys in `secrets.yaml` and that `http://<charger-ip>/status.html` opens with the login. Once the power sensor has a value, the energy sensor shows `0.000 kWh` within about a minute and appears in the list. |
+| Range shows a `~` (e.g. `~213 km`), or always exactly battery % × 4.1 | The range sensor was unknown, so the dashboard guessed. `sensor.vehicle_battery_range` used to read Tesla Fleet's **Estimate battery range** entity, which is disabled by default; it now reads **Battery range** (enabled by default) and only falls back to the estimate. Restart Home Assistant after updating. If you still see `~`, check that `sensor.<car>_battery_range` is enabled in **Settings → Devices & Services → Tesla Fleet → entities**. |
+| History → *Last 7 days* shows a tiny **Energy charged** (e.g. `1.97 kWh`) | Fixed: it subtracted two readings of the per-session counter, which restarts at 0 every charge. It now uses `sensor.tesla_tariff_charging_energy_total` (all charged kWh). The figure is right once that sensor has 7 days of history. |
+| Driving charts show the same bar height day after day, or 30-day charts/totals only cover about 10 days | Two causes, both fixed: days without data used to be filled with the day before (apexcharts `group_by.fill` defaults to `last`; now `'null'`, so those days are empty), and Home Assistant kept only 10 days of history (`configuration.yaml` now has `recorder: purge_keep_days: 365`). History that was already deleted can't come back, so the charts fill up over the next weeks. Keeping a year of history makes the database bigger (for all entities); lower `purge_keep_days` (at least 35) if disk space is tight. |
+| Driving → *Energy efficiency* shows the same number for *Average* and the right-hand value, or 228 Wh/km on Monday mornings | Fixed: the average used the calendar week (reset every Monday, so on Mondays it equalled today's value, and fell back to 228 until 5 km were driven), and the daily bar copied the average on days without logged drive energy. The average now covers this month and last month; the right-hand value is the **last driving day**. |
+| Cost Projections are far too low at the start of a month | Fixed: *Monthly/Annual/5 years* were "this month so far" × 1 / × 12 / × 60. They now use your average cost per day over this month and last month. |
+| **Dog Mode** / **Camp Mode** didn't show anything on the car's screen | Fixed: the buttons only switched the climate on at 20 °C / 18 °C. They now turn on Tesla's real Dog / Camp Mode (`climate.set_preset_mode`), the tile turns green while active, and tapping again turns it off. Reload scripts after updating. |
+| No **Cabin Overheat Protection** tile on the Climate tab | The Tesla Fleet entity `climate.<car>_cabin_overheat_protection` is disabled by default. Enable it in **Settings → Devices & Services → Tesla Fleet → entities** (show disabled entities, open it, *Enabled*); the tile appears by itself. |
+| After updating, new Driving/Cost figures show `Entity not available` | The new `history_stats` sensors and the `recorder` change need a **full restart** (Settings → System → Restart), not just a YAML reload. |
 
 > **Removing a wrong month from "Distance · Yearly":** Home Assistant can't
 > edit this kind of statistic in the UI. Install the **SQLite Web** add-on
@@ -711,7 +725,7 @@ left alone by default (pass `--include-labels` to rename those too). Run
 > every 8 hours. Until that newer token is copied into `secrets.yaml`, the
 > copy is dead, and a restart doesn't copy it. Refresh it manually, with no
 > restart:
-> - **Analytics → Settings → 🔑 Tesla API Token → "Refresh Tesla API token"**, or
+> - **Analytics → Settings → Advanced → 🔑 Tesla API Token → "Refresh Tesla API token"**, or
 > - **Developer Tools → Actions →** `script.tesla_refresh_fleet_token` → **Perform action**.
 >
 > A "Tesla token refreshed" notification confirms it and shows how long the
