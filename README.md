@@ -321,14 +321,24 @@ car parked a few houses away still counts as "home".
 If the car charges somewhere else on someone else's electricity (e.g. a
 neighbour or your workplace), give that place its own zone:
 
-1. **Settings → Areas, labels & zones → Zones → Add zone.** Put the pin on the
-   parking spot, radius **15–20 m** (smaller than your Home zone: where zones
-   overlap, Home Assistant picks the smallest). Leave *Passive* off. Name it
+1. **Settings → Areas, labels & zones → Zones → Add zone.** Put the pin where
+   the **car** stands when it charges there, not on the house: a car parked
+   at the kerb can be 10–20 m from the building. **Map** in the sidebar shows
+   the car's dot, or tap the Overview location strip to open its GPS point in
+   Google Maps. Use a radius of about **20–25 m** so normal GPS drift stays
+   inside. Where zones overlap, Home Assistant picks the **smallest**. So if
+   the spot is inside your Home circle (the default 100 m one usually covers
+   the neighbours), make this zone smaller than Home, and make sure it doesn't
+   reach the spot where the car parks at home. Leave *Passive* off. Name it
    anything, e.g. "Work". Never put zone coordinates in this repo's YAML —
    they are your address.
 2. **Tesla Analytics → Settings → ⚡ Electricity Price:** enter the zone's
    entity ID (e.g. `zone.work`) in **Work Zone** and that place's price in
    **Work Rate**.
+3. **Check it:** Home Assistant re-checks the car's zone on every Tesla Fleet
+   poll (every 10 minutes, also while the car sleeps). Then *Live Tariff
+   Status → Price where the car is now* should say **Work zone, Work rate**.
+   If it still says *away*, see Troubleshooting.
 
 From then on, charging inside that zone is priced at the Work rate; the
 Overview location strip shows the zone name and "charging here uses the Work
@@ -661,8 +671,31 @@ left alone by default (pass `--include-labels` to rename those too). Run
 | **Dog Mode** / **Camp Mode** didn't show anything on the car's screen | Fixed: the buttons only switched the climate on at 20 °C / 18 °C. They now turn on Tesla's real Dog / Camp Mode (`climate.set_preset_mode`), the tile turns green while active, and tapping again turns it off. Reload scripts after updating. |
 | No **Cabin Overheat Protection** tile on the Climate tab | The Tesla Fleet entity `climate.<car>_cabin_overheat_protection` is disabled by default. Enable it in **Settings → Devices & Services → Tesla Fleet → entities** (show disabled entities, open it, *Enabled*); the tile appears by itself. |
 | After updating, new Driving/Cost figures show `Entity not available` | The new `history_stats` sensors and the `recorder` change need a **full restart** (Settings → System → Restart), not just a YAML reload. |
-| The Overview location strip says **At home**, but the car is parked a few houses away (the Tesla app shows the other address) | Home Assistant's Home zone has a 100 m radius by default, and the Saved Location Rates names are just text. Create a small zone for the other spot (15–20 m) — see **Maintenance → Charging at another place (Work zone)**. If the car charges there on someone else's electricity, also set it as the **Work Zone** so that charging is priced at the Work rate. |
+| The Overview location strip says **At home**, but the car is parked a few houses away (the Tesla app shows the other address) | Home Assistant's Home zone has a 100 m radius by default, and the Saved Location Rates names are just text. Create a small zone for the other spot (about 20–25 m, centred where the car stands) — see **Maintenance → Charging at another place (Work zone)**. If the car charges there on someone else's electricity, also set it as the **Work Zone** so that charging is priced at the Work rate. |
 | After setting a Work zone, the location strip still says **At home** at that spot | The new zone is bigger than, or doesn't contain, the parking spot. Make it smaller than your Home zone and check the pin. Also check that it isn't *Passive* and that **Work Zone** holds its entity ID (e.g. `zone.work`, Settings → Entities). Analytics → Settings → *Live Tariff Status → Price where the car is now* shows which price applies. |
+| The car is parked in the Work zone on the map, but *Price where the car is now* says **away, default rate** | The car's GPS point is just outside the circle. This is common when the pin is on the house and the car stands at the kerb, or the radius is small and GPS drifts a few metres. Run the check below. If the distance is bigger than the radius, edit the zone: drag the pin onto the car's spot (sidebar **Map** shows the car's dot) and/or use a 20–25 m radius. Don't let it reach your home parking spot. |
+
+> **Checking which zone the car is in:** paste this into **Developer Tools →
+> Template** (metric unit system, so distances are in metres):
+> ```jinja
+> {% set t = 'device_tracker.' ~ states('input_text.tesla_car_name') ~ '_location' %}
+> {% set z = states('input_text.tesla_rate_work_zone') | trim | lower %}
+> Car: {{ states(t) }}, in zones: {{ state_attr(t, 'in_zones') }}
+> To {{ z }}: {{ (distance(t, z) * 1000) | round(0) }} m (radius {{ state_attr(z, 'radius') }} m, passive: {{ state_attr(z, 'passive') }})
+> To zone.home: {{ (distance(t, 'zone.home') * 1000) | round(0) }} m (radius {{ state_attr('zone.home', 'radius') }} m)
+> ```
+> - Distance **bigger** than the radius → the car is outside: move the pin
+>   and/or make the radius bigger.
+> - Distance **smaller** than the radius, but *in zones* doesn't list the zone
+>   → the car's location hasn't been re-checked since you saved the zone. Wait
+>   10 minutes, or run **Developer Tools → Actions →
+>   `homeassistant.update_entity`** on `device_tracker.<car>_location` (this
+>   doesn't wake the car).
+> - *passive: True* → turn *Passive* off in the zone.
+> - *in zones* lists both Home and Work → the smaller zone wins; shrink the
+>   one that shouldn't.
+> - *in zones* shows `None` on older Home Assistant versions; then go by the
+>   distance alone.
 
 > **Removing a wrong month from "Distance · Yearly":** Home Assistant can't
 > edit this kind of statistic in the UI. Install the **SQLite Web** add-on

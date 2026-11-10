@@ -2696,6 +2696,28 @@ accented zone name.
 * Don't reintroduce tariff-mode branches in cost sensors: price
   differences belong in the accumulator.
 
+**Follow-up: "away, default rate" while parked at the Work zone.** The user
+created `zone.work` (small radius, pin on the neighbour's plot) and set
+**Work Zone** = `zone.work`. The car's GPS point (the Overview location strip →
+Google Maps) appeared to be at the kerb, between the Home and Work circles. The Live
+Tariff Status table showed "away, default rate". The template was correct.
+Confirmed in HA core: `device_tracker/entity.py` `_async_update_zones` →
+`zone.async_in_zones` puts a point in a zone only if distance to the centre <
+radius (GPS accuracy 0 for Tesla Fleet), and picks the **smallest** non-passive
+containing zone. It runs on every state write, and Tesla Fleet writes on every
+600 s vehicle poll, also while the car sleeps (`tesla_fleet/entity.py`
+`_handle_coordinator_update`, `coordinator.py` returns cached data). So a zone
+created in the UI applies within ~10 minutes; `homeassistant.update_entity` on
+the tracker forces it (the free `vehicle()` call, no wake). Fix (user side,
+README Step 1 now says it): put the pin where the car stands, not on the house,
+and use a radius of about 20–25 m (the original 15–20 m advice was too tight for
+kerb parking and GPS drift). Keep it smaller than Home if inside the Home circle,
+and off the home parking spot. README Troubleshooting has a Developer Tools
+template (tracker state, `in_zones`, distance to the Work/Home centres vs radius,
+passive).
+**Rule:** when a zone isn't recognised, check `in_zones` and the
+distance-vs-radius numbers first, before changing the price template.
+
 ### 26. Battery Tab "Charging price" Card (price here + session cost)
 
 **Request:** show the current/session charging price and the location/zone
