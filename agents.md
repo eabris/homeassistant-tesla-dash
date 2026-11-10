@@ -2747,5 +2747,62 @@ Work zone charging, away not charging, fresh install with no data).
 
 **Rule:** if you change the delta rules, change all four accumulators on
 `sensor.vehicle_charge_energy_added` together (home energy, tariff energy,
-cost total, session cost).
+cost total, session cost), and the session split in the Analytics
+"Charging sessions" chart (Section 27).
+
+### 27. Analytics Charging Tab — "Charging sessions" Chart (last 10 sessions)
+
+**Request:** a chart of the kWh added in each of the last ~10 charging
+sessions (as many as fit without crowding).
+
+**Design (no new entities):** the chart's first series has an async
+`data_generator` (apexcharts-card runs it as an `AsyncFunction`, see
+`src/graphEntry.ts` `_generateData`). It calls
+`hass.callWS({type: 'history/history_during_period', …})` for the last
+180 days of `sensor.vehicle_charge_energy_added` and
+`device_tracker.<car>_location` (`minimal_response`, `no_attributes`,
+`significant_changes_only`). With `minimal_response` HA only returns rows
+where the state changed, compressed (`s`, `lu`, `lc`); the code uses
+`lc ?? lu` (seconds). Sessions are split with the accumulators' rules:
+first sample or a value below half of the previous one → new session;
+a rise → session kWh/end time; small dip → ignored. The oldest sample
+is only kept if it rises (it may be a session that ended before the
+history starts), and sessions under 0.1 kWh are dropped. The start time
+is the first rise, so it can be up to one poll late. Place = tracker
+state at the session end (home → Home, not_home → Away, else the zone
+name as typed). Reading history was chosen over a new template sensor with
+a sessions attribute: it shows past sessions immediately (no back-fill
+problem) and adds nothing to the recorder.
+
+**Why the bars aren't on a time axis:** on a datetime axis apexcharts sizes
+columns by the smallest gap between points, so two sessions on one day
+made every bar a hairline. The bars are on 10 evenly spaced slots instead:
+`xaxis.type: numeric` (apex_config is deep-merged over the card's default
+`datetime`), `tickAmount: 11`, slot k at `start + (k + 1) × span / 11`.
+The card sets `xaxis.min/max` to the same `start`/`end` it passes to the
+generator, so ticks land on the bars. Always 10 slots (empty ones `null`),
+otherwise a few sessions render as thin bars. The x-label formatter
+(`EVAL:`) maps a tick back to its slot with `opts.w.globals.minX/maxX` and
+returns a two-line `[day, month]` label, which fits 10 bars at phone width.
+Labels and the custom tooltip (time span, place, kWh; empty for empty
+slots) read `window.teslaChargeSessions`, which the generator fills.
+`graph_span` (11d) only sets the slot spacing, not the period shown.
+
+**Header:** LAST SESSION and AVERAGE (LAST 10). They're header-only series
+whose generators `await window.teslaChargeSessions.ready`. apexcharts-card
+starts the series in order and each generator runs synchronously up to its
+first `await`, so the Bars series must stay **first** to publish the
+promise before the header series read it.
+
+**Tested** with the real apexcharts-card v2.2.3 bundle in headless Chromium
+(mock `hass` + generated history: resets, noise dips, unknown gaps, work /
+away places) at 400 px and 600 px: 12 sessions (oldest 2 dropped, labels
+aligned, tooltips right), 2 sessions (right-aligned, normal bar width),
+none (empty chart, no errors), hover on an empty slot (no tooltip).
+
+**Rules for future agents:**
+* Keep the session split in step with the accumulators (Section 26 rule).
+* Keep the Bars series first, and keep its `slots` array aligned with the
+  returned data points (the formatter and tooltip index into it).
+* Don't switch this chart back to a datetime axis or drop the null padding.
 

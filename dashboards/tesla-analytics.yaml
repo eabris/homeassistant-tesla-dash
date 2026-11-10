@@ -1072,6 +1072,185 @@ views:
               fill: 'null'
 
 
+      # ── Charging sessions ──
+      # kWh per session for the last 10 sessions, built from recorder history
+      # of sensor.vehicle_charge_energy_added (it restarts at 0 every session;
+      # same session rules as the accumulators in configuration.yaml: a value
+      # below half of the previous one starts a new session, small dips are
+      # noise). The bars sit on 10 evenly spaced slots instead of real times,
+      # so sessions on the same day don't squeeze together; the x labels and
+      # tooltip read the real dates from window.teslaChargeSessions, which the
+      # first series fills. Keep the Bars series first: the header series
+      # wait for its result.
+      - type: custom:apexcharts-card
+        graph_span: 11d
+        header:
+          show: true
+          title: "Charging sessions"
+          show_states: true
+          colorize_states: true
+        yaxis:
+          - min: 0
+            decimals: 0
+        apex_config:
+          subtitle:
+            text: "kWh added per charging session, last 10 sessions."
+            offsetY: 0
+            style:
+              fontSize: "12px"
+              color: "#888888"
+          chart:
+            height: 250
+            foreColor: '#7F7F7F'
+            toolbar:
+              show: false
+          plotOptions:
+            bar:
+              columnWidth: 60%
+              borderRadius: 2
+              dataLabels:
+                position: top
+          grid:
+            borderColor: '#2D2D2D'
+            strokeDashArray: 4
+          xaxis:
+            type: numeric
+            tickAmount: 11
+            tooltip:
+              enabled: false
+            labels:
+              rotate: 0
+              hideOverlappingLabels: false
+              style:
+                fontSize: "10px"
+              formatter: |
+                EVAL:function (v, ts, opts) {
+                  const d = window.teslaChargeSessions;
+                  const g = opts && opts.w && opts.w.globals;
+                  if (!d || !g || !(g.maxX > g.minX)) return '';
+                  const k = Math.round((v - g.minX) / ((g.maxX - g.minX) / (d.n + 1))) - 1;
+                  return (d.slots[k] && d.slots[k].label) || '';
+                }
+          tooltip:
+            custom: |
+              EVAL:function (opts) {
+                const s = window.teslaChargeSessions && window.teslaChargeSessions.slots[opts.dataPointIndex];
+                if (!s) return '';
+                return '<div style="padding:6px 10px;font-size:12px;line-height:1.5">'
+                  + '<div style="opacity:0.75">' + s.detail + '</div>'
+                  + '<div><b>' + s.kwh.toFixed(1) + ' kWh</b> added</div></div>';
+              }
+          dataLabels:
+            offsetY: -18
+            style:
+              fontSize: "10px"
+              fontWeight: 600
+              colors: ['#CCCCCC']
+            background:
+              enabled: false
+        series:
+          - entity: sensor.vehicle_charge_energy_added
+            name: Charged
+            type: column
+            color: '#1E88E5'
+            unit: " kWh"
+            float_precision: 1
+            show:
+              in_header: false
+              legend_value: false
+              datalabels: true
+            data_generator: |
+              const N = 10;
+              const work = (async () => {
+                const car = hass.states['input_text.tesla_car_name']?.state || 'tesla';
+                const eid = 'sensor.vehicle_charge_energy_added';
+                const tid = `device_tracker.${car}_location`;
+                const res = await hass.callWS({
+                  type: 'history/history_during_period',
+                  start_time: new Date(Date.now() - 180 * 864e5).toISOString(),
+                  end_time: new Date().toISOString(),
+                  entity_ids: [eid, tid],
+                  minimal_response: true,
+                  no_attributes: true,
+                  significant_changes_only: true,
+                });
+                const time = (r) => ((r.lc ?? r.lu) || 0) * 1000;
+                const sessions = [];
+                let cur = null;
+                let last = null;
+                for (const r of res[eid] || []) {
+                  const v = parseFloat(r.s);
+                  if (isNaN(v)) continue;
+                  const t = time(r);
+                  if (last === null || v < last * 0.5) {
+                    if (cur) sessions.push(cur);
+                    // The oldest sample may belong to a session that ended
+                    // before the history starts: only keep it if it rises.
+                    const seen = last !== null && v > 0;
+                    cur = { kwh: v, start: seen ? t : null, end: seen ? t : null };
+                    last = v;
+                  } else if (v > last) {
+                    cur.kwh = v;
+                    cur.start = cur.start ?? t;
+                    cur.end = t;
+                    last = v;
+                  }
+                }
+                if (cur) sessions.push(cur);
+                const track = (res[tid] || []).map((r) => [time(r), r.s]);
+                const where = (t) => {
+                  let s = null;
+                  for (const [tt, st] of track) { if (tt <= t + 60000) s = st; else break; }
+                  return s === 'home' ? 'Home' : (!s || s === 'not_home' || s === 'unknown' || s === 'unavailable') ? 'Away' : s;
+                };
+                const lang = hass.locale?.language || hass.language || 'en-GB';
+                const fmt = (t, o) => new Date(t).toLocaleString(lang, o);
+                const hm = { hour: '2-digit', minute: '2-digit' };
+                const charging = ['charging', 'starting'].includes(hass.states['sensor.vehicle_charging']?.state);
+                const list = sessions.filter((s) => s.end !== null && s.kwh >= 0.1).slice(-N);
+                return list.map((s, i) => {
+                  const now = charging && i === list.length - 1 && Date.now() - s.end < 3600e3;
+                  const sameDay = new Date(s.start).toDateString() === new Date(s.end).toDateString();
+                  const span = `${fmt(s.start, { weekday: 'short', day: 'numeric', month: 'short', ...hm })} – ${fmt(s.end, sameDay ? hm : { day: 'numeric', month: 'short', ...hm })}`;
+                  return {
+                    kwh: Math.round(s.kwh * 10) / 10,
+                    label: [fmt(s.end, { day: 'numeric' }), fmt(s.end, { month: 'short' })],
+                    detail: `${span} · ${where(s.end)}${now ? ' · charging now' : ''}`,
+                  };
+                });
+              })();
+              window.teslaChargeSessions = { n: N, slots: [], ready: work };
+              const list = await work;
+              // Always N slots (empty ones null, oldest first), so the bars
+              // keep the same width when there are fewer sessions.
+              const slots = Array(N - list.length).fill(null).concat(list);
+              window.teslaChargeSessions = { n: N, slots, ready: work };
+              const slot = (end.getTime() - start.getTime()) / (N + 1);
+              return slots.map((s, i) => [start.getTime() + (i + 1) * slot, s ? s.kwh : null]);
+          - entity: sensor.vehicle_charge_energy_added
+            name: LAST SESSION
+            color: '#FF9F0A'
+            unit: " kWh"
+            float_precision: 1
+            show:
+              in_chart: false
+              legend_value: true
+            data_generator: |
+              const list = await window.teslaChargeSessions?.ready || [];
+              return list.length ? [[Date.now(), list[list.length - 1].kwh]] : [];
+          - entity: sensor.vehicle_charge_energy_added
+            name: AVERAGE (LAST 10)
+            color: '#1E88E5'
+            unit: " kWh"
+            float_precision: 1
+            show:
+              in_chart: false
+              legend_value: true
+            data_generator: |
+              const list = await window.teslaChargeSessions?.ready || [];
+              return list.length ? [[Date.now(), list.reduce((a, s) => a + s.kwh, 0) / list.length]] : [];
+
+
       # ── Charger power ──
       - type: custom:apexcharts-card
         graph_span: 30d

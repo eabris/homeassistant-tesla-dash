@@ -25,7 +25,7 @@ Six tabs covering everyday use of the car. On a phone everything is one column; 
 Four tabs (plus an Advanced sub-page) for history and configuration:
 - **History** — five summary cards (today, this week, last 7 days, this month, last month), each with distance, energy charged, charging cost, what a fuel car would cost, and what you saved.
 - **Driving** — 30-day daily charts for distance, energy used, charging cost, fuel cost, driving time, speed, number of drives and **real energy efficiency (Wh/km)** from actual battery-drop telemetry, plus 12-month charts. Every number in a chart header says what it is (*This month*, *Per day (avg)*, *Per km*, *Last driving day*…).
-- **Charging** — 30-day charts of energy charged per day, charger power, charge rate and current, each with the live value (*Now*) in the header.
+- **Charging** — 30-day charts of energy charged per day, charger power, charge rate and current, each with the live value (*Now*) in the header, plus a **Charging sessions** chart: kWh added in each of the last 10 sessions (date under each bar, tap/hover for the time and place; the header shows the last session and the 10-session average). It's built from Home Assistant's history, so it only shows sessions the recorder still has.
 - **Settings** — **currency** (HUF/EUR/USD/GBP) and **unit system** (Metric / US Imperial / UK), wheel size and tire pressure, electricity rate or **Hungarian electricity tariff** (Tariff A / Tariff D, with the discounted quota), **Smart Charging**, **Full auto charging** and the fuel-comparison car. The **Advanced** sub-page holds the Tesla API token refresh, unit-system details and your Saved Location Rates notes.
 
 ### ⚙️ Plus
