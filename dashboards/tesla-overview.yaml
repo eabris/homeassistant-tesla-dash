@@ -3206,23 +3206,8 @@ views:
     sections:
       - type: grid
         cards:
-          # 5.1 Target Pressure Notice
-          # Value comes from input_number.tesla_recommended_tire_pressure
-          # (editable on the Settings tab) — Tesla's Fleet API doesn't expose a
-          # placard/recommended pressure, only live per-wheel readings, and the
-          # correct value depends on your specific wheel size (see your car's
-          # driver-door placard). Stored in bar; converted to psi for display.
-          - type: markdown
-            content: >
-              {% set p = states('input_number.tesla_recommended_tire_pressure') | float(2.9) %}
-              {% set is_psi = states('input_select.tesla_unit_system') == 'US Imperial (mi, °F, psi)' %}
-              {% set size = states('input_select.tesla_wheel_size') %}
-              💡 **Recommended cold pressure ({{ size }} wheels): {{ (p * 14.5038) | round(0) ~ ' psi' if is_psi else p | round(2) ~ ' bar' }}**
-
-              <sub>Readings are about {{ '3–4 psi' if is_psi else '0.2–0.3 bar' }} higher when the tires are warm after driving. Check them cold (parked for 3+ hours).</sub>
-
           # 5.2 Tire Pressure Overlay (top-down car image)
-          # Small thumbnail-style card (150px wide, centered) with 4 minimal
+          # Small thumbnail-style card (170px wide incl. 10px side padding, centered) with 4 minimal
           # pressure readouts overlaid. No lock icon here, per explicit user
           # request — this tab is pressure-readouts only.
           # NOTE: assumes the image has the front of the car facing up (FL/FR
@@ -3256,8 +3241,10 @@ views:
               style: |
                 ha-card {
                   border-radius: 12px;
-                  overflow: hidden;
-                  width: 150px;
+                  overflow: visible;
+                  width: 200px;
+                  padding: 0 20px;
+                  box-sizing: border-box;
                   margin: 0 auto;
                 }
             elements:
@@ -3301,7 +3288,7 @@ views:
                       }
                 style:
                   top: 15%
-                  left: 12%
+                  left: 6%
                   width: 20%
 
               # FR
@@ -3344,7 +3331,7 @@ views:
                       }
                 style:
                   top: 15%
-                  left: 90%
+                  left: 96%
                   width: 20%
 
               # RL
@@ -3387,7 +3374,7 @@ views:
                       }
                 style:
                   top: 78%
-                  left: 12%
+                  left: 6%
                   width: 20%
 
               # RR
@@ -3430,121 +3417,233 @@ views:
                       }
                 style:
                   top: 78%
-                  left: 90%
+                  left: 96%
                   width: 20%
 
       - type: grid
         cards:
-          # 5.3 Historical Pressure Chart
-          # Two variants (bar vs psi) because apexcharts-card's yaxis min/max and
-          # axis title are static YAML — they can't follow input_select.tesla_unit_system
-          # live like a JS button-card label can. Only US Imperial switches to psi;
-          # UK stays on bar (matches the rest of the pressure readouts on this tab).
-          - type: conditional
-            conditions:
-              - entity: input_select.tesla_unit_system
-                state_not: "US Imperial (mi, °F, psi)"
-            card:
-              type: custom:apexcharts-card
-              graph_span: 7d
-              cache: true
-              header:
-                show: true
-                title: "Tire pressure · last 7 days"
-              apex_config:
+          # 5.3 Tire Pressure Card: recommended pressure, 2x2 tire status grid
+          # and a 30-day chart with coloured pressure zones, all in one card
+          # (agents.md Section 28).
+          # Zones follow input_number.tesla_recommended_tire_pressure (rec):
+          #   unsafe      > rec + 0.6   (3.5 bar for 2.9)
+          #   harsher     rec + 0.2 … rec + 0.6
+          #   optimal     rec − 0.4 … rec + 0.2
+          #   reduced     rec − 1.0 … rec − 0.4
+          #   unsafe      < rec − 1.0   (1.9 bar for 2.9)
+          # A Tesla tire-pressure warning always shows the danger icon.
+          # The chart is a nested card: button-card evaluates the [[[ ]]]
+          # templates inside it and passes a new config to apexcharts-card when
+          # the recommended pressure or unit system changes, so zones and units
+          # update without a page reload. Keep the zone offsets in
+          # variables.tz in sync with the tile icons (same variable).
+          - type: custom:button-card
+            show_icon: false
+            show_name: false
+            show_state: false
+            tap_action:
+              action: none
+            triggers_update:
+              - sensor.vehicle_tyre_pressure_front_left
+              - sensor.vehicle_tyre_pressure_front_right
+              - sensor.vehicle_tyre_pressure_rear_left
+              - sensor.vehicle_tyre_pressure_rear_right
+              - binary_sensor.vehicle_tyre_pressure_warning_front_left
+              - binary_sensor.vehicle_tyre_pressure_warning_front_right
+              - binary_sensor.vehicle_tyre_pressure_warning_rear_left
+              - binary_sensor.vehicle_tyre_pressure_warning_rear_right
+              - input_number.tesla_recommended_tire_pressure
+              - input_select.tesla_unit_system
+              - input_select.tesla_wheel_size
+            variables:
+              tz: |
+                [[[
+                  const r = parseFloat(states['input_number.tesla_recommended_tire_pressure']?.state);
+                  const rec = isNaN(r) ? 2.9 : r;
+                  const psi = states['input_select.tesla_unit_system']?.state === 'US Imperial (mi, °F, psi)';
+                  return {
+                    rec, psi,
+                    f: psi ? 14.5038 : 1,
+                    unit: psi ? 'psi' : 'bar',
+                    lowDanger: rec - 1.0,
+                    lowWarn: rec - 0.4,
+                    highWarn: rec + 0.2,
+                    highDanger: rec + 0.6,
+                    axisMin: rec - 1.3,
+                    axisMax: rec + 0.9,
+                  };
+                ]]]
+            custom_fields:
+              head: |
+                [[[
+                  const z = variables.tz;
+                  const size = states['input_select.tesla_wheel_size']?.state;
+                  const sizeTxt = size && !['unknown', 'unavailable'].includes(size) ? ` (${size} wheels)` : '';
+                  const recTxt = z.psi ? `${Math.round(z.rec * z.f)} psi` : `${z.rec.toFixed(1)} bar`;
+                  return `<div style="display:flex;align-items:center;gap:8px;font-size:15px;color:rgba(244,244,245,0.85)">
+                      <ha-icon icon="mdi:lightbulb-outline" style="--mdc-icon-size:18px;color:rgba(244,244,245,0.6);margin:0"></ha-icon>
+                      <span>Recommended cold pressure${sizeTxt}: ${recTxt}</span>
+                    </div>
+                    <div style="font-size:11px;color:rgba(244,244,245,0.45);margin:4px 0 0 26px;white-space:normal">
+                      Warm tires read about ${z.psi ? '3–4 psi' : '0.2–0.3 bar'} higher. Check them cold (parked 3+ hours).
+                    </div>`;
+                ]]]
+              tires: |
+                [[[
+                  const z = variables.tz;
+                  const wheels = [
+                    ['front_left', 'FRONT LEFT'], ['front_right', 'FRONT RIGHT'],
+                    ['rear_left', 'REAR LEFT'], ['rear_right', 'REAR RIGHT'],
+                  ];
+                  const tile = ([key, label]) => {
+                    const p = parseFloat(states['sensor.vehicle_tyre_pressure_' + key]?.state);
+                    const warn = states['binary_sensor.vehicle_tyre_pressure_warning_' + key]?.state === 'on';
+                    let icon = 'mdi:check', color = '#4ade80';
+                    if (isNaN(p)) { icon = 'mdi:help'; color = 'rgba(244,244,245,0.45)'; }
+                    else if (warn || p < z.lowDanger || p > z.highDanger) { icon = 'mdi:alert-octagon'; color = '#f87171'; }
+                    else if (p < z.lowWarn || p > z.highWarn) { icon = 'mdi:alert'; color = '#fbbf24'; }
+                    const value = isNaN(p) ? '—' : (z.psi ? `${Math.round(p * z.f)} psi` : `${p.toFixed(2)} bar`);
+                    return `<div style="display:flex;align-items:center;gap:12px;min-width:0">
+                        <div style="flex:0 0 auto;width:42px;height:42px;border-radius:50%;background:rgba(255,255,255,0.08);display:flex;align-items:center;justify-content:center">
+                          <ha-icon icon="${icon}" style="--mdc-icon-size:24px;color:${color}"></ha-icon>
+                        </div>
+                        <div style="min-width:0;text-align:left">
+                          <div style="font-size:13px;font-weight:500;letter-spacing:0.02em;color:rgba(244,244,245,0.55)">${label}</div>
+                          <div style="font-size:17px;font-weight:700;color:#f4f4f5">${value}</div>
+                        </div>
+                      </div>`;
+                  };
+                  return `<div style="display:grid;grid-template-columns:1fr 1fr;gap:14px 12px">${wheels.map(tile).join('')}</div>`;
+                ]]]
+              chart:
+                # apexcharts-card keeps old annotations on setConfig, so build a
+                # new chart when the zones/unit change. Pressure updates alone
+                # don't change this config and don't rebuild the chart.
+                force_recreate: true
+                card:
+                  type: custom:apexcharts-card
+                  graph_span: 14d
+                  cache: true
+                  header:
+                    show: false
+                  yaxis:
+                    # "~" = soft bound: the axis still grows if a reading is outside the zones.
+                    - min: "[[[ return '~' + (variables.tz.axisMin * variables.tz.f).toFixed(2); ]]]"
+                      max: "[[[ return '~' + (variables.tz.axisMax * variables.tz.f).toFixed(2); ]]]"
+                      show: false
+                  apex_config:
+                    chart:
+                      height: 400
+                    legend:
+                      show: false
+                    grid:
+                      show: false
+                      padding:
+                        left: 0
+                        right: 8
+                    xaxis:
+                      tickAmount: 2
+                      axisBorder:
+                        show: false
+                      axisTicks:
+                        show: false
+                    annotations: |
+                      [[[
+                        const z = variables.tz;
+                        const v = (b) => +(b * z.f).toFixed(2);
+                        const t = (b) => z.psi ? `${Math.round(b * z.f)} PSI` : `${b.toFixed(1)} BAR`;
+                        const band = (y, y2, color, opacity) => ({
+                          y: v(y), y2: v(y2), fillColor: color, opacity, borderColor: 'transparent',
+                          strokeDashArray: 0, label: { text: '' },
+                        });
+                        const line = (y, color) => ({
+                          y: v(y), borderColor: color, borderWidth: 1, strokeDashArray: 6, opacity: 0.9,
+                          label: { text: '' },
+                        });
+                        const label = (y, text, color) => ({
+                          y: v(y), borderColor: 'transparent', strokeDashArray: 0,
+                          label: {
+                            text, position: 'center', textAnchor: 'middle', borderWidth: 0, offsetY: 7,
+                            style: { color, background: 'transparent', fontSize: '11px', fontWeight: 600 },
+                          },
+                        });
+                        return {
+                          position: 'back',
+                          yaxis: [
+                            band(z.highDanger, z.axisMax + 5, '#ef4444', 0.2),
+                            band(z.highWarn, z.highDanger, '#a3e635', 0.13),
+                            band(z.lowWarn, z.highWarn, '#22c55e', 0.16),
+                            band(z.lowDanger, z.lowWarn, '#f59e0b', 0.22),
+                            band(z.axisMin - 5, z.lowDanger, '#ef4444', 0.2),
+                            line(z.highDanger, '#ef4444'),
+                            line(z.lowWarn, '#f59e0b'),
+                            line(z.lowDanger, '#ef4444'),
+                            label((z.highDanger + z.axisMax) / 2, `>${t(z.highDanger)} • UNSAFE`, '#f87171'),
+                            label((z.highWarn + z.highDanger) / 2, `>${t(z.highWarn)} • HARSHER RIDE & WEAR`, '#bef264'),
+                            label(z.lowWarn + 0.12, 'OPTIMAL', '#4ade80'),
+                            label((z.lowDanger + z.lowWarn) / 2, `<${t(z.lowWarn)} • REDUCED HANDLING & EFFICIENCY`, '#fbbf24'),
+                            label((z.axisMin + z.lowDanger) / 2, `<${t(z.lowDanger)} • UNSAFE`, '#f87171'),
+                          ],
+                        };
+                      ]]]
+                  series:
+                    - entity: sensor.vehicle_tyre_pressure_front_left
+                      name: "Front Left"
+                      type: line
+                      curve: stepline
+                      stroke_width: 2
+                      color: "#4ade80"
+                      float_precision: "[[[ return variables.tz.psi ? 0 : 2; ]]]"
+                      transform: "[[[ return variables.tz.psi ? 'return x * 14.5038;' : 'return x;'; ]]]"
+                    - entity: sensor.vehicle_tyre_pressure_front_right
+                      name: "Front Right"
+                      type: line
+                      curve: stepline
+                      stroke_width: 2
+                      color: "#86efac"
+                      float_precision: "[[[ return variables.tz.psi ? 0 : 2; ]]]"
+                      transform: "[[[ return variables.tz.psi ? 'return x * 14.5038;' : 'return x;'; ]]]"
+                    - entity: sensor.vehicle_tyre_pressure_rear_left
+                      name: "Rear Left"
+                      type: line
+                      curve: stepline
+                      stroke_width: 2
+                      color: "#22c55e"
+                      float_precision: "[[[ return variables.tz.psi ? 0 : 2; ]]]"
+                      transform: "[[[ return variables.tz.psi ? 'return x * 14.5038;' : 'return x;'; ]]]"
+                    - entity: sensor.vehicle_tyre_pressure_rear_right
+                      name: "Rear Right"
+                      type: line
+                      curve: stepline
+                      stroke_width: 2
+                      color: "#bbf7d0"
+                      float_precision: "[[[ return variables.tz.psi ? 0 : 2; ]]]"
+                      transform: "[[[ return variables.tz.psi ? 'return x * 14.5038;' : 'return x;'; ]]]"
+                  card_mod:
+                    style: |
+                      ha-card {
+                        background: none;
+                        border: none;
+                        box-shadow: none;
+                      }
+            styles:
+              card:
+                - padding: 16px
+              grid:
+                - grid-template-areas: '"head" "tires" "chart"'
+                - grid-template-columns: 1fr
+                - row-gap: 16px
+              custom_fields:
+                head:
+                  - justify-self: stretch
+                  - text-align: left
+                  - white-space: normal
+                tires:
+                  - justify-self: stretch
+                  - overflow: visible
                 chart:
-                  height: 300
-                yaxis:
-                  - min: 2
-                    max: 3.6
-                    tickAmount: 8
-                    decimalsInFloat: 1
-                    title:
-                      text: "bar"
-                colors:
-                  - '#FF6B6B'
-                  - '#4ECDC4'
-                  - '#45B7D1'
-                  - '#FFA07A'
-                plotOptions:
-                  area:
-                    fillTo: zero
-              series:
-                - entity: sensor.vehicle_tyre_pressure_front_left
-                  name: "Front Left"
-                  type: line
-                  stroke_width: 2
-                  float_precision: 2
-                - entity: sensor.vehicle_tyre_pressure_front_right
-                  name: "Front Right"
-                  type: line
-                  stroke_width: 2
-                  float_precision: 2
-                - entity: sensor.vehicle_tyre_pressure_rear_left
-                  name: "Rear Left"
-                  type: line
-                  stroke_width: 2
-                  float_precision: 2
-                - entity: sensor.vehicle_tyre_pressure_rear_right
-                  name: "Rear Right"
-                  type: line
-                  stroke_width: 2
-                  float_precision: 2
-
-          - type: conditional
-            conditions:
-              - entity: input_select.tesla_unit_system
-                state: "US Imperial (mi, °F, psi)"
-            card:
-              type: custom:apexcharts-card
-              graph_span: 7d
-              cache: true
-              header:
-                show: true
-                title: "Tire pressure · last 7 days"
-              apex_config:
-                chart:
-                  height: 300
-                yaxis:
-                  - min: 28
-                    max: 52
-                    tickAmount: 6
-                    decimalsInFloat: 0
-                    title:
-                      text: "psi"
-                colors:
-                  - '#FF6B6B'
-                  - '#4ECDC4'
-                  - '#45B7D1'
-                  - '#FFA07A'
-                plotOptions:
-                  area:
-                    fillTo: zero
-              series:
-                - entity: sensor.vehicle_tyre_pressure_front_left
-                  name: "Front Left"
-                  type: line
-                  stroke_width: 2
-                  float_precision: 0
-                  transform: "return x * 14.5038;"
-                - entity: sensor.vehicle_tyre_pressure_front_right
-                  name: "Front Right"
-                  type: line
-                  stroke_width: 2
-                  float_precision: 0
-                  transform: "return x * 14.5038;"
-                - entity: sensor.vehicle_tyre_pressure_rear_left
-                  name: "Rear Left"
-                  type: line
-                  stroke_width: 2
-                  float_precision: 0
-                  transform: "return x * 14.5038;"
-                - entity: sensor.vehicle_tyre_pressure_rear_right
-                  name: "Rear Right"
-                  type: line
-                  stroke_width: 2
-                  float_precision: 0
-                  transform: "return x * 14.5038;"
+                  - justify-self: stretch
+                  - margin: 0 -8px -8px
 
   # ========== VIEW 6: COST PROJECTIONS ==========
   - title: Cost Projections

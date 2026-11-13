@@ -1011,7 +1011,8 @@ Battery tab RANGE row, Climate tab interior/outdoor temp + target-temp
 stepper (display only — the actual `climate.set_temperature` step logic in
 `script.tesla_climate_temp_up/down` stays hardcoded to 0.5°C internally,
 since that's what the vehicle's API expects; only the *readout* converts),
-and the Tires tab (banner + 4 wheel cards + historical pressure chart).
+and the Tires tab (image pressure overlay + the combined pressure card,
+Section 28).
 Also converted: the Analytics dashboard's History tab Today/This
 Week/This Month distance figures.
 
@@ -1021,13 +1022,12 @@ skipped):** the Analytics dashboard's **Driving** and **Charging** tabs
 plot in km / km/h / Wh-per-km regardless of this selector. Converting those
 properly would need per-series `transform:` conversion **and** duplicating
 each chart's static `yaxis` min/max + axis title (which apexcharts-card
-can't template), the same way the Tires-tab historical pressure chart was
-handled below — i.e. wrapping each chart in a `type: conditional` pair. That
-was judged too large/risky to do untested across 14 charts in one pass;
-tackle it as a following, focused task if the user wants it, using the
-Tires-tab chart (`dashboards/tesla-overview.yaml`, "Historical Pressure
-Chart") as the reference pattern for how to pair `conditional` cards with a
-`transform:`-adjusted series and matching axis bounds.
+can't template on its own). That was judged too large/risky to do untested
+across 14 charts in one pass; tackle it as a following, focused task if the
+user wants it. Two patterns exist: a `type: conditional` pair per unit
+(static bounds in each card), or the Tires-tab pattern (Section 28): nest
+the chart in a `custom:button-card` custom field so `[[[ ]]]` templates set
+`transform:`, axis bounds and annotations, with `force_recreate: true`.
 
 **Recommended tire pressure is now user-configurable, not hardcoded:** the
 Tires tab's "Recommended cold pressure" banner used to hardcode `2.9 bar`
@@ -2806,3 +2806,63 @@ none (empty chart, no errors), hover on an empty slot (no tooltip).
   returned data points (the formatter and tooltip index into it).
 * Don't switch this chart back to a datetime axis or drop the null padding.
 
+
+### 28. Tires Tab — Combined Pressure Card (status grid + zoned chart)
+
+**Request:** recreate a Tessie-style tire layout: the recommended cold
+pressure, a 2×2 grid of tire tiles (round icon, label, value) whose icon
+turns into a warning or danger icon by pressure, and a 30-day chart with
+coloured pressure zones, all in **one card**. The top-down car image with
+the pressure numbers stays as its own card.
+
+**What was built** (`dashboards/tesla-overview.yaml`, Tires view, "5.3"):
+one `custom:button-card` with three custom fields: `head` (recommended
+pressure + warm-tire hint), `tires` (2×2 HTML grid) and `chart` (a nested
+`custom:apexcharts-card`). The old markdown notice and the old pair of
+`conditional` bar/psi line charts were removed.
+
+**Zones** are relative to `input_number.tesla_recommended_tire_pressure`
+(rec), matching the Tab 5 spec at rec = 2.9 bar: unsafe > rec + 0.6,
+harsher ride rec + 0.2 … + 0.6, optimal rec − 0.4 … + 0.2, reduced handling
+rec − 1.0 … − 0.4, unsafe < rec − 1.0. Axis rec − 1.3 … rec + 0.9 as soft
+bounds (`~`), so a reading outside them still shows. The values live once
+in the button-card `variables.tz` object; the tile icons and the chart
+annotations both read it. Tile icons: `mdi:check` green, `mdi:alert` amber
+(harsher or reduced), `mdi:alert-octagon` red (unsafe, or the Tesla
+`binary_sensor.vehicle_tyre_pressure_warning_*` is on), `mdi:help` grey
+(no reading).
+
+**How it works / confirmed constraints:**
+* button-card evaluates `[[[ ]]]` templates inside a custom field's `card:`
+  config (`_objectEvalTemplate` in `button-card.ts`), and only passes a
+  new config to the nested card when the evaluated config changed
+  (`deepEqual`). Templates may return objects/numbers, so `annotations:`,
+  `yaxis` min/max, `transform:` and `float_precision` are templated; psi
+  uses `× 14.5038`.
+* apexcharts-card v2.2.3 keeps the old annotations when `setConfig` is
+  called again (tested), so `chart:` has `force_recreate: true`. Pressure
+  updates don't change the config, so they never rebuild the chart; only a
+  recommended-pressure or unit change does.
+* Bands are ApexCharts `annotations.yaxis` ranges (`y`/`y2`), boundaries
+  are dashed line annotations, and the centred labels are transparent line
+  annotations (`label.position: center`, `offsetY: 7`); ApexCharts draws a
+  label at its annotation's top edge, hence the separate label lines.
+  `annotations.position: back` keeps the tire lines on top.
+* The y-axis is hidden with the card-level `yaxis: - show: false` (an
+  `apex_config: {show: false}` under it was ignored).
+* `triggers_update` lists every entity the templates read, so the nested
+  chart also gets new `hass` when a pressure changes.
+
+**Tested** with the real button-card and apexcharts-card v2.2.3 bundles in
+the VS Code browser (mock `hass`, 30 days of mock history via
+`callApi('GET', 'history/period/…')`, which v2.2.3 uses) at 400 px: metric
+at 2.9 bar (all checks, zones 3.5/3.1/2.5/1.9), rec 3.1 (zones 3.7/3.3/2.7/
+2.1; 2.40 → warning, 3.75 → danger, Tesla warning → danger), US Imperial
+(42 psi, zones 51/45/36/28), an unknown reading (`?`, "—"), and a pressure
+update (same chart element, no rebuild).
+
+**Rules for future agents:**
+* Keep the zone offsets only in `variables.tz`.
+* Keep `force_recreate: true` on the nested chart, and keep pressure
+  values out of the nested chart config, or it rebuilds on every update.
+* Add any new entity a template reads to `triggers_update`.

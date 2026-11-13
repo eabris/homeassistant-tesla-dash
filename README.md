@@ -44,7 +44,7 @@ Six tabs covering everyday use of the car. On a phone everything is one column; 
 - **Controls** — status chips, wake, window vent/close, sentry mode and media playback.
 - **Climate** — Tesla-app-style 6-seat cabin map (`tesla-cabin-topdown.png`) with tappable seat/steering-wheel heaters, interior/exterior temperature, climate on/off + target temperature, close windows, defrost, Tesla's real **Dog Mode** and **Camp Mode**, and **Cabin Overheat Protection** (shown once you enable that Tesla Fleet entity).
 - **Battery** — battery % and range, energy in the battery, energy added, charging power/current/voltage and finish time, energy used for driving, a **charging price** card (where the car is, the price per kWh there and why, and the cost of the current or last charging session), the car's charge-limit slider, a Full auto charging card, and start/stop charging (or "Charge now" with Full auto on) + unlock charge port buttons.
-- **Tires** — live pressure of all 4 wheels on a top-down car image, the recommended cold pressure for your wheels, and a 7-day pressure chart.
+- **Tires** — live pressure of all 4 wheels on a top-down car image, plus one pressure card: your recommended cold pressure, a 2×2 tire grid (green check, warning or danger icon per tire) and a 30-day chart with coloured zones (unsafe / harsher ride / optimal / reduced handling). The zones follow the recommended pressure you set for your wheels in Settings.
 - **Cost Projections** — what charging costs you per month, per year and over 5 years, what a petrol/diesel car would cost for the same driving, and how much you save; plus a status card for the selected Hungarian electricity tariff (active price, discounted-quota usage).
 
 ### 📊 Tesla Analytics dashboard
