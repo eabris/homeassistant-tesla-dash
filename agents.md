@@ -978,7 +978,9 @@ way), so there is no template-sensor-level workaround.
 `"Ft/km"` for the two per-km ones) matching the currently-selected HUF
 currency — the user explicitly chose this over removing the unit label
 entirely. **If you change `input_select.tesla_currency` away from HUF,
-these 10 static strings must be manually updated to match** (there is no
+these 10 static strings must be manually updated to match**, plus the
+newer `"Ft"` sensors from Sections 21 and 24 (e.g.
+`tesla_projected_monthly_electric_cost` / `_fuel_cost`) (there is no
 way to make this automatic without a custom component that rewrites the
 entity registry's unit on every currency change — out of scope for this
 project). The underlying cost *values* are unaffected by this limitation:
@@ -1080,6 +1082,11 @@ replaced by the wheel-adjusted calculation per user request, since "ideal
 range" isn't wheel-size-aware and was a less actionable number for this
 purpose. (`sensor.vehicle_ideal_battery_range` itself is untouched and
 still defined, just no longer read by this specific card.)
+
+**Superseded wording (Section 24):** the brackets were unexplained, so the
+display is now `{official} {unit} (≈{calculated} real)` in compact spots
+and "≈{calculated} {unit} real-world" as a second line where there's room.
+Same two numbers, same formula; only the wording changed.
 
 ### 10a. Tesla Fleet Token Refresh Script (`scripts/refresh_tesla_token.sh`)
 
@@ -1990,7 +1997,7 @@ Assistant restart only sometimes fixed it.
   says to reload scripts. Tested on the python3 and jq paths with fake
   `core.config_entries` files: valid, unchanged, expired, invalidated (0),
   and first run.
-* Manual button: Analytics → Settings → "🔑 Tesla API Token"
+* Manual button: Analytics → Settings → Advanced → "🔑 Tesla API Token" (moved there in Section 24)
   (`custom:mushroom-entity-card` on `script.tesla_refresh_fleet_token`).
 
 **General rule going forward:** never tell the user to restart HA to apply
@@ -2055,7 +2062,9 @@ counter, which restarts at 0 each session). On every change it adds
 `delta × price`, where price is `sensor.tesla_active_charging_price` when
 `device_tracker.<car>_location` is `home`, else
 `input_number.tesla_default_electricity_cost` (Superchargers etc. are not
-on the home tariff). The delta rules, kept identical in both accumulators:
+on the home tariff). **Superseded by Section 25:** the price now comes from
+`sensor.tesla_location_charging_price` (home → tariff, Work zone → Work
+rate, elsewhere → default). The delta rules, kept identical in both accumulators:
 * first sample ever (no `last_energy_kwh` attribute yet) → 0;
 * value went up → `new − last`;
 * value fell below half of `last` → a new session started → add `new`;
@@ -2072,8 +2081,9 @@ source never resets.
 **Rewired cost sensors keep their entity_ids** (Section 13: entity_id
 comes from `name:`, so the names were left alone): daily / weekly /
 monthly / 7d-rolling / previous-month electric cost and "Tesla Electric
-Cost Per KM". In Off mode they use the original `energy × default rate`
-formula unchanged. In Tariff A/D mode they read the tariff meters (previous
+Cost Per KM". In Off mode they used the original `energy × default rate`
+formula (**superseded by Section 25:** every mode now reads the tariff
+meters, because Off ignored where the car charged). In Tariff A/D mode they read the tariff meters (previous
 month = the monthly meter's `last_period` attribute; per-km = this month's
 average price, or the active price before 5 kWh are charged). Annual and
 5-year projections follow automatically through the monthly sensor. The
@@ -2186,8 +2196,9 @@ re-priced; quota remaining, the band flag and the active price follow.
 **Rules for future agents:**
 * Never price charging by multiplying a period's energy by the *current*
   tariff price — always accumulate per delta at the price active then.
-* Keep the two accumulators' delta logic identical; if you change one,
-  change both and re-test the dip, session-restart and first-sample cases.
+* Keep the accumulators' delta logic identical (now four, see Section 26);
+  if you change one, change all and re-test the dip, session-restart and
+  first-sample cases.
 * Never give `tesla_quota_used_this_month`, `tesla_quota_usage_correction`
   or `tesla_quota_correction_set` an `initial:`; and keep the correction
   automation's `user_id` guard.
@@ -2487,3 +2498,311 @@ yearly sensor's formula in step with its monthly twin.
   adjusts `sum` statistics. The README has the `DELETE` statements.
 * Per-series `color:` is set on the chart columns, because a `colors:` list
   in `apex_config` didn't line up with the header-only series.
+
+### 24. Dashboard UX + Accuracy Pass (user-friendliness audit, Nov 2026)
+
+**Request:** the user shared screenshots of every tab and asked for a
+plan to make the dashboards "100% user friendly, nothing confusing even
+for a simple-minded user", then to execute it. Their own findings:
+Overview/History look empty on desktop; the Driving *Distance* card
+should show a daily average; *Energy efficiency* showed the same 282 for
+both header numbers; and header numbers had no "current / last / daily /
+monthly" label. The audit found these real bugs too (root causes
+confirmed against HA core, apexcharts-card and button-card sources):
+
+* **Range was always the SoC × 4.1 guess.** `sensor.vehicle_battery_range`
+  read `sensor.<car>_estimate_battery_range`, and Tesla Fleet's
+  `charge_state_est_battery_range` has `entity_registry_enabled_default=False`
+  (`tesla_fleet/sensor.py`). The rated `battery_range` is enabled by
+  default. The alias now reads `_battery_range` and only falls back to
+  the estimate. Symptom: "~213 km" (52 × 4.1) on one card, "213 km" on another.
+* **History "Last 7 days: Energy charged 1.97 kWh".** The statistics
+  sensor took the 7-day `change` of `sensor.vehicle_charge_energy_added`,
+  which restarts at 0 every session. It now uses
+  `sensor.tesla_tariff_charging_energy_total` (all kWh, every tariff mode,
+  never resets). Rule: a statistics `change` sensor's source must be a
+  lifetime counter, never a per-session/per-period one.
+* **Flat identical bars (Oct 12–28 on every Driving chart).**
+  apexcharts-card's `group_by.fill` defaults to `last` (README: "`last`
+  will replace them with the last non-empty state"), so days with no
+  history repeated the previous day. Every daily bar series now has
+  `fill: 'null'`. Rule: always set `fill: 'null'` on `group_by` bar series
+  of daily totals.
+* **Only ~10 days of history.** There was no `recorder:` block, so HA's
+  default `purge_keep_days: 10` applied: the "30d" history_stats counted 10
+  days and the Charging charts started ~Oct 30. The user chose **365 days**
+  (Technical Appendix §1), knowing the whole database grows. Purged data
+  can't come back; charts fill up over time.
+* **Efficiency "average" = today on Mondays.** `sensor.tesla_efficiency_kwh_km`
+  used the calendar-week meters (reset Monday 00:00), not a rolling 7 days
+  as its comment claimed: on Mondays it equalled today's value, and fell
+  back to 0.228 until 5 km were driven. The daily bar sensor also copied
+  the average whenever the day had no real drive energy. Now: average =
+  (this month + last month real drive energy) / (both months' distance),
+  last month only if both values exist; daily bars = real energy only,
+  else unknown (no bar). New `sensor.tesla_last_driving_day_efficiency`
+  (trigger template on `sensor.tesla_daily_drive_energy`, ≥ 5 km, keeps the
+  last value) is the header's second number.
+* **Cost Projections far too low.** Monthly was "this month so far",
+  annual = that × 12 (on the 9th: 78,864 Ft/year instead of ~625,000).
+  New `sensor.tesla_projected_monthly_electric_cost` / `_fuel_cost`: cost
+  per day over this month so far (fractional days, min 1) + all of last
+  month (if > 0) × 365.25/12. Annual/5-year chain from them.
+* **Dog / Camp Mode were fake.** The scripts only did `climate.turn_on`
+  + `set_temperature` 20/18 °C. Tesla Fleet's climate entity has
+  `preset_modes = ["off", "keep", "dog", "camp"]` (`set_climate_keeper_mode`).
+  The scripts now toggle `climate.set_preset_mode`; tiles show On/Off and
+  turn green.
+* **"Cabin Protect: Not in Fleet API" was false.** `TeslaFleetCabinOverheatProtectionEntity`
+  exists (hvac modes off / cool / fan_only), disabled by default. New
+  `script.tesla_cabin_protect_toggle`; the tile hides itself (`display:
+  none`) until the entity exists. Bio Defense (no HA entity) and Valet Mode
+  (no Fleet API) placeholder tiles were removed.
+* **Location tap did nothing.** The `url_path` JS called `state_attr()`, a
+  Jinja function that doesn't exist in button-card JS. Rule: in `[[[ ]]]`
+  use `states[id]?.attributes?.x`, never Jinja helpers.
+
+**UX changes:**
+* **Layout:** all six Overview tabs and Analytics History are now
+  `type: sections` views (`max_columns` 2, Cost 3, History 3). Mobile keeps
+  the exact old order (sections stack in YAML order); desktop gets columns
+  instead of one 400 px strip. Custom cards default to full width / auto
+  height in a grid section (`DEFAULT_GRID_SIZE = {columns: 12, rows:
+  "auto"}`, frontend `compute-card-grid-size.ts`). The conversion was checked
+  by loading old and new YAML and asserting the flattened card list of every
+  view is identical. Driving/Charging stay masonry (already multi-column);
+  Settings stays masonry, but each topic is one `vertical-stack` so a
+  heading can't be split from its controls.
+* **Every header number is labelled with its period:** Driving uses THIS
+  MONTH + PER DAY (AVG) (or PER KM for costs, AVG/TOP THIS MONTH for
+  speed, AVERAGE / LAST DRIVING DAY for efficiency); Charging uses NOW /
+  THIS MONTH / TODAY; yearly charts THIS YEAR / THIS MONTH. Subtitles say
+  what the bars are. New per-day/month sensors: `tesla_average_daily_*`,
+  `tesla_monthly_driving_time`, `tesla_drive_sessions_month`,
+  `tesla_driving_time_month_raw`, `tesla_average_speed_this_month`,
+  `tesla_top_speed_this_month`. Charging "Energy added" bars now come from
+  the daily meter (the old per-session max missed multi-session days).
+* **Shared templates:** `button_card_templates` at the top of both
+  dashboards (`tesla_cost_period`, `tesla_period_summary`) replace 8
+  copy-pasted cards. Money uses `Intl.NumberFormat(locale, {style:
+  'currency', currency: <input_select.tesla_currency>, min/max fraction 0})`
+  everywhere ("6572 Ft", "$6,572"). The old cards mixed "Ft432", "6572 Ft".
+* **Clearer tiles:** Schedule → *Next departure* ("Not set" for past/1970
+  dates instead of "00:00"); Idles → *Parked for* (time since the last
+  drive, `triggers_update: all` so it ticks); Activity = Driving / Charging
+  / Asleep / Parked; Automation → *Auto charging* (Full auto / Time window
+  23:00–06:00 / Off; tap opens Settings instead of silently toggling);
+  Drives/Charges *today*; Battery tab tiles say "Not charging" instead of
+  0 A / 0 V; Cost "HOME" → "Charging costs you" (it always included all
+  charging) and the always-0 Supercharger / Other rows were dropped.
+* **Settings:** regrouped (Currency & units, Wheels & tires, Electricity
+  price, Smart Charging, Full auto, Fuel comparison) with shorter text; a
+  `subview: true` page `/tesla-analytics/settings-advanced` holds the API
+  token refresh, unit-system details, the Supercharging note and the
+  notes-only Saved Location Rates (which affect no calculation).
+
+**Testing done:** YAML parse of all files; every `[[[ ]]]` template
+compiled and run in Node with mock states taken from the screenshots;
+every new/changed Jinja template rendered with a mock HA environment (38
+cases: alias fallback, efficiency with/without last month, projections on
+the 1st / in March / without last month, trigger sensors keeping values,
+script toggles); every `sensor.tesla_*`/`vehicle_*` referenced by the
+dashboards resolved against names in `configuration.yaml` (that check
+caught `tesla_average_speed_month` vs the real slug
+`tesla_average_speed_this_month` — Section 13 again). Not yet run in a
+live HA.
+
+**Rules for future agents:**
+* Every number in a chart header or tile must say which period it covers.
+  Never show two numbers that come from the same source or fallback.
+* Never let a fallback silently copy another displayed value (render
+  `none` instead, Section 12).
+* New `history_stats` windows need recorder history that long; keep
+  `purge_keep_days` ≥ the longest window + 1 day.
+* Don't add placeholder tiles for features the integration can't do; hide
+  tiles whose entity may be disabled instead of showing "not available".
+* When adding a Driving/Charging chart, copy an existing one: labelled
+  header series (`in_chart: false`), bars with `in_header: false`,
+  per-series `color:`, `float_precision`, `fill: 'null'`.
+* Before referencing a new template sensor, slugify its `name:` (Section 13).
+
+### 25. Work Zone Pricing (car parked/charging a few houses from home)
+
+**Symptom:** the Tesla app showed the car parked at a neighbouring address
+(two houses from home), but the Overview location strip said "At home". The
+user had typed both addresses into the Saved Location Rates (Home / Work)
+and expected those to define the locations.
+
+**Root cause (confirmed against HA core):** the Tesla Fleet
+`device_tracker.<car>_location` only has `latitude`/`longitude`
+(`tesla_fleet/device_tracker.py`); there is no reverse geocoding. HA turns
+the coordinates into a state with `zone.async_active_zone`: the zones that
+contain the point, "sorted by radius and then by distance so that the
+smallest and closest zone wins". `zone.home` has a 100 m default radius, so
+a spot two houses away is "home". The Saved Location Rates are plain
+`input_text`/`input_number` notes with no coordinates; nothing read them.
+Side effect: charging there was priced at the home tariff and counted
+against the home discounted quota, and Full auto treated it as home.
+
+**User decision:** the car charges there on **someone else's electricity**:
+price it at the Work rate and keep Full auto off there.
+
+**Fix:**
+* The user creates a small zone (15–20 m, not passive) in the HA UI.
+  **Never in YAML**: its coordinates are a private address (Section 10).
+  New `input_text.tesla_rate_work_zone` holds its entity ID (no `initial:`).
+* New `sensor.tesla_location_charging_price`: `home` →
+  `sensor.tesla_active_charging_price`; tracker state equal to the
+  `friendly_name` of the Work zone → `input_number.tesla_rate_work_per_kwh`;
+  else the default rate. Attribute `location` = home / work / away. A
+  device_tracker in a non-home zone has the zone's *name* as state, so the
+  match is on `friendly_name`, not the entity ID. `zone.home` and invalid
+  IDs are ignored.
+* `sensor.tesla_tariff_charging_cost_total` (state and `last_price`) prices
+  each kWh with it. The delta rules are unchanged.
+* The seven electric-cost sensors (daily, weekly, 7d, monthly, previous
+  month, yearly, per km) and the "Electric cost · Yearly" chart no longer
+  branch on tariff mode: Off used `energy × default rate`, which ignored
+  location. The accumulator already ran in every mode and prices home at
+  the default rate when the tariff is Off, so home/away results are
+  unchanged; only Work-zone charging and default-rate changes differ (past
+  kWh keep their price, as in Section 21).
+* Nothing else needed changing: Full auto (plan sensor `away`, `_adopt`),
+  `sensor.tesla_home_charging_energy_total` (quota) and the solar surplus
+  already require `is_state(tracker, 'home')`.
+* UI: the Work Zone + Work Rate fields are on Settings → ⚡ Electricity
+  Price (the Work rate is no longer notes-only); "Price where the car is
+  now" row in the Live Tariff Status table; the location strip shows the
+  zone name plus "charging here uses the Work rate". The strip used to
+  title-case zone names with `/\b\w/g`, which breaks accented names
+  ("Kertész" → "KertéSz"); names are now shown as typed.
+
+**Not changed:** the 🌙 Smart Charging window automation still doesn't
+check the location (documented in the README). Past charging is not
+re-priced.
+
+**Tested** with a Jinja harness: home / Work zone / not_home / other zone;
+empty, `zone.home`, missing and mixed-case Work Zone values; the
+accumulator adding 10 kWh at the Work rate; all seven cost sensors giving
+identical results in Off and Tariff A mode; the location label with an
+accented zone name.
+
+**Rules for future agents:**
+* Location logic must use zones (`device_tracker` state), never free-text
+  location names.
+* Never commit zone coordinates or other address-derived values.
+* Any new place-dependent price goes into `sensor.tesla_location_charging_price`,
+  not into individual cost sensors.
+* Don't reintroduce tariff-mode branches in cost sensors: price
+  differences belong in the accumulator.
+
+**Follow-up: "away, default rate" while parked at the Work zone.** The user
+created `zone.work` (small radius, pin on the neighbour's plot) and set
+**Work Zone** = `zone.work`. The car's GPS point (the Overview location strip →
+Google Maps) appeared to be at the kerb, between the Home and Work circles. The Live
+Tariff Status table showed "away, default rate". The template was correct.
+Confirmed in HA core: `device_tracker/entity.py` `_async_update_zones` →
+`zone.async_in_zones` puts a point in a zone only if distance to the centre <
+radius (GPS accuracy 0 for Tesla Fleet), and picks the **smallest** non-passive
+containing zone. It runs on every state write, and Tesla Fleet writes on every
+600 s vehicle poll, also while the car sleeps (`tesla_fleet/entity.py`
+`_handle_coordinator_update`, `coordinator.py` returns cached data). So a zone
+created in the UI applies within ~10 minutes; `homeassistant.update_entity` on
+the tracker forces it (the free `vehicle()` call, no wake). Fix (user side,
+README Step 1 now says it): put the pin where the car stands, not on the house,
+and use a radius of about 20–25 m (the original 15–20 m advice was too tight for
+kerb parking and GPS drift). Keep it smaller than Home if inside the Home circle,
+and off the home parking spot. README Troubleshooting has a Developer Tools
+template (tracker state, `in_zones`, distance to the Work/Home centres vs radius,
+passive).
+**Rule:** when a zone isn't recognised, check `in_zones` and the
+distance-vs-radius numbers first, before changing the price template.
+
+### 26. Battery Tab "Charging price" Card (price here + session cost)
+
+**Request:** show the current/session charging price and the location/zone
+on the Overview → Battery tab.
+
+**What was added:**
+* `sensor.tesla_charging_session_cost`, a trigger template in the same block
+  as the other `sensor.vehicle_charge_energy_added` accumulators (Section
+  21). It uses the same delta rules and the same price
+  (`sensor.tesla_location_charging_price`, Section 25), but restarts on a new
+  session (value below half of `last_energy_kwh`). The first sample ever
+  prices the whole session so far at the current price (an estimate, only
+  right after installing). Attributes: `last_energy_kwh` (session kWh),
+  `started`, `location` (home/work/away), `zone`. No `state_class`: it
+  resets every session and isn't needed in long-term statistics. Unit
+  hardcoded `"Ft"` (Section 8).
+* Battery tab card "4.2b" (top of the second section): zone and price
+  source (tariff source attribute at home, "Work rate", "Default rate"),
+  price per kWh now, and the session cost with kWh, average price, start
+  time and place ("This charging session" while charging, "Last charging
+  session" otherwise). Numbers use the currency locale. Tap → Settings
+  (prices); hold → more-info of the session sensor.
+
+**Tested:** Jinja harness (first sample, rising, small dip, new session,
+rising from 0, attributes) and the card's JS in four cases (home charging,
+Work zone charging, away not charging, fresh install with no data).
+
+**Rule:** if you change the delta rules, change all four accumulators on
+`sensor.vehicle_charge_energy_added` together (home energy, tariff energy,
+cost total, session cost), and the session split in the Analytics
+"Charging sessions" chart (Section 27).
+
+### 27. Analytics Charging Tab — "Charging sessions" Chart (last 10 sessions)
+
+**Request:** a chart of the kWh added in each of the last ~10 charging
+sessions (as many as fit without crowding).
+
+**Design (no new entities):** the chart's first series has an async
+`data_generator` (apexcharts-card runs it as an `AsyncFunction`, see
+`src/graphEntry.ts` `_generateData`). It calls
+`hass.callWS({type: 'history/history_during_period', …})` for the last
+180 days of `sensor.vehicle_charge_energy_added` and
+`device_tracker.<car>_location` (`minimal_response`, `no_attributes`,
+`significant_changes_only`). With `minimal_response` HA only returns rows
+where the state changed, compressed (`s`, `lu`, `lc`); the code uses
+`lc ?? lu` (seconds). Sessions are split with the accumulators' rules:
+first sample or a value below half of the previous one → new session;
+a rise → session kWh/end time; small dip → ignored. The oldest sample
+is only kept if it rises (it may be a session that ended before the
+history starts), and sessions under 0.1 kWh are dropped. The start time
+is the first rise, so it can be up to one poll late. Place = tracker
+state at the session end (home → Home, not_home → Away, else the zone
+name as typed). Reading history was chosen over a new template sensor with
+a sessions attribute: it shows past sessions immediately (no back-fill
+problem) and adds nothing to the recorder.
+
+**Why the bars aren't on a time axis:** on a datetime axis apexcharts sizes
+columns by the smallest gap between points, so two sessions on one day
+made every bar a hairline. The bars are on 10 evenly spaced slots instead:
+`xaxis.type: numeric` (apex_config is deep-merged over the card's default
+`datetime`), `tickAmount: 11`, slot k at `start + (k + 1) × span / 11`.
+The card sets `xaxis.min/max` to the same `start`/`end` it passes to the
+generator, so ticks land on the bars. Always 10 slots (empty ones `null`),
+otherwise a few sessions render as thin bars. The x-label formatter
+(`EVAL:`) maps a tick back to its slot with `opts.w.globals.minX/maxX` and
+returns a two-line `[day, month]` label, which fits 10 bars at phone width.
+Labels and the custom tooltip (time span, place, kWh; empty for empty
+slots) read `window.teslaChargeSessions`, which the generator fills.
+`graph_span` (11d) only sets the slot spacing, not the period shown.
+
+**Header:** LAST SESSION and AVERAGE (LAST 10). They're header-only series
+whose generators `await window.teslaChargeSessions.ready`. apexcharts-card
+starts the series in order and each generator runs synchronously up to its
+first `await`, so the Bars series must stay **first** to publish the
+promise before the header series read it.
+
+**Tested** with the real apexcharts-card v2.2.3 bundle in headless Chromium
+(mock `hass` + generated history: resets, noise dips, unknown gaps, work /
+away places) at 400 px and 600 px: 12 sessions (oldest 2 dropped, labels
+aligned, tooltips right), 2 sessions (right-aligned, normal bar width),
+none (empty chart, no errors), hover on an empty slot (no tooltip).
+
+**Rules for future agents:**
+* Keep the session split in step with the accumulators (Section 26 rule).
+* Keep the Bars series first, and keep its `slots` array aligned with the
+  returned data points (the formatter and tooltip index into it).
+* Don't switch this chart back to a datetime axis or drop the null padding.
+
