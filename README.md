@@ -8,6 +8,32 @@ This README is written for **everyone**, including people who have never touched
 
 ---
 
+## 📸 Dashboard screenshots
+
+Explore the two dashboards below. Select any image to view it at full size.
+
+### 🧭 Tesla Overview
+
+| Dashboard | Controls |
+| :---: | :---: |
+| [![Tesla Overview dashboard with vehicle status and quick actions](documents/images/tesla-ha-dash-overview-dashboard.png)](documents/images/tesla-ha-dash-overview-dashboard.png) | [![Tesla Overview controls for the vehicle](documents/images/tesla-ha-dash-overview-controls.png)](documents/images/tesla-ha-dash-overview-controls.png) |
+| **Climate** | **Battery** |
+| [![Tesla climate dashboard with cabin controls](documents/images/tesla-ha-dash-overview-climate.png)](documents/images/tesla-ha-dash-overview-climate.png) | [![Tesla battery dashboard with charging information](documents/images/tesla-ha-dash-overview-battery.png)](documents/images/tesla-ha-dash-overview-battery.png) |
+| **Tires** | **Cost Projections** |
+| [![Tesla tire pressures and history](documents/images/tesla-ha-dash-overview-tires.png)](documents/images/tesla-ha-dash-overview-tires.png) | [![Tesla charging cost and savings projections](documents/images/tesla-ha-dash-overview-cost-projections.png)](documents/images/tesla-ha-dash-overview-cost-projections.png) |
+
+### 📊 Tesla Analytics
+
+| History | Driving |
+| :---: | :---: |
+| [![Tesla history summaries](documents/images/tesla-ha-dash-analytics-history.png)](documents/images/tesla-ha-dash-analytics-history.png) | [![Tesla driving analytics charts](documents/images/tesla-ha-dash-analytics-driving.png)](documents/images/tesla-ha-dash-analytics-driving.png) |
+| **Charging** | **Settings — part 1** |
+| [![Tesla charging analytics charts](documents/images/tesla-ha-dash-analytics-charging.png)](documents/images/tesla-ha-dash-analytics-charging.png) | [![Tesla dashboard settings, part 1](documents/images/tesla-ha-dash-analytics-settings-1.png)](documents/images/tesla-ha-dash-analytics-settings-1.png) |
+| **Settings — part 2** | **Settings — part 3** |
+| [![Tesla dashboard settings, part 2](documents/images/tesla-ha-dash-analytics-settings-2.png)](documents/images/tesla-ha-dash-analytics-settings-2.png) | [![Tesla dashboard settings, part 3](documents/images/tesla-ha-dash-analytics-settings-3.png)](documents/images/tesla-ha-dash-analytics-settings-3.png) |
+
+---
+
 ## ✨ What you get
 
 Two ready-made Lovelace dashboards, wired directly to your Tesla's native entities, styled to look and feel like the Tessie mobile app:
